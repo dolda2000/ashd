@@ -1,0 +1,17 @@
+#!/bin/sh
+
+dolibtool=no
+dogettext=no
+
+if [ "$dogettext" = yes ]; then
+    autopoint || exit
+    aclocal$AUTOMAKE_VERSION -I m4 || exit
+else
+    aclocal$AUTOMAKE_VERSION || exit
+fi
+autoheader || exit
+if [ "$dolibtool" = yes ]; then
+    libtoolize --copy --force || exit
+fi
+automake$AUTOMAKE_VERSION --add-missing --copy || exit
+autoconf || exit
