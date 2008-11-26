@@ -1,13 +1,11 @@
-AC_INIT(src/main.c)
-AM_INIT_AUTOMAKE([pkgname], [0.1])
+AC_INIT(src/htparser.c)
+AM_INIT_AUTOMAKE([ashd], [0.1])
 AM_CONFIG_HEADER(config.h)
 
 AC_PROG_CC
+AM_PROG_CC_C_O
 AC_PROG_INSTALL
-
-dnl Add for gettext:
-dnl AM_GNU_GETTEXT_VERSION(0.12.1)
-dnl AM_GNU_GETTEXT([external])
+AC_PROG_RANLIB
 
 dnl Add for libtool:
 dnl AM_PROG_LIBTOOL
@@ -17,6 +15,5 @@ AC_HEADER_STDC
 AC_OUTPUT([
 Makefile
 src/Makefile
-dnl Add for gettext:
-dnl po/Makefile.in
+lib/Makefile
 ])

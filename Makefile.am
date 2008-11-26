@@ -1,4 +1,1 @@
-SUBDIRS=src
-
-# Add for gettext:
-# EXTRA_DIST = config.rpath
+SUBDIRS = lib src
