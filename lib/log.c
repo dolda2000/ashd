@@ -21,6 +21,9 @@
 #include <stdio.h>
 #include <syslog.h>
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 #include <utils.h>
 
 static int tostderr = 1, tosyslog = 0;
