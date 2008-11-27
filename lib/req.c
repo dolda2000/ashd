@@ -57,6 +57,17 @@ void freereq(struct htreq *req)
     free(req);
 }
 
+char *getheader(struct htreq *req, char *name)
+{
+    int i;
+    
+    for(i = 0; i < req->noheaders; i++) {
+	if(!strcasecmp(req->headers[i][0], name))
+	    return(req->headers[i][1]);
+    }
+    return(NULL);
+}
+
 void reqpreheader(struct htreq *req, char *name, char *val)
 {
     req->headers = srealloc(req->headers, sizeof(*req->headers) * (req->noheaders + 1));

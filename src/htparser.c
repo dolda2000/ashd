@@ -31,6 +31,7 @@
 #include <utils.h>
 #include <mt.h>
 #include <log.h>
+#include <req.h>
 
 #define EV_READ 1
 #define EV_WRITE 2
@@ -115,6 +116,124 @@ static int listensock6(int port)
     return(fd);
 }
 
+static char *slowreadhead(int fd)
+{
+    int ret;
+    struct charbuf buf;
+    int nl;
+    char last;
+    
+    bufinit(buf);
+    nl = 0;
+    while(1) {
+	sizebuf(buf, buf.d + 1);
+	ret = recv(fd, buf.b + buf.d, 1, MSG_DONTWAIT);
+	if(ret <= 0) {
+	    if((ret < 0) && (errno == EAGAIN)) {
+		block(fd, EV_READ);
+		continue;
+	    }
+	    goto err;
+	}
+	last = buf.b[buf.d++];
+	if(last == '\n') {
+	    if(nl)
+		break;
+	    nl = 1;
+	} else if(last == '\r') {
+	} else {
+	    nl = 0;
+	}
+    }
+    bufadd(buf, 0);
+    return(buf.b);
+    
+err:
+    buffree(buf);
+    return(NULL);
+}
+
+#define SKIPNL(ptr) ({				\
+	    int __buf__;			\
+	    if(*(ptr) == '\r')			\
+		*((ptr)++) = 0;			\
+	    if(*(ptr) != '\n') {		\
+		__buf__ = 0;			\
+	    } else {				\
+		*((ptr)++) = 0;			\
+		__buf__ = 1;			\
+	    }					\
+	    __buf__;})
+static struct htreq *parseraw(char *buf)
+{
+    char *p, *p2, *nl;
+    char *method, *url, *ver;
+    struct htreq *req;
+    
+    if((nl = strchr(buf, '\n')) == NULL)
+	return(NULL);
+    if(((p = strchr(buf, ' ')) == NULL) || (p > nl))
+	return(NULL);
+    method = buf;
+    *(p++) = 0;
+    if(((p2 = strchr(p, ' ')) == NULL) || (p2 > nl))
+	return(NULL);
+    url = p;
+    p = p2;
+    *(p++) = 0;
+    if(strncmp(p, "HTTP/", 5))
+	return(NULL);
+    ver = (p += 5);
+    for(; ((*p >= '0') && (*p <= '9')) || (*p == '.'); p++);
+    if(!SKIPNL(p))
+	return(NULL);
+
+    req = mkreq(method, url, ver);
+    while(1) {
+	if(SKIPNL(p)) {
+	    if(*p)
+		return(NULL);
+	    break;
+	}
+	if((nl = strchr(p, '\n')) == NULL)
+	    return(NULL);
+	if(((p2 = strchr(p, ':')) == NULL) || (p2 > nl))
+	    return(NULL);
+	*(p2++) = 0;
+	for(; (*p2 == ' ') || (*p2 == '\t'); p2++);
+	for(nl = p2; (*nl != '\r') && (*nl != '\n'); nl++);
+	if(!SKIPNL(nl))
+	    return(NULL);
+	reqappheader(req, p, p2);
+	p = nl;
+    }
+    return(req);
+}
+
+static void serve(struct muth *muth, va_list args)
+{
+    vavar(int, fd);
+    char *hb;
+    struct htreq *req;
+    
+    hb = NULL;
+    while(1) {
+	if((hb = slowreadhead(fd)) == NULL)
+	    goto out;
+	if((req = parseraw(hb)) == NULL)
+	    goto out;
+	free(hb);
+	hb = NULL;
+	printf("\"%s\", \"%s\", \"%s\"\n", req->method, req->url, req->ver);
+	freereq(req);
+    }
+    
+out:
+    if(hb != NULL)
+	free(hb);
+    close(fd);
+}
+
 static void listenloop(struct muth *muth, va_list args)
 {
     vavar(int, ss);
@@ -126,10 +245,15 @@ static void listenloop(struct muth *muth, va_list args)
 	namelen = sizeof(name);
 	block(ss, EV_READ);
 	ns = accept(ss, (struct sockaddr *)&name, &namelen);
-	block(ns, EV_WRITE);
-	write(ns, "test\n", 5);
-	close(ns);
+	if(ns < 0) {
+	    flog(LOG_ERR, "accept: %s", strerror(errno));
+	    goto out;
+	}
+	mustart(serve, ns);
     }
+    
+out:
+    close(ss);
 }
 
 static void ioloop(void)
@@ -140,7 +264,7 @@ static void ioloop(void)
     int maxfd;
     int ev;
     
-    while(1) {
+    while(blockers != NULL) {
 	FD_ZERO(&rfds);
 	FD_ZERO(&wfds);
 	FD_ZERO(&efds);
@@ -172,7 +296,8 @@ static void ioloop(void)
 		ev |= EV_WRITE;
 	    if(FD_ISSET(bl->fd, &efds))
 		ev = -1;
-	    resume(bl->th, ev);
+	    if(ev != 0)
+		resume(bl->th, ev);
 	}
     }
 }
