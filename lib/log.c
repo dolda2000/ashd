@@ -17,27 +17,31 @@
 */
 
 #include <stdlib.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <syslog.h>
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
 #include <utils.h>
 
-void _sizebuf(struct buffer *buf, size_t wanted, size_t el)
+static int tostderr = 1, tosyslog = 0;
+
+void flog(int level, char *format, ...)
 {
-    size_t n;
+    va_list args;
     
-    n = buf->s;
-    if(n == 0)
-	n = 1;
-    while(n < wanted)
-	n <<= 1;
-    if(n <= buf->s)
-	return;
-    if(buf->b != NULL)
-	buf->b = srealloc(buf->b, n * el);
-    else
-	buf->b = smalloc(n * el);
-    buf->s = n;
+    va_start(args, format);
+    if(tostderr) {
+	vfprintf(stderr, format, args);
+	fprintf(stderr, "\n");
+    } else if(tosyslog) {
+	vsyslog(level, format, args);
+    }
+    va_end(args);
 }
 
+void opensyslog(void)
+{
+    openlog("ashd", 0, LOG_DAEMON);
+    tostderr = 0;
+    tosyslog = 1;
+}
