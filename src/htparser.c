@@ -116,41 +116,48 @@ static int listensock6(int port)
     return(fd);
 }
 
-static char *slowreadhead(int fd)
+static size_t readhead(int fd, struct charbuf *buf)
 {
-    int ret;
-    struct charbuf buf;
     int nl;
-    char last;
+    size_t off;
     
-    bufinit(buf);
-    nl = 0;
-    while(1) {
-	sizebuf(buf, buf.d + 1);
-	ret = recv(fd, buf.b + buf.d, 1, MSG_DONTWAIT);
-	if(ret <= 0) {
-	    if((ret < 0) && (errno == EAGAIN)) {
-		block(fd, EV_READ);
-		continue;
+    int get1(void)
+    {
+	int ret;
+	
+	while(!(off < buf->d)) {
+	    sizebuf(*buf, buf->d + 1024);
+	    ret = recv(fd, buf->b + buf->d, buf->s - buf->d, MSG_DONTWAIT);
+	    if(ret <= 0) {
+		if((ret < 0) && (errno == EAGAIN)) {
+		    block(fd, EV_READ);
+		    continue;
+		}
+		return(-1);
 	    }
-	    goto err;
+	    buf->d += ret;
 	}
-	last = buf.b[buf.d++];
-	if(last == '\n') {
+	return(buf->b[off++]);
+    }
+
+    nl = 0;
+    off = 0;
+    while(1) {
+	switch(get1()) {
+	case '\n':
 	    if(nl)
-		break;
+		return(off);
 	    nl = 1;
-	} else if(last == '\r') {
-	} else {
+	    break;
+	case '\r':
+	    break;
+	case -1:
+	    return(-1);
+	default:
 	    nl = 0;
+	    break;
 	}
     }
-    bufadd(buf, 0);
-    return(buf.b);
-    
-err:
-    buffree(buf);
-    return(NULL);
 }
 
 #define SKIPNL(ptr) ({				\
@@ -192,45 +199,48 @@ static struct htreq *parseraw(char *buf)
     while(1) {
 	if(SKIPNL(p)) {
 	    if(*p)
-		return(NULL);
+		goto fail;
 	    break;
 	}
 	if((nl = strchr(p, '\n')) == NULL)
-	    return(NULL);
+	    goto fail;
 	if(((p2 = strchr(p, ':')) == NULL) || (p2 > nl))
-	    return(NULL);
+	    goto fail;
 	*(p2++) = 0;
 	for(; (*p2 == ' ') || (*p2 == '\t'); p2++);
 	for(nl = p2; (*nl != '\r') && (*nl != '\n'); nl++);
 	if(!SKIPNL(nl))
-	    return(NULL);
+	    goto fail;
 	reqappheader(req, p, p2);
 	p = nl;
     }
     return(req);
+    
+fail:
+    freereq(req);
+    return(NULL);
 }
 
 static void serve(struct muth *muth, va_list args)
 {
     vavar(int, fd);
-    char *hb;
+    struct charbuf buf;
     struct htreq *req;
+    size_t headoff;
     
-    hb = NULL;
+    bufinit(buf);
     while(1) {
-	if((hb = slowreadhead(fd)) == NULL)
+	buf.d = 0;
+	if((headoff = readhead(fd, &buf)) < 0)
 	    goto out;
-	if((req = parseraw(hb)) == NULL)
+	if((req = parseraw(buf.b)) == NULL)
 	    goto out;
-	free(hb);
-	hb = NULL;
-	printf("\"%s\", \"%s\", \"%s\"\n", req->method, req->url, req->ver);
+	printf("\"%s\", \"%s\", \"%s\", \"%s\"\n", req->method, req->url, req->ver, getheader(req, "host"));
 	freereq(req);
     }
     
 out:
-    if(hb != NULL)
-	free(hb);
+    buffree(buf);
     close(fd);
 }
 
