@@ -18,73 +18,166 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <errno.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 #include <utils.h>
+#include <log.h>
 #include <req.h>
+#include <proc.h>
 
-struct htreq *mkreq(char *method, char *url, char *ver)
+struct hthead *mkreq(char *method, char *url, char *ver)
 {
-    struct htreq *req;
+    struct hthead *req;
     
     omalloc(req);
     req->method = sstrdup(method);
     req->url = sstrdup(url);
     req->ver = sstrdup(ver);
-    req->restbuf = sstrdup(url);
-    req->rest = req->restbuf;
+    req->rest = sstrdup(url);
     return(req);
 }
 
-void freereq(struct htreq *req)
+struct hthead *mkresp(int code, char *msg, char *ver)
 {
-    int i;
+    struct hthead *resp;
     
-    free(req->method);
-    free(req->url);
-    free(req->ver);
-    free(req->restbuf);
-    if(req->headers) {
-	for(i = 0; i < req->noheaders; i++) {
-	    free(req->headers[i][0]);
-	    free(req->headers[i][1]);
-	    free(req->headers[i]);
-	}
-	free(req->headers);
-    }
-    free(req);
+    omalloc(resp);
+    resp->code = code;
+    resp->msg = sstrdup(msg);
+    resp->ver = sstrdup(ver);
+    return(resp);
 }
 
-char *getheader(struct htreq *req, char *name)
+void freehthead(struct hthead *head)
 {
     int i;
     
-    for(i = 0; i < req->noheaders; i++) {
-	if(!strcasecmp(req->headers[i][0], name))
-	    return(req->headers[i][1]);
+    if(head->method != NULL)
+	free(head->method);
+    if(head->url != NULL)
+	free(head->url);
+    if(head->msg != NULL)
+	free(head->msg);
+    if(head->ver != NULL)
+	free(head->ver);
+    if(head->rest != NULL)
+	free(head->rest);
+    if(head->headers) {
+	for(i = 0; i < head->noheaders; i++) {
+	    free(head->headers[i][0]);
+	    free(head->headers[i][1]);
+	    free(head->headers[i]);
+	}
+	free(head->headers);
+    }
+    free(head);
+}
+
+char *getheader(struct hthead *head, char *name)
+{
+    int i;
+    
+    for(i = 0; i < head->noheaders; i++) {
+	if(!strcasecmp(head->headers[i][0], name))
+	    return(head->headers[i][1]);
     }
     return(NULL);
 }
 
-void reqpreheader(struct htreq *req, char *name, char *val)
+void headpreheader(struct hthead *head, const char *name, const char *val)
 {
-    req->headers = srealloc(req->headers, sizeof(*req->headers) * (req->noheaders + 1));
-    memmove(req->headers + 1, req->headers, sizeof(*req->headers) * req->noheaders);
-    req->noheaders++;
-    req->headers[0] = smalloc(sizeof(*req->headers[0]) * 2);
-    req->headers[0][0] = sstrdup(name);
-    req->headers[0][1] = sstrdup(val);
+    head->headers = srealloc(head->headers, sizeof(*head->headers) * (head->noheaders + 1));
+    memmove(head->headers + 1, head->headers, sizeof(*head->headers) * head->noheaders);
+    head->noheaders++;
+    head->headers[0] = smalloc(sizeof(*head->headers[0]) * 2);
+    head->headers[0][0] = sstrdup(name);
+    head->headers[0][1] = sstrdup(val);
 }
 
-void reqappheader(struct htreq *req, char *name, char *val)
+void headappheader(struct hthead *head, const char *name, const char *val)
 {
     int i;
 
-    i = req->noheaders++;
-    req->headers = srealloc(req->headers, sizeof(*req->headers) * req->noheaders);
-    req->headers[i] = smalloc(sizeof(*req->headers[i]) * 2);
-    req->headers[i][0] = sstrdup(name);
-    req->headers[i][1] = sstrdup(val);
+    i = head->noheaders++;
+    head->headers = srealloc(head->headers, sizeof(*head->headers) * head->noheaders);
+    head->headers[i] = smalloc(sizeof(*head->headers[i]) * 2);
+    head->headers[i][0] = sstrdup(name);
+    head->headers[i][1] = sstrdup(val);
+}
+
+int sendreq(int sock, struct hthead *req)
+{
+    int ret, i;
+    int pfds[2];
+    struct charbuf buf;
+    
+    if(socketpair(PF_UNIX, SOCK_DGRAM, 0, pfds))
+	return(-1);
+    bufinit(buf);
+    bufcatstr2(buf, req->method);
+    bufcatstr2(buf, req->url);
+    bufcatstr2(buf, req->ver);
+    bufcatstr2(buf, req->rest);
+    for(i = 0; i < req->noheaders; i++) {
+	bufcatstr2(buf, req->headers[i][0]);
+	bufcatstr2(buf, req->headers[i][1]);
+    }
+    bufcatstr2(buf, "");
+    ret = sendfd(sock, pfds[0], buf.b, buf.d);
+    buffree(buf);
+    close(pfds[0]);
+    if(ret < 0) {
+	close(pfds[1]);
+	return(-1);
+    } else {
+	return(pfds[1]);
+    }
+}
+
+int recvreq(int sock, struct hthead **reqp)
+{
+    int fd;
+    struct charbuf buf;
+    char *p;
+    size_t l;
+    char *name, *val;
+    struct hthead *req;
+    
+    if((fd = recvfd(sock, &buf.b, &buf.d)) < 0) {
+	return(-1);
+    }
+    buf.s = buf.d;
+    p = buf.b;
+    l = buf.d;
+    
+    *reqp = omalloc(req);
+    if((req->method = sstrdup(decstr(&p, &l))) == NULL)
+	goto fail;
+    if((req->url = sstrdup(decstr(&p, &l))) == NULL)
+	goto fail;
+    if((req->ver = sstrdup(decstr(&p, &l))) == NULL)
+	goto fail;
+    if((req->rest = sstrdup(decstr(&p, &l))) == NULL)
+	goto fail;
+    
+    while(1) {
+	if(!*(name = decstr(&p, &l)))
+	    break;
+	val = decstr(&p, &l);
+	headappheader(req, name, val);
+    }
+    
+    buffree(buf);
+    return(fd);
+    
+fail:
+    close(fd);
+    freehthead(req);
+    errno = EPROTO;
+    return(-1);
 }

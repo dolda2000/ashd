@@ -1,17 +1,21 @@
 #ifndef _LIB_HTREQ_H
 #define _LIB_HTREQ_H
 
-struct htreq {
-    char *method, *url, *ver;
-    char *restbuf, *rest;
+struct hthead {
+    char *method, *url, *ver, *msg;
+    int code;
+    char *rest;
     char ***headers;
     int noheaders;
 };
 
-struct htreq *mkreq(char *method, char *url, char *ver);
-void freereq(struct htreq *req);
-char *getheader(struct htreq *req, char *name);
-void reqpreheader(struct htreq *req, char *name, char *val);
-void reqappheader(struct htreq *req, char *name, char *val);
+struct hthead *mkreq(char *method, char *url, char *ver);
+struct hthead *mkresp(int code, char *msg, char *ver);
+void freehthead(struct hthead *head);
+char *getheader(struct hthead *head, char *name);
+void headpreheader(struct hthead *head, const char *name, const char *val);
+void headappheader(struct hthead *head, const char *name, const char *val);
+int sendreq(int sock, struct hthead *req);
+int recvreq(int sock, struct hthead **reqp);
 
 #endif
