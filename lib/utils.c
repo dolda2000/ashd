@@ -17,6 +17,7 @@
 */
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -41,3 +42,59 @@ void _sizebuf(struct buffer *buf, size_t wanted, size_t el)
     buf->s = n;
 }
 
+char *decstr(char **p, size_t *len)
+{
+    char *p2, *ret;
+    
+    for(p2 = *p; (p2 - *p) < *len; p2++) {
+	if(*p2 == 0)
+	    break;
+    }
+    if((p2 - *p) == *len)
+	return(NULL);
+    p2++;
+    ret = *p;
+    *len -= p2 - *p;
+    *p = p2;
+    return(ret);
+}
+
+char *vsprintf2(char *format, va_list al)
+{
+    int ret;
+    char *buf;
+    va_list al2;
+    
+    va_copy(al2, al);
+    ret = vsnprintf(NULL, 0, format, al2);
+    va_end(al2);
+    buf = smalloc(ret + 1);
+    va_copy(al2, al);
+    vsnprintf(buf, ret + 1, format, al2);
+    va_end(al2);
+    return(buf);
+}
+
+char *sprintf2(char *format, ...)
+{
+    va_list args;
+    char *buf;
+    
+    va_start(args, format);
+    buf = vsprintf2(format, args);
+    va_end(args);
+    return(buf);
+}
+
+char *sprintf3(char *format, ...)
+{
+    static char *buf = NULL;
+    va_list args;
+    
+    if(buf != NULL)
+	free(buf);
+    va_start(args, format);
+    buf = vsprintf2(format, args);
+    va_end(args);
+    return(buf);
+}
