@@ -3,6 +3,9 @@
 
 #include <stdarg.h>
 
+#define max(a, b) (((b) > (a))?(b):(a))
+#define min(a, b) (((b) < (a))?(b):(a))
+
 #define smalloc(size) ({void *__result__; ((__result__ = malloc(size)) == NULL)?({exit(-1); (void *)0;}):__result__;})
 #define srealloc(ptr, size) ({void *__result__; ((__result__ = realloc((ptr), (size))) == NULL)?({exit(-1); (void *)0;}):__result__;})
 #define szmalloc(size) memset(smalloc(size), 0, size)
