@@ -167,3 +167,11 @@ void freeca(char **ca)
 	free(*c);
     free(ca);
 }
+
+int calen(char **a)
+{
+    int i;
+    
+    for(i = 0; *a; a++, i++);
+    return(i);
+}

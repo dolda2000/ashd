@@ -67,5 +67,6 @@ char *sprintf3(char *format, ...);
 off_t atoo(char *n);
 char **tokenize(char *src);
 void freeca(char **ca);
+int calen(char **a);
 
 #endif
