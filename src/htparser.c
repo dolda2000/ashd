@@ -369,6 +369,10 @@ static void serve(struct muth *muth, va_list args)
 	    goto out;
 	inbuf.b[headoff] = old;
 	bufeat(inbuf, headoff);
+	/* We strip off the leading slash from the rest string, so
+	 * that multiplexers can parse coherently. */
+	if(req->rest[0] == '/')
+	    replrest(req, req->rest + 1);
 	
 	/*
 	 * Add metainformation and then send the request to the root

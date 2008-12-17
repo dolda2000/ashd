@@ -89,6 +89,17 @@ char *getheader(struct hthead *head, char *name)
     return(NULL);
 }
 
+void replrest(struct hthead *head, char *rest)
+{
+    char *tmp;
+    
+    /* Do not free the current rest string yet, so that the new one
+     * can a subpart of the old one. */
+    tmp = head->rest;
+    head->rest = sstrdup(rest);
+    free(tmp);
+}
+
 void headpreheader(struct hthead *head, const char *name, const char *val)
 {
     head->headers = srealloc(head->headers, sizeof(*head->headers) * (head->noheaders + 1));
