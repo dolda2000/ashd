@@ -296,7 +296,7 @@ static off_t passdata(int src, int dst, struct charbuf *buf, off_t max)
 
     sent = 0;
     eof = 0;
-    while(!eof || (buf->d > 0)) {
+    while((!eof || (buf->d > 0)) && ((max < 0) || (sent < max))) {
 	if(!eof && (buf->d < buf->s) && ((max < 0) || (sent + buf->d < max))) {
 	    while(1) {
 		ret = recv(src, buf->b + buf->d, buf->s - buf->d, MSG_DONTWAIT);
@@ -343,7 +343,7 @@ static void serve(struct muth *muth, va_list args)
     struct charbuf inbuf, outbuf;
     struct hthead *req, *resp;
     off_t dlen, sent;
-    size_t headoff;
+    ssize_t headoff;
     char nmbuf[256];
     
     bufinit(inbuf);
@@ -395,6 +395,8 @@ static void serve(struct muth *muth, va_list args)
 	    if(dlen > 0)
 		passdata(fd, cfd, &inbuf, dlen);
 	}
+	/* Make sure to send EOF */
+	shutdown(cfd, SHUT_WR);
 	
 	/*
 	 * Find and decode the response header:
