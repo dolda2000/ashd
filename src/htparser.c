@@ -342,7 +342,7 @@ static void serve(struct muth *muth, va_list args)
     char *hd;
     struct charbuf inbuf, outbuf;
     struct hthead *req, *resp;
-    off_t sent;
+    off_t dlen, sent;
     size_t headoff;
     char nmbuf[256];
     
@@ -382,6 +382,15 @@ static void serve(struct muth *muth, va_list args)
 	    headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&name)->sin6_port)));
 	}
 	cfd = sendreq(plex, req);
+
+	/*
+	 * If there is message data, pass it:
+	 */
+	if((hd = getheader(req, "content-length")) != NULL) {
+	    dlen = atoo(hd);
+	    if(dlen > 0)
+		passdata(fd, cfd, &inbuf, dlen);
+	}
 	
 	/*
 	 * Find and decode the response header:
