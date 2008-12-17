@@ -350,6 +350,8 @@ static void serve(struct muth *muth, va_list args)
 	    headappheader(req, "X-Ash-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&name)->sin6_addr, nmbuf, sizeof(nmbuf)));
 	    headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&name)->sin6_port)));
 	}
+	if(block(plex, EV_WRITE, 60) <= 0)
+	    goto out;
 	if((cfd = sendreq(plex, req)) < 0)
 	    goto out;
 
