@@ -1,6 +1,8 @@
 bin_PROGRAMS = htparser
+noinst_PROGRAMS = debugsink
 
 htparser_SOURCES = htparser.c
+debugsink_SOURCES = debugsink.c
 
-htparser_LDADD = $(top_srcdir)/lib/libht.a
-htparser_CPPFLAGS = -I$(top_srcdir)/lib
+LDADD = $(top_srcdir)/lib/libht.a
+AM_CPPFLAGS = -I$(top_srcdir)/lib
