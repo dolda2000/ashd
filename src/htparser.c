@@ -20,60 +20,22 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/select.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <time.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 #include <utils.h>
 #include <mt.h>
+#include <mtio.h>
 #include <log.h>
 #include <req.h>
 #include <proc.h>
 
-#define EV_READ 1
-#define EV_WRITE 2
-
-struct blocker {
-    struct blocker *n, *p;
-    int fd;
-    int ev;
-    time_t to;
-    struct muth *th;
-};
-
-static struct blocker *blockers;
-int plex;
-
-static int block(int fd, int ev, time_t to)
-{
-    struct blocker *bl;
-    int rv;
-    
-    omalloc(bl);
-    bl->fd = fd;
-    bl->ev = ev;
-    if(to > 0)
-	bl->to = time(NULL) + to;
-    bl->th = current;
-    bl->n = blockers;
-    if(blockers)
-	blockers->p = bl;
-    blockers = bl;
-    rv = yield();
-    if(bl->n)
-	bl->n->p = bl->p;
-    if(bl->p)
-	bl->p->n = bl->n;
-    if(bl == blockers)
-	blockers = bl->n;
-    return(rv);
-}
+static int plex;
 
 static int listensock4(int port)
 {
@@ -479,63 +441,6 @@ static void listenloop(struct muth *muth, va_list args)
     
 out:
     close(ss);
-}
-
-static void ioloop(void)
-{
-    int ret;
-    fd_set rfds, wfds, efds;
-    struct blocker *bl, *nbl;
-    struct timeval toval;
-    time_t now, timeout;
-    int maxfd;
-    int ev;
-    
-    while(blockers != NULL) {
-	FD_ZERO(&rfds);
-	FD_ZERO(&wfds);
-	FD_ZERO(&efds);
-	maxfd = 0;
-	now = time(NULL);
-	timeout = 0;
-	for(bl = blockers; bl; bl = bl->n) {
-	    if(bl->ev & EV_READ)
-		FD_SET(bl->fd, &rfds);
-	    if(bl->ev & EV_WRITE)
-		FD_SET(bl->fd, &wfds);
-	    FD_SET(bl->fd, &efds);
-	    if(bl->fd > maxfd)
-		maxfd = bl->fd;
-	    if((bl->to != 0) && ((timeout == 0) || (timeout > bl->to)))
-		timeout = bl->to;
-	}
-	toval.tv_sec = timeout - now;
-	toval.tv_usec = 0;
-	ret = select(maxfd + 1, &rfds, &wfds, &efds, timeout?(&toval):NULL);
-	if(ret < 0) {
-	    if(errno != EINTR) {
-		flog(LOG_CRIT, "ioloop: select errored out: %s", strerror(errno));
-		/* To avoid CPU hogging in case it's bad, which it
-		 * probably is. */
-		sleep(1);
-	    }
-	}
-	now = time(NULL);
-	for(bl = blockers; bl; bl = nbl) {
-	    nbl = bl->n;
-	    ev = 0;
-	    if(FD_ISSET(bl->fd, &rfds))
-		ev |= EV_READ;
-	    if(FD_ISSET(bl->fd, &wfds))
-		ev |= EV_WRITE;
-	    if(FD_ISSET(bl->fd, &efds))
-		ev = -1;
-	    if(ev != 0)
-		resume(bl->th, ev);
-	    else if((bl->to != 0) && (bl->to <= now))
-		resume(bl->th, 0);
-	}
-    }
 }
 
 int main(int argc, char **argv)
