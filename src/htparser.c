@@ -339,7 +339,7 @@ static void serve(struct muth *muth, va_list args)
     vavar(struct sockaddr_storage, name);
     int cfd;
     char old;
-    char *hd;
+    char *hd, *p;
     struct charbuf inbuf, outbuf;
     struct hthead *req, *resp;
     off_t dlen, sent;
@@ -369,10 +369,13 @@ static void serve(struct muth *muth, va_list args)
 	    goto out;
 	inbuf.b[headoff] = old;
 	bufeat(inbuf, headoff);
-	/* We strip off the leading slash from the rest string, so
-	 * that multiplexers can parse coherently. */
+	/* We strip off the leading slash and any param string from
+	 * the rest string, so that multiplexers can parse
+	 * coherently. */
 	if(req->rest[0] == '/')
 	    replrest(req, req->rest + 1);
+	if((p = strchr(req->rest, '?')) != NULL)
+	    *p = 0;
 	
 	/*
 	 * Add metainformation and then send the request to the root
