@@ -116,7 +116,7 @@ int sendreq(int sock, struct hthead *req)
     int pfds[2];
     struct charbuf buf;
     
-    if(socketpair(PF_UNIX, SOCK_DGRAM, 0, pfds))
+    if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
 	return(-1);
     bufinit(buf);
     bufcatstr2(buf, req->method);
