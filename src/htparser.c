@@ -349,7 +349,7 @@ static void serve(struct muth *muth, va_list args)
     bufinit(inbuf);
     bufinit(outbuf);
     cfd = -1;
-    req = NULL;
+    req = resp = NULL;
     while(1) {
 	/*
 	 * First, find and decode the header:
@@ -388,7 +388,8 @@ static void serve(struct muth *muth, va_list args)
 	    headappheader(req, "X-Ash-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&name)->sin6_addr, nmbuf, sizeof(nmbuf)));
 	    headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&name)->sin6_port)));
 	}
-	cfd = sendreq(plex, req);
+	if((cfd = sendreq(plex, req)) < 0)
+	    goto out;
 
 	/*
 	 * If there is message data, pass it:
@@ -405,7 +406,8 @@ static void serve(struct muth *muth, va_list args)
 	 * Find and decode the response header:
 	 */
 	outbuf.d = 0;
-	headoff = readhead(cfd, &outbuf);
+	if((headoff = readhead(cfd, &outbuf)) < 0)
+	    goto out;
 	hd = memcpy(smalloc(headoff + 1), outbuf.b, headoff);
 	hd[headoff] = 0;
 	if((resp = parserawresp(hd)) == NULL)

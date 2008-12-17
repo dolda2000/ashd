@@ -33,8 +33,10 @@
 int main(int argc, char **argv)
 {
     struct hthead *req;
-    int fd;
+    int fd, ret;
+    char buf[1024];
     FILE *out;
+    off_t nb;
     
     while(1) {
 	if((fd = recvreq(0, &req)) < 0) {
@@ -44,12 +46,35 @@ int main(int argc, char **argv)
 	}
 	printf("%s %s %s %s %s\n", req->method, req->url, req->ver, req->rest, getheader(req, "x-ash-address"));
 	out = fdopen(fd, "w");
-	fprintf(out, "HTTP/1.1 200 OK\r\n");
-	fprintf(out, "Content-Type: text/plain; charset=utf8\r\n");
-	fprintf(out, "\r\n");
-	fprintf(out, "%s\n", getheader(req, "x-ash-port"));
-	fprintf(out, "%s\n", getheader(req, "user-agent"));
-	fprintf(out, "%s\n", getheader(req, "content-length"));
+	if(!strcmp(req->rest, "")) {
+	    fprintf(out, "HTTP/1.1 200 OK\r\n");
+	    fprintf(out, "Content-Type: text/html; charset=utf8\r\n");
+	    fprintf(out, "\r\n");
+	    fprintf(out, "<html>\n<body>\n<form action=\"/post\" method=\"post\">\n<input type=\"submit\" name=\"barda\" />\n</form>\n</body>\n</html>\n");
+	} else if(!strcmp(req->rest, "post")) {
+	    nb = 0;
+	    while(1) {
+		ret = read(fd, buf, 1024);
+		if(ret < 0)
+		    exit(1);
+		if(ret == 0)
+		    break;
+		nb += ret;
+	    }
+	    fprintf(out, "HTTP/1.1 200 OK\r\n");
+	    fprintf(out, "Content-Type: text/plain; charset=utf8\r\n");
+	    fprintf(out, "\r\n");
+	    fprintf(out, "%i\n", (int)nb);
+	} else if(!strcmp(req->rest, "inf")) {
+	    fprintf(out, "HTTP/1.1 200 OK\r\n");
+	    fprintf(out, "Content-Type: text/plain\r\n");
+	    fprintf(out, "\r\n");
+	    while(1)
+		fprintf(out, "0123456789012345678901234567890123456789012345678901234567890123456789\n");
+	} else {
+	    fprintf(out, "HTTP/1.1 404 Not Found\r\n");
+	    fprintf(out, "\r\n");
+	}
 	fclose(out);
     }
     return(0);
