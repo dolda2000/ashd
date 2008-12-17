@@ -98,3 +98,8 @@ char *sprintf3(char *format, ...)
     va_end(args);
     return(buf);
 }
+
+off_t atoo(char *n)
+{
+    return((off_t)strtoll(n, NULL, 10));
+}

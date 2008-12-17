@@ -61,5 +61,6 @@ char *decstr(char **p, size_t *len);
 char *vsprintf2(char *format, va_list al);
 char *sprintf2(char *format, ...);
 char *sprintf3(char *format, ...);
+off_t atoo(char *n);
 
 #endif
