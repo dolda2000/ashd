@@ -35,7 +35,7 @@ int stdmkchild(char **argv)
     pid_t pid;
     int fd[2];
     
-    if(socketpair(PF_UNIX, SOCK_DGRAM, 0, fd))
+    if(socketpair(PF_UNIX, SOCK_SEQPACKET, 0, fd))
 	return(-1);
     if((pid = fork()) < 0)
 	return(-1);
@@ -98,8 +98,10 @@ int recvfd(int sock, char **data, size_t *datalen)
     msg.msg_controllen = sizeof(cbuf);
     
     ret = recvmsg(sock, &msg, 0);
-    if(ret < 0) {
+    if(ret <= 0) {
 	free(buf);
+	if(ret == 0)
+	    errno = 0;
 	return(-1);
     }
     
