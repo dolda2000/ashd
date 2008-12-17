@@ -65,5 +65,7 @@ char *vsprintf2(char *format, va_list al);
 char *sprintf2(char *format, ...);
 char *sprintf3(char *format, ...);
 off_t atoo(char *n);
+char **tokenize(char *src);
+void freeca(char **ca);
 
 #endif

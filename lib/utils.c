@@ -18,6 +18,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <ctype.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -102,4 +104,66 @@ char *sprintf3(char *format, ...)
 off_t atoo(char *n)
 {
     return((off_t)strtoll(n, NULL, 10));
+}
+
+char **tokenize(char *src)
+{
+    char **ret;
+    char *p, *p2, *n;
+    int s, q, cl;
+    
+    p = src;
+    s = 0;
+    ret = NULL;
+    while(1) {
+	while(isspace(*p))
+	    p++;
+	if(!*p)
+	    break;
+	p2 = p;
+	q = 0;
+	while(1) {
+	    if(q) {
+		if(*p == '\"')
+		    q = 0;
+		else if(*p == '\\')
+		    p++;
+	    } else {
+		if(*p == '\"')
+		    q = 1;
+		else if(isspace(*p) || !*p)
+		    break;
+		else if(*p == '\\')
+		    p++;
+	    }
+	    p++;
+	}
+	cl = p - p2;
+	n = memcpy(malloc(cl + 1), p2, cl);
+	n[cl] = 0;
+	for(p2 = n; *p2; cl--) {
+	    if(*p2 == '\\') {
+		memmove(p2, p2 + 1, cl--);
+		p2++;
+	    } else if(*p2 == '\"') {
+		memmove(p2, p2 + 1, cl);
+	    } else {
+		p2++;
+	    }
+	}
+	ret = realloc(ret, sizeof(char *) * (++s));
+	ret[s - 1] = n;
+    }
+    ret = realloc(ret, sizeof(char *) * (++s));
+    ret[s - 1] = NULL;
+    return(ret);
+}
+
+void freeca(char **ca)
+{
+    char **c;
+    
+    for(c = ca; *c; c++)
+	free(*c);
+    free(ca);
 }
