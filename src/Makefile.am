@@ -1,7 +1,8 @@
-bin_PROGRAMS = htparser
+bin_PROGRAMS = htparser dirplex
 noinst_PROGRAMS = debugsink
 
 htparser_SOURCES = htparser.c
+dirplex_SOURCES = dirplex.c
 debugsink_SOURCES = debugsink.c
 
 LDADD = $(top_srcdir)/lib/libht.a

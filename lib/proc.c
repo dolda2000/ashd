@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <ctype.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -28,6 +29,7 @@
 #include <utils.h>
 #include <log.h>
 #include <proc.h>
+#include <req.h>
 
 int stdmkchild(char **argv)
 {
@@ -120,4 +122,47 @@ int recvfd(int sock, char **data, size_t *datalen)
     *data = buf;
     *datalen = ret;
     return(fd);
+}
+
+pid_t stdforkserve(char **argv, struct hthead *req, int fd)
+{
+    int i;
+    char *ebuf, *p;
+    pid_t pid;
+    struct charvbuf args;
+    
+    if((pid = fork()) < 0)
+	return(-1);
+    if(pid == 0) {
+	dup2(fd, 0);
+	dup2(fd, 1);
+	for(i = 3; i < FD_SETSIZE; i++)
+	    close(i);
+	
+	bufinit(args);
+	for(i = 0; argv[i]; i++)
+	    bufadd(args, argv[i]);
+	bufadd(args, req->method);
+	bufadd(args, req->url);
+	bufadd(args, req->rest);
+	bufadd(args, NULL);
+	
+	for(i = 0; i < req->noheaders; i++) {
+	    ebuf = sstrdup(req->headers[i][0]);
+	    for(p = ebuf; *p; p++) {
+		if(isalnum(*p))
+		    *p = toupper(*p);
+		else
+		    *p = '_';
+	    }
+	    putenv(sprintf2("REQ_%s=%s", ebuf, req->headers[i][1]));
+	}
+	putenv(sprintf2("HTTP_VERSION=%s", req->ver));
+	
+	execvp(args.b[0], args.b);
+	flog(LOG_WARNING, "could not exec child program %s: %s", argv[0], strerror(errno));
+	exit(127);
+    }
+    close(fd);
+    return(pid);
 }
