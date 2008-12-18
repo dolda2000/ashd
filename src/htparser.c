@@ -300,6 +300,7 @@ static void serve(struct muth *muth, va_list args)
     vavar(int, fd);
     vavar(struct sockaddr_storage, name);
     int cfd;
+    int pfds[2];
     char old;
     char *hd, *p;
     struct charbuf inbuf, outbuf;
@@ -352,8 +353,12 @@ static void serve(struct muth *muth, va_list args)
 	}
 	if(block(plex, EV_WRITE, 60) <= 0)
 	    goto out;
-	if((cfd = sendreq(plex, req)) < 0)
+	if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
 	    goto out;
+	if(sendreq(plex, req, pfds[0]))
+	    goto out;
+	close(pfds[0]);
+	cfd = pfds[1];
 
 	/*
 	 * If there is message data, pass it:

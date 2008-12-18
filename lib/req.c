@@ -121,14 +121,11 @@ void headappheader(struct hthead *head, const char *name, const char *val)
     head->headers[i][1] = sstrdup(val);
 }
 
-int sendreq(int sock, struct hthead *req)
+int sendreq(int sock, struct hthead *req, int fd)
 {
     int ret, i;
-    int pfds[2];
     struct charbuf buf;
     
-    if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
-	return(-1);
     bufinit(buf);
     bufcatstr2(buf, req->method);
     bufcatstr2(buf, req->url);
@@ -139,15 +136,12 @@ int sendreq(int sock, struct hthead *req)
 	bufcatstr2(buf, req->headers[i][1]);
     }
     bufcatstr2(buf, "");
-    ret = sendfd(sock, pfds[0], buf.b, buf.d);
+    ret = sendfd(sock, fd, buf.b, buf.d);
     buffree(buf);
-    close(pfds[0]);
-    if(ret < 0) {
-	close(pfds[1]);
+    if(ret < 0)
 	return(-1);
-    } else {
-	return(pfds[1]);
-    }
+    else
+	return(0);
 }
 
 int recvreq(int sock, struct hthead **reqp)
