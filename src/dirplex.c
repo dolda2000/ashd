@@ -347,13 +347,14 @@ static struct config *getconfig(char *path)
     return(cf);
 }
 
-static char *findfile(struct hthead *req, char *nm)
+static char *findfile(struct hthead *req)
 {
-    char *p, *p2, *path, *ftmp, *buf, *rv, *p3;
+    char *p, *p2, *path, *ftmp, *buf, *rv, *p3, *nm;
     struct stat sb;
     DIR *dir;
     struct dirent *dent;
     
+    nm = req->rest;
     path = sstrdup(".");
     p = nm;
     rv = NULL;
@@ -426,6 +427,10 @@ static char *findfile(struct hthead *req, char *nm)
 	    break;
 	p = p2;
     }
+    if(p2 == NULL)
+	replrest(req, "");
+    else
+	replrest(req, p2);
     if(!strncmp(rv, "./", 2))
 	memmove(rv, rv + 2, strlen(rv + 2) + 1);
     goto out;
@@ -539,11 +544,10 @@ static void serve(struct hthead *req, int fd)
     struct pattern *pat;
     struct child *ch;
     
-    if((file = findfile(req, req->rest)) == NULL) {
+    if((file = findfile(req)) == NULL) {
 	/* XXX: Do 404 handling */
 	return;
     }
-    replrest(req, file);
     if(stat(file, &sb)) {
 	flog(LOG_ERR, "could not stat previously found file %s: %s", file, strerror(errno));
 	free(file);
@@ -554,6 +558,7 @@ static void serve(struct hthead *req, int fd)
 	free(file);
 	return;
     }
+    headappheader(req, "X-Ash-File", file);
     if(((pat = findmatch(file, 0)) == NULL) && ((pat = findmatch(file, 1)) == NULL)) {
 	/* XXX: Send a 500 error? 404? */
 	free(file);
