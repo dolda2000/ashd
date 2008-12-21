@@ -347,101 +347,6 @@ static struct config *getconfig(char *path)
     return(cf);
 }
 
-static char *findfile(struct hthead *req)
-{
-    char *p, *p2, *path, *ftmp, *buf, *rv, *p3, *nm;
-    struct stat sb;
-    DIR *dir;
-    struct dirent *dent;
-    
-    nm = req->rest;
-    path = sstrdup(".");
-    p = nm;
-    rv = NULL;
-    while(1) {
-	if((p2 = strchr(p, '/')) == NULL) {
-	} else {
-	    *(p2++) = 0;
-	}
-	
-	if(!*p) {
-	    if(p2 == NULL) {
-		rv = sstrdup(path);
-		break;
-	    } else {
-		goto fail;
-	    }
-	}
-	if(*p == '.')
-	    goto fail;
-	
-	getconfig(path);
-	
-	/*
-	 * First, check the name verbatimely:
-	 */
-	buf = sprintf3("%s/%s", path, p);
-	if(!stat(buf, &sb)) {
-	    if(S_ISDIR(sb.st_mode)) {
-		ftmp = path;
-		if(!strcmp(path, "."))
-		    path = sstrdup(p);
-		else
-		    path = sprintf2("%s/%s", path, p);
-		free(ftmp);
-		goto next;
-	    }
-	    if(S_ISREG(sb.st_mode)) {
-		rv = sstrdup(buf);
-		break;
-	    }
-	    goto fail;
-	}
-
-	/*
-	 * Check the file extensionlessly:
-	 */
-	if(!strchr(p, '.') && ((dir = opendir(path)) != NULL)) {
-	    while((dent = readdir(dir)) != NULL) {
-		buf = sprintf3("%s/%s", path, dent->d_name);
-		if((p3 = strchr(dent->d_name, '.')) != NULL)
-		    *p3 = 0;
-		if(strcmp(dent->d_name, p))
-		    continue;
-		if(stat(buf, &sb))
-		    continue;
-		if(!S_ISREG(sb.st_mode))
-		    continue;
-		rv = sstrdup(buf);
-		break;
-	    }
-	    closedir(dir);
-	    if(dent != NULL)
-		break;
-	}
-	
-	goto fail;
-	
-    next:
-	if(p2 == NULL)
-	    break;
-	p = p2;
-    }
-    if(p2 == NULL)
-	replrest(req, "");
-    else
-	replrest(req, p2);
-    if(!strncmp(rv, "./", 2))
-	memmove(rv, rv + 2, strlen(rv + 2) + 1);
-    goto out;
-    
-fail:
-    rv = NULL;
-out:
-    free(path);
-    return(rv);
-}
-
 static struct child *findchild(char *file, char *name)
 {
     char *buf, *p;
@@ -537,37 +442,19 @@ static void passreq(struct child *ch, struct hthead *req, int fd)
     }
 }
 
-static void serve(struct hthead *req, int fd)
+static void handlefile(struct hthead *req, int fd, char *path)
 {
-    char *file;
-    struct stat sb;
     struct pattern *pat;
     struct child *ch;
-    
-    if((file = findfile(req)) == NULL) {
-	/* XXX: Do 404 handling */
-	return;
-    }
-    if(stat(file, &sb)) {
-	flog(LOG_ERR, "could not stat previously found file %s: %s", file, strerror(errno));
-	free(file);
-	return;
-    }
-    if(!S_ISREG(sb.st_mode)) {
-	/* XXX: Handle default files or similar stuff. */
-	free(file);
-	return;
-    }
-    headappheader(req, "X-Ash-File", file);
-    if(((pat = findmatch(file, 0)) == NULL) && ((pat = findmatch(file, 1)) == NULL)) {
+
+    headappheader(req, "X-Ash-File", path);
+    if(((pat = findmatch(path, 0)) == NULL) && ((pat = findmatch(path, 1)) == NULL)) {
 	/* XXX: Send a 500 error? 404? */
-	free(file);
 	return;
     }
-    if((ch = findchild(file, pat->childnm)) == NULL) {
+    if((ch = findchild(path, pat->childnm)) == NULL) {
 	/* XXX: Send a 500 error. */
 	flog(LOG_ERR, "child %s requested, but was not declared", pat->childnm);
-	free(file);
 	return;
     }
     
@@ -576,8 +463,124 @@ static void serve(struct hthead *req, int fd)
     } else if(ch->type == CH_FORK) {
 	stdforkserve(ch->argv, req, fd);
     }
+}
+
+static void handledir(struct hthead *req, int fd, char *path)
+{
+}
+
+static int checkdir(struct hthead *req, int fd, char *path)
+{
+    return(0);
+}
+
+static void serve(struct hthead *req, int fd)
+{
+    char *p, *p2, *path, *tmp, *buf, *p3, *nm;
+    struct stat sb;
+    DIR *dir;
+    struct dirent *dent;
     
-    free(file);
+    nm = req->rest;
+    path = sstrdup(".");
+    p = nm;
+    while(1) {
+	if((p2 = strchr(p, '/')) == NULL) {
+	} else {
+	    *(p2++) = 0;
+	}
+	
+	if(!*p) {
+	    if(p2 == NULL) {
+		if(stat(path, &sb)) {
+		    flog(LOG_WARNING, "failed to stat previously stated directory %s: %s", path, strerror(errno));
+		    goto fail;
+		}
+		break;
+	    } else {
+		goto fail;
+	    }
+	}
+	if(*p == '.')
+	    goto fail;
+	
+	getconfig(path);
+	
+	/*
+	 * First, check the name verbatimely:
+	 */
+	buf = sprintf3("%s/%s", path, p);
+	if(!stat(buf, &sb)) {
+	    if(S_ISDIR(sb.st_mode)) {
+		tmp = path;
+		if(!strcmp(path, "."))
+		    path = sstrdup(p);
+		else
+		    path = sprintf2("%s/%s", path, p);
+		free(tmp);
+		if(checkdir(req, fd, path))
+		    break;
+		goto next;
+	    }
+	    if(S_ISREG(sb.st_mode)) {
+		tmp = path;
+		path = sprintf2("%s/%s", path, p);
+		free(tmp);
+		break;
+	    }
+	    goto fail;
+	}
+
+	/*
+	 * Check the file extensionlessly:
+	 */
+	if(!strchr(p, '.') && ((dir = opendir(path)) != NULL)) {
+	    while((dent = readdir(dir)) != NULL) {
+		buf = sprintf3("%s/%s", path, dent->d_name);
+		if((p3 = strchr(dent->d_name, '.')) != NULL)
+		    *p3 = 0;
+		if(strcmp(dent->d_name, p))
+		    continue;
+		if(stat(buf, &sb))
+		    continue;
+		if(!S_ISREG(sb.st_mode))
+		    continue;
+		tmp = path;
+		path = sstrdup(buf);
+		free(tmp);
+		break;
+	    }
+	    closedir(dir);
+	    if(dent != NULL)
+		break;
+	}
+	
+	goto fail;
+	
+    next:
+	if(p2 == NULL)
+	    break;
+	p = p2;
+    }
+    if(p2 == NULL)
+	replrest(req, "");
+    else
+	replrest(req, p2);
+    if(!strncmp(path, "./", 2))
+	memmove(path, path + 2, strlen(path + 2) + 1);
+    if(S_ISDIR(sb.st_mode)) {
+	handledir(req, fd, path);
+    } else if(S_ISREG(sb.st_mode)) {
+	handlefile(req, fd, path);
+    } else {
+	goto fail;
+    }
+    goto out;
+    
+fail:
+    /* XXX: Send error report. */
+out:
+    free(path);
 }
 
 int main(int argc, char **argv)
