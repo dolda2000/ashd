@@ -68,5 +68,7 @@ off_t atoo(char *n);
 char **tokenize(char *src);
 void freeca(char **ca);
 int calen(char **a);
+void bvprintf(struct charbuf *buf, char *format, va_list al);
+void bprintf(struct charbuf *buf, char *format, ...);
 
 #endif

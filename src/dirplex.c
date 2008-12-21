@@ -34,6 +34,7 @@
 #include <log.h>
 #include <req.h>
 #include <proc.h>
+#include <resp.h>
 
 #define CH_SOCKET 0
 #define CH_FORK 1
@@ -453,8 +454,8 @@ static void handlefile(struct hthead *req, int fd, char *path)
 	return;
     }
     if((ch = findchild(path, pat->childnm)) == NULL) {
-	/* XXX: Send a 500 error. */
 	flog(LOG_ERR, "child %s requested, but was not declared", pat->childnm);
+	simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", pat->childnm);
 	return;
     }
     
@@ -467,6 +468,8 @@ static void handlefile(struct hthead *req, int fd, char *path)
 
 static void handledir(struct hthead *req, int fd, char *path)
 {
+    /* XXX: Todo */
+    simpleerror(fd, 403, "Not Authorized", "Will not send directory listings or indices yet");
 }
 
 static int checkdir(struct hthead *req, int fd, char *path)
@@ -494,15 +497,19 @@ static void serve(struct hthead *req, int fd)
 	    if(p2 == NULL) {
 		if(stat(path, &sb)) {
 		    flog(LOG_WARNING, "failed to stat previously stated directory %s: %s", path, strerror(errno));
+		    simpleerror(fd, 500, "Internal Server Error", "The server encountered an unexpected condition.");
 		    goto fail;
 		}
 		break;
 	    } else {
+		simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 		goto fail;
 	    }
 	}
-	if(*p == '.')
+	if(*p == '.') {
+	    simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 	    goto fail;
+	}
 	
 	getconfig(path);
 	
@@ -528,6 +535,7 @@ static void serve(struct hthead *req, int fd)
 		free(tmp);
 		break;
 	    }
+	    simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 	    goto fail;
 	}
 
@@ -555,6 +563,7 @@ static void serve(struct hthead *req, int fd)
 		break;
 	}
 	
+	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 	goto fail;
 	
     next:
@@ -573,12 +582,13 @@ static void serve(struct hthead *req, int fd)
     } else if(S_ISREG(sb.st_mode)) {
 	handlefile(req, fd, path);
     } else {
+	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 	goto fail;
     }
     goto out;
     
 fail:
-    /* XXX: Send error report. */
+    /* No special handling, for now at least. */
 out:
     free(path);
 }

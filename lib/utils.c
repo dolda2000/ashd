@@ -175,3 +175,29 @@ int calen(char **a)
     for(i = 0; *a; a++, i++);
     return(i);
 }
+
+void bvprintf(struct charbuf *buf, char *format, va_list al)
+{
+    va_list al2;
+    int ret;
+    
+    while(1) {
+	va_copy(al2, al);
+	ret = vsnprintf(buf->b + buf->d, buf->s - buf->d, format, al2);
+	va_end(al2);
+	if(ret < buf->s - buf->d) {
+	    buf->d += ret;
+	    return;
+	}
+	sizebuf(*buf, buf->d + ret + 1);
+    }
+}
+
+void bprintf(struct charbuf *buf, char *format, ...)
+{
+    va_list args;
+    
+    va_start(args, format);
+    bvprintf(buf, format, args);
+    va_end(args);
+}
