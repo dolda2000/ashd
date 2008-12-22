@@ -150,7 +150,7 @@ static struct rule *newrule(struct pattern *pat)
     
     for(i = 0; pat->rules[i]; i++);
     pat->rules = srealloc(pat->rules, sizeof(*pat->rules) * (i + 2));
-    rule = pat->rules[i] = smalloc(sizeof(*rule));
+    rule = pat->rules[i] = szmalloc(sizeof(*rule));
     pat->rules[i + 1] = NULL;
     return(rule);
 }
@@ -181,9 +181,10 @@ static struct config *readconfig(char *path)
     struct rule *rule;
     struct stat sb;
     
-    if(stat(path, &sb))
+    p = sprintf3("%s/.htrc", path);
+    if(stat(p, &sb))
 	return(NULL);
-    if((s = fopen(sprintf3("%s/.htrc", path), "r")) == NULL)
+    if((s = fopen(p, "r")) == NULL)
 	return(NULL);
     omalloc(cf);
     cf->mtime = sb.st_mtime;
@@ -332,7 +333,7 @@ static struct config *getconfig(char *path)
     
     for(cf = cflist; cf != NULL; cf = cf->next) {
 	if(!strcmp(cf->path, path)) {
-	    if(stat(path, &sb))
+	    if(stat(sprintf3("%s/.htrc", path), &sb))
 		return(NULL);
 	    if(sb.st_mtime != cf->mtime) {
 		freeconfig(cf);

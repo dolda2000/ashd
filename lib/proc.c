@@ -163,6 +163,5 @@ pid_t stdforkserve(char **argv, struct hthead *req, int fd)
 	flog(LOG_WARNING, "could not exec child program %s: %s", argv[0], strerror(errno));
 	exit(127);
     }
-    close(fd);
     return(pid);
 }
