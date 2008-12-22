@@ -1,4 +1,4 @@
-bin_PROGRAMS = htparser dirplex
+bin_PROGRAMS = htparser dirplex sendfile
 noinst_PROGRAMS = debugsink
 
 htparser_SOURCES = htparser.c
