@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <stdint.h>
+#include <time.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -71,7 +72,26 @@ static char *getmimetype(char *file, struct stat *sb)
 	return("application/xhtml+xml");
     if(!strrcmp(file, ".txt"))
 	return("text/plain");
+    if(!strrcmp(file, ".py"))
+	return("text/plain");
+    if(!strrcmp(file, ".c"))
+	return("text/plain");
     return("application/octet-stream");
+}
+
+static void checkcache(char *file, struct stat *sb)
+{
+    char *hdr;
+    
+    if((hdr = getenv("REQ_IF_MODIFIED_SINCE")) != NULL) {
+	if(parsehttpdate(hdr) < sb->st_mtime)
+	    return;
+	printf("HTTP/1.1 304 Not Modified\r\n");
+	printf("Date: %s\r\n", fmthttpdate(time(NULL)));
+	printf("Content-Length: 0\r\n");
+	printf("\r\n");
+	exit(0);
+    }
 }
 
 int main(int argc, char **argv)
@@ -98,9 +118,13 @@ int main(int argc, char **argv)
 	exit(1);
     }
     
+    checkcache(file, &sb);
+    
     printf("HTTP/1.1 200 OK\r\n");
     printf("Content-Type: %s\r\n", getmimetype(file, &sb));
     printf("Content-Length: %ji\r\n", (intmax_t)sb.st_size);
+    printf("Last-Modified: %s\r\n", fmthttpdate(sb.st_mtime));
+    printf("Date: %s\r\n", fmthttpdate(time(NULL)));
     printf("\r\n");
     fflush(stdout);
     if(strcasecmp(argv[1], "head"))
