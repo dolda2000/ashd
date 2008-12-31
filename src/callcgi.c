@@ -52,7 +52,7 @@ static void passdata(FILE *in, FILE *out)
     free(buf);
 }
 
-static void forkchild(char *prog, char *file, char *method, char *url, char *rest, int *infd, int *outfd)
+static void forkchild(int inpath, char *prog, char *file, char *method, char *url, char *rest, int *infd, int *outfd)
 {
     int i;
     char *qp, **env;
@@ -104,7 +104,10 @@ static void forkchild(char *prog, char *file, char *method, char *url, char *res
 	 * specification, but PHP seems to require it.
 	 */
 	putenv(sprintf2("SCRIPT_FILENAME=%s", file));
-	execlp(prog, prog, file, NULL);
+	if(inpath)
+	    execlp(prog, prog, file, NULL);
+	else
+	    execl(prog, prog, file, NULL);
 	exit(127);
     }
     close(inp[0]);
@@ -219,35 +222,59 @@ static void sendheaders(char **headers, FILE *out)
     }
 }
 
+static void usage(void)
+{
+    flog(LOG_ERR, "usage: callcgi [-p PROGRAM] METHOD URL REST");
+}
+
 int main(int argc, char **argv, char **envp)
 {
-    char *file;
-    int in, out;
-    FILE *ins, *outs;
+    int c;
+    char *file, *prog;
+    int inpath;
+    int infd, outfd;
+    FILE *in, *out;
     char **headers;
     
     environ = envp;
     signal(SIGPIPE, SIG_IGN);
-    if(argc < 5) {
-	flog(LOG_ERR, "usage: callcgi PROGRAM METHOD URL REST");
+    
+    prog = NULL;
+    inpath = 0;
+    while((c = getopt(argc, argv, "p:")) >= 0) {
+	switch(c) {
+	case 'p':
+	    prog = optarg;
+	    inpath = 1;
+	    break;
+	default:
+	    usage();
+	    exit(1);
+	}
+    }
+    
+    if(argc - optind < 3) {
+	usage();
 	exit(1);
     }
     if((file = getenv("REQ_X_ASH_FILE")) == NULL) {
 	flog(LOG_ERR, "callcgi: needs to be called with the X-Ash-File header");
 	exit(1);
     }
-    forkchild(argv[1], file, argv[2], argv[3], argv[4], &in, &out);
-    ins = fdopen(in, "w");
-    passdata(stdin, ins);
-    fclose(ins);
-    outs = fdopen(out, "r");
-    if((headers = parseheaders(outs)) == NULL) {
+    if(prog == NULL)
+	prog = file;
+    forkchild(inpath, prog, file, argv[optind], argv[optind + 1], argv[optind + 2], &infd, &outfd);
+    in = fdopen(infd, "w");
+    passdata(stdin, in);
+    fclose(in);
+    out = fdopen(outfd, "r");
+    if((headers = parseheaders(out)) == NULL) {
 	flog(LOG_WARNING, "CGI handler returned invalid headers");
 	exit(1);
     }
     sendstatus(headers, stdout);
     sendheaders(headers, stdout);
     printf("\r\n");
-    passdata(outs, stdout);
+    passdata(out, stdout);
     return(0);
 }
