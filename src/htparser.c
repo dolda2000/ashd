@@ -365,8 +365,10 @@ static void serve(struct muth *muth, va_list args)
 	 */
 	if((hd = getheader(req, "content-length")) != NULL) {
 	    dlen = atoo(hd);
-	    if(dlen > 0)
-		passdata(fd, cfd, &inbuf, dlen);
+	    if(dlen > 0) {
+		if(passdata(fd, cfd, &inbuf, dlen) < 0)
+		    goto out;
+	    }
 	}
 	/* Make sure to send EOF */
 	shutdown(cfd, SHUT_WR);
@@ -386,7 +388,8 @@ static void serve(struct muth *muth, va_list args)
 	 * Pass the actual output:
 	 */
 	sizebuf(outbuf, 65536);
-	sent = passdata(cfd, fd, &outbuf, -1);
+	if((sent = passdata(cfd, fd, &outbuf, -1)) < 0)
+	    goto out;
 	sent -= headoff;
 	
 	/*
