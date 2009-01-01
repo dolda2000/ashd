@@ -453,6 +453,28 @@ out:
     close(ss);
 }
 
+static void plexwatch(struct muth *muth, va_list args)
+{
+    vavar(int, fd);
+    char *buf;
+    int ret;
+    
+    while(1) {
+	block(fd, EV_READ, 0);
+	buf = smalloc(65536);
+	ret = recv(fd, buf, 65536, 0);
+	if(ret < 0) {
+	    flog(LOG_WARNING, "received error on rootplex read channel: %s", strerror(errno));
+	    exit(1);
+	} else if(ret == 0) {
+	    exit(0);
+	}
+	/* Maybe I'd like to implement some protocol in this direction
+	 * some day... */
+	free(buf);
+    }
+}
+
 int main(int argc, char **argv)
 {
     int fd;
@@ -478,6 +500,7 @@ int main(int argc, char **argv)
     } else {
 	mustart(listenloop, fd);
     }
+    mustart(plexwatch, plex);
     ioloop();
     return(0);
 }
