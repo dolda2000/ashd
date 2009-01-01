@@ -115,7 +115,7 @@ void ioloop(void)
 		ev |= EV_WRITE;
 	    if(FD_ISSET(bl->fd, &efds))
 		ev = -1;
-	    if(ev != 0)
+	    if((ev < 0) || (ev & bl->ev))
 		resume(bl->th, ev);
 	    else if((bl->to != 0) && (bl->to <= now))
 		resume(bl->th, 0);
