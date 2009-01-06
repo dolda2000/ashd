@@ -17,11 +17,14 @@
 */
 
 #include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
 #include <errno.h>
 #include <sys/select.h>
+#include <sys/socket.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -121,4 +124,95 @@ void ioloop(void)
 		resume(bl->th, 0);
 	}
     }
+}
+
+struct stdiofd {
+    int fd;
+    int sock;
+    int timeout;
+};
+
+static ssize_t mtread(void *cookie, char *buf, size_t len)
+{
+    struct stdiofd *d = cookie;
+    int ev;
+    ssize_t ret;
+    
+    while(1) {
+	ret = read(d->fd, buf, len);
+	if((ret < 0) && (errno == EAGAIN)) {
+	    ev = block(d->fd, EV_READ, d->timeout);
+	    if(ev < 0) {
+		/* If we just go on, we should get the real error. */
+		continue;
+	    } else if(ev == 0) {
+		errno = ETIMEDOUT;
+		return(-1);
+	    } else {
+		continue;
+	    }
+	} else {
+	    return(ret);
+	}
+    }
+}
+
+static ssize_t mtwrite(void *cookie, const char *buf, size_t len)
+{
+    struct stdiofd *d = cookie;
+    int ev;
+    ssize_t ret;
+    
+    while(1) {
+	if(d->sock)
+	    ret = send(d->fd, buf, len, MSG_DONTWAIT | MSG_NOSIGNAL);
+	else
+	    ret = write(d->fd, buf, len);
+	if((ret < 0) && (errno == EAGAIN)) {
+	    ev = block(d->fd, EV_WRITE, d->timeout);
+	    if(ev < 0) {
+		/* If we just go on, we should get the real error. */
+		continue;
+	    } else if(ev == 0) {
+		errno = ETIMEDOUT;
+		return(-1);
+	    } else {
+		continue;
+	    }
+	} else {
+	    return(ret);
+	}
+    }
+}
+
+static int mtclose(void *cookie)
+{
+    struct stdiofd *d = cookie;
+    
+    close(d->fd);
+    free(d);
+    return(0);
+}
+
+static cookie_io_functions_t iofuns = {
+    .read = mtread,
+    .write = mtwrite,
+    .close = mtclose,
+};
+
+FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
+{
+    struct stdiofd *d;
+    FILE *ret;
+    
+    omalloc(d);
+    d->fd = fd;
+    d->sock = issock;
+    d->timeout = timeout;
+    ret = fopencookie(d, mode, iofuns);
+    if(!ret)
+	free(d);
+    else
+	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+    return(ret);
 }

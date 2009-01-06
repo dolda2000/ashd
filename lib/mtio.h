@@ -6,5 +6,6 @@
 
 int block(int fd, int ev, time_t to);
 void ioloop(void);
+FILE *mtstdopen(int fd, int issock, int timeout, char *mode);
 
 #endif
