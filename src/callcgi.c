@@ -200,6 +200,7 @@ static void sendstatus(char **headers, FILE *out)
 	    **hp = 0;
 	} else if(!strcasecmp(hp[0], "location")) {
 	    location = hp[1];
+	    hp += 2;
 	} else {
 	    hp += 2;
 	}

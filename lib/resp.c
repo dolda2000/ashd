@@ -76,7 +76,7 @@ void simpleerror(int fd, int code, char *msg, char *fmt, ...)
     out = fdopen(fd, "w");
     fprintf(out, "HTTP/1.1 %i %s\r\n", code, msg);
     fprintf(out, "Content-Type: text/html\r\n");
-    fprintf(out, "Content-Length: %i\r\n", buf.d);
+    fprintf(out, "Content-Length: %zi\r\n", buf.d);
     fprintf(out, "\r\n");
     fwrite(buf.b, 1, buf.d, out);
     fclose(out);

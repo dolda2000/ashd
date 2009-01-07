@@ -213,7 +213,7 @@ static off_t passdata(FILE *in, FILE *out, off_t max)
     char buf[8192];
     
     total = 0;
-    while(!feof(in) && (total < max)) {
+    while(!feof(in) && ((max < 0) || (total < max))) {
 	read = sizeof(buf);
 	if(max >= 0)
 	    read = min(max - total, read);
@@ -236,7 +236,7 @@ static int passchunks(FILE *in, FILE *out)
 	read = fread(buf, 1, sizeof(buf), in);
 	if(ferror(in))
 	    return(-1);
-	fprintf(out, "%x\r\n", read);
+	fprintf(out, "%zx\r\n", read);
 	if(fwrite(buf, 1, read, out) != read)
 	    return(-1);
 	fprintf(out, "\r\n");
@@ -305,7 +305,8 @@ static void serve(struct muth *muth, va_list args)
 	/* Make sure to send EOF */
 	shutdown(pfds[1], SHUT_WR);
 	
-	resp = parseresp(out);
+	if((resp = parseresp(out)) == NULL)
+	    break;
 	replstr(&resp->ver, req->ver);
 
 	if(!strcmp(req->ver, "HTTP/1.0")) {
