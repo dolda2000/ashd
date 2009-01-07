@@ -213,10 +213,10 @@ static off_t passdata(FILE *in, FILE *out, off_t max)
     char buf[8192];
     
     total = 0;
-    while(!feof(in)) {
+    while(!feof(in) && (total < max)) {
 	read = sizeof(buf);
 	if(max >= 0)
-	    read = max(max - total, read);
+	    read = min(max - total, read);
 	read = fread(buf, 1, read, in);
 	if(ferror(in))
 	    return(-1);
