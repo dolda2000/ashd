@@ -72,6 +72,8 @@ static char *getmimetype(char *file, struct stat *sb)
 	return("application/xhtml+xml");
     if(!strrcmp(file, ".txt"))
 	return("text/plain");
+    if(!strrcmp(file, ".css"))
+	return("text/css");
     if(!strrcmp(file, ".py"))
 	return("text/plain");
     if(!strrcmp(file, ".c"))
