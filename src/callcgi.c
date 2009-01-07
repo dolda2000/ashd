@@ -186,6 +186,46 @@ fail:
     return(NULL);
 }
 
+static char *defstatus(int code)
+{
+    if(code == 200)
+	return("OK");
+    else if(code == 201)
+	return("Created");
+    else if(code == 202)
+	return("Accepted");
+    else if(code == 204)
+	return("No Content");
+    else if(code == 300)
+	return("Multiple Choices");
+    else if(code == 301)
+	return("Moved Permanently");
+    else if(code == 302)
+	return("Found");
+    else if(code == 303)
+	return("See Other");
+    else if(code == 304)
+	return("Not Modified");
+    else if(code == 307)
+	return("Moved Temporarily");
+    else if(code == 400)
+	return("Bad Request");
+    else if(code == 401)
+	return("Unauthorized");
+    else if(code == 403)
+	return("Forbidden");
+    else if(code == 404)
+	return("Not Found");
+    else if(code == 500)
+	return("Internal Server Error");
+    else if(code == 501)
+	return("Not Implemented");
+    else if(code == 503)
+	return("Service Unavailable");
+    else
+	return("Unknown status");
+}
+
 static void sendstatus(char **headers, FILE *out)
 {
     char **hp;
@@ -206,7 +246,10 @@ static void sendstatus(char **headers, FILE *out)
 	}
     }
     if(status) {
-	fprintf(out, "HTTP/1.1 %s\r\n", status);
+	if(strchr(status, ' '))
+	    fprintf(out, "HTTP/1.1 %s\r\n", status);
+	else
+	    fprintf(out, "HTTP/1.1 %i %s\r\n", atoi(status), defstatus(atoi(status)));
     } else if(location) {
 	fprintf(out, "HTTP/1.1 303 See Other\r\n");
     } else {
