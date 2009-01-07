@@ -1,6 +1,8 @@
 #ifndef _LIB_HTREQ_H
 #define _LIB_HTREQ_H
 
+#include <stdio.h>
+
 struct hthead {
     char *method, *url, *ver, *msg;
     int code;
@@ -18,5 +20,7 @@ void headappheader(struct hthead *head, const char *name, const char *val);
 int sendreq(int sock, struct hthead *req, int fd);
 int recvreq(int sock, struct hthead **reqp);
 void replrest(struct hthead *head, char *rest);
+int parseheaders(struct hthead *head, FILE *in);
+int writeresp(FILE *out, struct hthead *resp);
 
 #endif

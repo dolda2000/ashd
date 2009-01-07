@@ -85,265 +85,197 @@ static int listensock6(int port)
     return(fd);
 }
 
-static size_t readhead(int fd, struct charbuf *buf)
+static struct hthead *parsereq(FILE *in)
 {
-    int nl;
-    size_t off;
-    
-    int get1(void)
-    {
-	int ret;
-	
-	while(!(off < buf->d)) {
-	    sizebuf(*buf, buf->d + 1024);
-	    ret = recv(fd, buf->b + buf->d, buf->s - buf->d, MSG_DONTWAIT);
-	    if(ret <= 0) {
-		if((ret < 0) && (errno == EAGAIN)) {
-		    if(block(fd, EV_READ, 60) <= 0)
-			return(-1);
-		    continue;
-		}
-		return(-1);
-	    }
-	    buf->d += ret;
-	}
-	return(buf->b[off++]);
-    }
-
-    nl = 0;
-    off = 0;
-    while(1) {
-	switch(get1()) {
-	case '\n':
-	    if(nl)
-		return(off);
-	    nl = 1;
-	    break;
-	case '\r':
-	    break;
-	case -1:
-	    return(-1);
-	default:
-	    nl = 0;
-	    break;
-	}
-    }
-}
-
-#define SKIPNL(ptr) ({				\
-	    int __buf__;			\
-	    if(*(ptr) == '\r')			\
-		*((ptr)++) = 0;			\
-	    if(*(ptr) != '\n') {		\
-		__buf__ = 0;			\
-	    } else {				\
-		*((ptr)++) = 0;			\
-		__buf__ = 1;			\
-	    }					\
-	    __buf__;})
-static struct hthead *parserawreq(char *buf)
-{
-    char *p, *p2, *nl;
-    char *method, *url, *ver;
     struct hthead *req;
+    struct charbuf method, url, ver;
+    int c;
     
-    if((nl = strchr(buf, '\n')) == NULL)
-	return(NULL);
-    if(((p = strchr(buf, ' ')) == NULL) || (p > nl))
-	return(NULL);
-    method = buf;
-    *(p++) = 0;
-    if(((p2 = strchr(p, ' ')) == NULL) || (p2 > nl))
-	return(NULL);
-    url = p;
-    p = p2;
-    *(p++) = 0;
-    if(strncmp(p, "HTTP/", 5))
-	return(NULL);
-    ver = (p += 5);
-    for(; ((*p >= '0') && (*p <= '9')) || (*p == '.'); p++);
-    if(!SKIPNL(p))
-	return(NULL);
-
-    req = mkreq(method, url, ver);
+    req = NULL;
+    bufinit(method);
+    bufinit(url);
+    bufinit(ver);
     while(1) {
-	if(SKIPNL(p)) {
-	    if(*p)
-		goto fail;
+	c = getc(in);
+	if(c == ' ') {
 	    break;
+	} else if((c == EOF) || (c < 32) || (c >= 128)) {
+	    goto fail;
+	} else {
+	    bufadd(method, c);
 	}
-	if((nl = strchr(p, '\n')) == NULL)
-	    goto fail;
-	if(((p2 = strchr(p, ':')) == NULL) || (p2 > nl))
-	    goto fail;
-	*(p2++) = 0;
-	for(; (*p2 == ' ') || (*p2 == '\t'); p2++);
-	for(nl = p2; (*nl != '\r') && (*nl != '\n'); nl++);
-	if(!SKIPNL(nl))
-	    goto fail;
-	if(strncasecmp(p, "x-ash-", 6))
-	    headappheader(req, p, p2);
-	p = nl;
     }
+    while(1) {
+	c = getc(in);
+	if(c == ' ') {
+	    break;
+	} else if((c == EOF) || (c < 32)) {
+	    goto fail;
+	} else {
+	    bufadd(url, c);
+	}
+    }
+    while(1) {
+	c = getc(in);
+	if(c == 10) {
+	    break;
+	} else if(c == 13) {
+	} else if((c == EOF) || (c < 32) || (c >= 128)) {
+	    goto fail;
+	} else {
+	    bufadd(ver, c);
+	}
+    }
+    bufadd(method, 0);
+    bufadd(url, 0);
+    bufadd(ver, 0);
+    req = mkreq(method.b, url.b, ver.b);
+    if(parseheaders(req, in))
+	goto fail;
+    goto out;
+    
+fail:
+    if(req != NULL) {
+	freehthead(req);
+	req = NULL;
+    }
+out:
+    buffree(method);
+    buffree(url);
+    buffree(ver);
     return(req);
-    
-fail:
-    freehthead(req);
-    return(NULL);
 }
 
-static struct hthead *parserawresp(char *buf)
+static struct hthead *parseresp(FILE *in)
 {
-    char *p, *p2, *nl;
-    char *msg, *ver;
+    struct hthead *req;
     int code;
-    struct hthead *resp;
+    struct charbuf ver, msg;
+    int c;
     
-    if((nl = strchr(buf, '\n')) == NULL)
-	return(NULL);
-    p = strchr(buf, '\r');
-    if((p != NULL) && (p < nl))
-	nl = p;
-    if(strncmp(buf, "HTTP/", 5))
-	return(NULL);
-    ver = p = buf + 5;
-    for(; ((*p >= '0') && (*p <= '9')) || (*p == '.'); p++);
-    if(*p != ' ')
-	return(NULL);
-    *(p++) = 0;
-    if(((p2 = strchr(p, ' ')) == NULL) || (p2 > nl))
-	return(NULL);
-    *(p2++) = 0;
-    code = atoi(p);
-    if((code < 100) || (code >= 600))
-	return(NULL);
-    if(p2 >= nl)
-	return(NULL);
-    msg = p2;
-    p = nl;
-    if(!SKIPNL(p))
-	return(NULL);
-
-    resp = mkresp(code, msg, ver);
+    req = NULL;
+    bufinit(ver);
+    bufinit(msg);
+    code = 0;
     while(1) {
-	if(SKIPNL(p)) {
-	    if(*p)
-		goto fail;
+	c = getc(in);
+	if(c == ' ') {
 	    break;
+	} else if((c == EOF) || (c < 32) || (c >= 128)) {
+	    goto fail;
+	} else {
+	    bufadd(ver, c);
 	}
-	if((nl = strchr(p, '\n')) == NULL)
-	    goto fail;
-	if(((p2 = strchr(p, ':')) == NULL) || (p2 > nl))
-	    goto fail;
-	*(p2++) = 0;
-	for(; (*p2 == ' ') || (*p2 == '\t'); p2++);
-	for(nl = p2; (*nl != '\r') && (*nl != '\n'); nl++);
-	if(!SKIPNL(nl))
-	    goto fail;
-	headappheader(resp, p, p2);
-	p = nl;
     }
-    return(resp);
+    while(1) {
+	c = getc(in);
+	if(c == ' ') {
+	    break;
+	} else if((c == EOF) || (c < '0') || (c > '9')) {
+	    goto fail;
+	} else {
+	    code = (code * 10) + (c - '0');
+	}
+    }
+    while(1) {
+	c = getc(in);
+	if(c == 10) {
+	    break;
+	} else if(c == 13) {
+	} else if((c == EOF) || (c < 32)) {
+	    goto fail;
+	} else {
+	    bufadd(msg, c);
+	}
+    }
+    bufadd(msg, 0);
+    bufadd(ver, 0);
+    req = mkresp(code, msg.b, ver.b);
+    if(parseheaders(req, in))
+	goto fail;
+    goto out;
     
 fail:
-    freehthead(resp);
-    return(NULL);
+    if(req != NULL) {
+	freehthead(req);
+	req = NULL;
+    }
+out:
+    buffree(msg);
+    buffree(ver);
+    return(req);
 }
 
-static off_t passdata(int src, int dst, struct charbuf *buf, off_t max)
+static off_t passdata(FILE *in, FILE *out, off_t max)
 {
-    size_t dataoff, smax;
-    off_t sent;
-    int eof, ret;
-
-    sent = 0;
-    eof = 0;
-    while((!eof || (buf->d > 0)) && ((max < 0) || (sent < max))) {
-	if(!eof && (buf->d < buf->s) && ((max < 0) || (sent + buf->d < max))) {
-	    while(1) {
-		ret = recv(src, buf->b + buf->d, buf->s - buf->d, MSG_DONTWAIT);
-		if((ret < 0) && (errno == EAGAIN)) {
-		} else if(ret < 0) {
-		    return(-1);
-		} else if(ret == 0) {
-		    eof = 1;
-		    break;
-		} else {
-		    buf->d += ret;
-		    break;
-		}
-		if(buf->d > 0)
-		    break;
-		if(block(src, EV_READ, 0) <= 0)
-		    return(-1);
-	    }
-	}
-	for(dataoff = 0; (dataoff < buf->d) && ((max < 0) || (sent < max));) {
-	    if(block(dst, EV_WRITE, 120) <= 0)
-		return(-1);
-	    smax = buf->d - dataoff;
-	    if(sent + smax > max)
-		smax = max - sent;
-	    ret = send(dst, buf->b + dataoff, smax, MSG_NOSIGNAL | MSG_DONTWAIT);
-	    if(ret < 0)
-		return(-1);
-	    dataoff += ret;
-	    sent += ret;
-	}
-	bufeat(*buf, dataoff);
+    size_t read;
+    off_t total;
+    char buf[8192];
+    
+    total = 0;
+    while(!feof(in)) {
+	read = sizeof(buf);
+	if(max >= 0)
+	    read = max(max - total, read);
+	read = fread(buf, 1, read, in);
+	if(ferror(in))
+	    return(-1);
+	if(fwrite(buf, 1, read, out) != read)
+	    return(-1);
+	total += read;
     }
-    return(sent);
+    return(total);
+}
+
+static int passchunks(FILE *in, FILE *out)
+{
+    char buf[8192];
+    size_t read;
+    
+    do {
+	read = fread(buf, 1, sizeof(buf), in);
+	if(ferror(in))
+	    return(-1);
+	fprintf(out, "%x\r\n", read);
+	if(fwrite(buf, 1, read, out) != read)
+	    return(-1);
+	fprintf(out, "\r\n");
+    } while(read > 0);
+    return(0);
+}
+
+static int hasheader(struct hthead *head, char *name, char *val)
+{
+    char *hd;
+    
+    if((hd = getheader(head, name)) == NULL)
+	return(0);
+    return(!strcasecmp(hd, val));
 }
 
 static void serve(struct muth *muth, va_list args)
 {
     vavar(int, fd);
     vavar(struct sockaddr_storage, name);
-    int cfd;
     int pfds[2];
-    char old;
-    char *hd, *p;
-    struct charbuf inbuf, outbuf;
+    FILE *in, *out;
     struct hthead *req, *resp;
-    off_t dlen, sent;
-    ssize_t headoff;
     char nmbuf[256];
+    char *hd, *p;
+    off_t dlen;
     
-    bufinit(inbuf);
-    bufinit(outbuf);
-    cfd = -1;
+    in = mtstdopen(fd, 1, 60, "r+");
+    out = NULL;
     req = resp = NULL;
     while(1) {
-	/*
-	 * First, find and decode the header:
-	 */
-	if((headoff = readhead(fd, &inbuf)) < 0)
-	    goto out;
-	if(headoff > 65536) {
-	    /* We cannot handle arbitrarily large headers, as they
-	     * need to fit within a single Unix datagram. This is
-	     * probably a safe limit, and larger packets than this are
-	     * most likely erroneous (or malicious) anyway. */
-	    goto out;
-	}
-	old = inbuf.b[headoff];
-	inbuf.b[headoff] = 0;
-	if((req = parserawreq(inbuf.b)) == NULL)
-	    goto out;
-	inbuf.b[headoff] = old;
-	bufeat(inbuf, headoff);
-	/* We strip off the leading slash and any param string from
-	 * the rest string, so that multiplexers can parse
-	 * coherently. */
+	if((req = parsereq(in)) == NULL)
+	    break;
+	replrest(req, req->url);
 	if(req->rest[0] == '/')
 	    replrest(req, req->rest + 1);
 	if((p = strchr(req->rest, '?')) != NULL)
 	    *p = 0;
 	
-	/*
-	 * Add metainformation and then send the request to the root
-	 * multiplexer:
-	 */
 	if(name.ss_family == AF_INET) {
 	    headappheader(req, "X-Ash-Address", inet_ntop(AF_INET, &((struct sockaddr_in *)&name)->sin_addr, nmbuf, sizeof(nmbuf)));
 	    headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in *)&name)->sin_port)));
@@ -351,84 +283,85 @@ static void serve(struct muth *muth, va_list args)
 	    headappheader(req, "X-Ash-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&name)->sin6_addr, nmbuf, sizeof(nmbuf)));
 	    headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&name)->sin6_port)));
 	}
-	if(block(plex, EV_WRITE, 60) <= 0)
-	    goto out;
-	if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
-	    goto out;
-	if(sendreq(plex, req, pfds[0]))
-	    goto out;
-	close(pfds[0]);
-	cfd = pfds[1];
 
-	/*
-	 * If there is message data, pass it:
-	 */
+	if(block(plex, EV_WRITE, 60) <= 0)
+	    break;
+	if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
+	    break;
+	if(sendreq(plex, req, pfds[0]))
+	    break;
+	close(pfds[0]);
+	out = mtstdopen(pfds[1], 1, 600, "r+");
+
 	if((hd = getheader(req, "content-length")) != NULL) {
 	    dlen = atoo(hd);
 	    if(dlen > 0) {
-		if(passdata(fd, cfd, &inbuf, dlen) < 0)
-		    goto out;
-	    }
-	}
-	/* Make sure to send EOF */
-	shutdown(cfd, SHUT_WR);
-	
-	/*
-	 * Find and decode the response header:
-	 */
-	outbuf.d = 0;
-	if((headoff = readhead(cfd, &outbuf)) < 0)
-	    goto out;
-	hd = memcpy(smalloc(headoff + 1), outbuf.b, headoff);
-	hd[headoff] = 0;
-	if((resp = parserawresp(hd)) == NULL)
-	    goto out;
-	
-	/*
-	 * Pass the actual output:
-	 */
-	sizebuf(outbuf, 65536);
-	if((sent = passdata(cfd, fd, &outbuf, -1)) < 0)
-	    goto out;
-	sent -= headoff;
-	
-	/*
-	 * Check for connection expiry
-	 */
-	if(strcasecmp(req->method, "head")) {
-	    if((hd = getheader(resp, "content-length")) != NULL) {
-		if(sent != atoo(hd)) {
-		    /* Exit because of error */
-		    goto out;
-		}
-	    } else {
-		if(((hd = getheader(resp, "transfer-encoding")) == NULL) || !strcasecmp(hd, "identity"))
+		if(passdata(in, out, dlen) != dlen)
 		    break;
 	    }
-	    if(((hd = getheader(req, "connection")) != NULL) && !strcasecmp(hd, "close"))
-		break;
-	    if(((hd = getheader(resp, "connection")) != NULL) && !strcasecmp(hd, "close"))
-		break;
 	}
+	if(fflush(out))
+	    break;
+	/* Make sure to send EOF */
+	shutdown(pfds[1], SHUT_WR);
 	
-	close(cfd);
-	cfd = -1;
+	resp = parseresp(out);
+	replstr(&resp->ver, req->ver);
+
+	if(!strcmp(req->ver, "HTTP/1.0")) {
+	    writeresp(in, resp);
+	    fprintf(in, "\r\n");
+	    if((hd = getheader(resp, "content-length")) != NULL) {
+		dlen = passdata(out, in, -1);
+		if(dlen != atoo(hd))
+		    break;
+		if(!hasheader(req, "connection", "keep-alive"))
+		    break;
+	    } else {
+		passdata(out, in, -1);
+		break;
+	    }
+	    if(hasheader(req, "connection", "close") || hasheader(resp, "connection", "close"))
+		break;
+	} else if(!strcmp(req->ver, "HTTP/1.1")) {
+	    if((hd = getheader(resp, "content-length")) != NULL) {
+		writeresp(in, resp);
+		fprintf(in, "\r\n");
+		dlen = passdata(out, in, -1);
+		if(dlen != atoo(hd))
+		    break;
+	    } else if(!getheader(resp, "transfer-encoding")) {
+		headappheader(resp, "Transfer-Encoding", "chunked");
+		writeresp(in, resp);
+		fprintf(in, "\r\n");
+		if(passchunks(out, in))
+		    break;
+	    } else {
+		writeresp(in, resp);
+		fprintf(in, "\r\n");
+		passdata(out, in, -1);
+		break;
+	    }
+	    if(hasheader(req, "connection", "close") || hasheader(resp, "connection", "close"))
+		break;
+	} else {
+	    break;
+	}
+
+	fclose(out);
+	out = NULL;
 	freehthead(req);
-	req = NULL;
 	freehthead(resp);
-	resp = NULL;
+	req = resp = NULL;
     }
     
-out:
-    if(cfd >= 0)
-	close(cfd);
+    if(out != NULL)
+	fclose(out);
     if(req != NULL)
 	freehthead(req);
     if(resp != NULL)
 	freehthead(resp);
-    buffree(inbuf);
-    buffree(outbuf);
-    close(fd);
+    fclose(in);
 }
 
 static void listenloop(struct muth *muth, va_list args)

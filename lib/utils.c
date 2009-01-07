@@ -201,3 +201,16 @@ void bprintf(struct charbuf *buf, char *format, ...)
     bvprintf(buf, format, args);
     va_end(args);
 }
+
+void replstr(char **p, char *n)
+{
+    char *tmp;
+    
+    tmp = *p;
+    if(n)
+	*p = sstrdup(n);
+    else
+	*p = NULL;
+    if(tmp)
+	free(tmp);
+}

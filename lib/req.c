@@ -21,6 +21,8 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <ctype.h>
+#include <stdio.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -89,12 +91,79 @@ char *getheader(struct hthead *head, char *name)
     return(NULL);
 }
 
+static void trim(struct charbuf *buf)
+{
+    char *p;
+    
+    for(p = buf->b; (p - buf->b < buf->d) && isspace(*p); p++);
+    memmove(buf->b, p, buf->d -= (p - buf->b));
+    for(p = buf->b + buf->d - 1; (p > buf->b) && isspace(*p); p--, buf->d--);
+}
+
+int parseheaders(struct hthead *head, FILE *in)
+{
+    int c, state;
+    struct charbuf name, val;
+    
+    bufinit(name);
+    bufinit(val);
+    state = 0;
+    while(1) {
+	c = fgetc(in);
+    again:
+	if(state == 0) {
+	    if(c == '\r') {
+	    } else if(c == '\n') {
+		break;
+	    } else if(c == EOF) {
+		goto fail;
+	    } else {
+		state = 1;
+		goto again;
+	    }
+	} else if(state == 1) {
+	    if(c == ':') {
+		trim(&name);
+		bufadd(name, 0);
+		state = 2;
+	    } else if(c == '\r') {
+	    } else if(c == '\n') {
+		goto fail;
+	    } else if(c == EOF) {
+		goto fail;
+	    } else {
+		bufadd(name, c);
+	    }
+	} else if(state == 2) {
+	    if(c == '\r') {
+	    } else if(c == '\n') {
+		trim(&val);
+		bufadd(val, 0);
+		headappheader(head, name.b, val.b);
+		buffree(name);
+		buffree(val);
+		state = 0;
+	    } else if(c == EOF) {
+		goto fail;
+	    } else {
+		bufadd(val, c);
+	    }
+	}
+    }
+    return(0);
+    
+fail:
+    buffree(name);
+    buffree(val);
+    return(-1);
+}
+
 void replrest(struct hthead *head, char *rest)
 {
     char *tmp;
     
     /* Do not free the current rest string yet, so that the new one
-     * can a subpart of the old one. */
+     * can be taken from a subpart of the old one. */
     tmp = head->rest;
     head->rest = sstrdup(rest);
     free(tmp);
@@ -119,6 +188,19 @@ void headappheader(struct hthead *head, const char *name, const char *val)
     head->headers[i] = smalloc(sizeof(*head->headers[i]) * 2);
     head->headers[i][0] = sstrdup(name);
     head->headers[i][1] = sstrdup(val);
+}
+
+int writeresp(FILE *out, struct hthead *resp)
+{
+    int i;
+    
+    if(fprintf(out, "%s %i %s\r\n", resp->ver, resp->code, resp->msg) < 0)
+	return(-1);
+    for(i = 0; i < resp->noheaders; i++) {
+	if(fprintf(out, "%s: %s\r\n", resp->headers[i][0], resp->headers[i][1]) < 0)
+	    return(-1);
+    }
+    return(0);
 }
 
 int sendreq(int sock, struct hthead *req, int fd)

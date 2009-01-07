@@ -13,7 +13,7 @@
 #define omalloc(o) ((o) = szmalloc(sizeof(*(o))))
 
 #define bufinit(buf) memset(&(buf), 0, sizeof(buf))
-#define buffree(buf) do { if((buf).b != NULL) {free((buf).b);} } while(0)
+#define buffree(buf) do { if((buf).b != NULL) {free((buf).b);} bufinit(buf); } while(0)
 #define sizebuf(buf, wanted) (_sizebuf((struct buffer *)&(buf), (wanted), sizeof(*((buf).b))))
 #define bufadd(buf, new) \
 do { \
@@ -70,5 +70,6 @@ void freeca(char **ca);
 int calen(char **a);
 void bvprintf(struct charbuf *buf, char *format, va_list al);
 void bprintf(struct charbuf *buf, char *format, ...);
+void replstr(char **p, char *n);
 
 #endif
