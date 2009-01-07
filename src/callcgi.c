@@ -52,6 +52,17 @@ static void passdata(FILE *in, FILE *out)
     free(buf);
 }
 
+static char *absolutify(char *file)
+{
+    char cwd[1024];
+    
+    if(*file != '/') {
+	getcwd(cwd, sizeof(cwd));
+	return(sprintf2("%s/%s", cwd, file));
+    }
+    return(sstrdup(file));
+}
+
 static void forkchild(int inpath, char *prog, char *file, char *method, char *url, char *rest, int *infd, int *outfd)
 {
     int i;
@@ -103,7 +114,7 @@ static void forkchild(int inpath, char *prog, char *file, char *method, char *ur
 	 * This is (understandably) missing from the CGI
 	 * specification, but PHP seems to require it.
 	 */
-	putenv(sprintf2("SCRIPT_FILENAME=%s", file));
+	putenv(sprintf2("SCRIPT_FILENAME=%s", absolutify(file)));
 	if(inpath)
 	    execlp(prog, prog, file, NULL);
 	else
