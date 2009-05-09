@@ -96,21 +96,40 @@ static void checkcache(char *file, struct stat *sb)
     }
 }
 
+static void usage(void)
+{
+    flog(LOG_ERR, "usage: sendfile [-c CONTENT-TYPE] METHOD URL REST");
+}
+
 int main(int argc, char **argv)
 {
+    int c;
     char *file;
     struct stat sb;
     int fd;
+    char *contype;
     
-    if(argc < 4) {
-	flog(LOG_ERR, "usage: sendfile METHOD URL REST");
+    contype = NULL;
+    while((c = getopt(argc, argv, "c:")) >= 0) {
+	switch(c) {
+	case 'c':
+	    contype = optarg;
+	    break;
+	default:
+	    usage();
+	    exit(1);
+	    break;
+	}
+    }
+    if(argc - optind < 3) {
+	usage();
 	exit(1);
     }
     if((file = getenv("REQ_X_ASH_FILE")) == NULL) {
 	flog(LOG_ERR, "sendfile: needs to be called with the X-Ash-File header");
 	exit(1);
     }
-    if(*argv[3]) {
+    if(*argv[optind + 2]) {
 	simpleerror(1, 404, "Not Found", "The requested URL has no corresponding resource.");
 	exit(0);
     }
@@ -119,17 +138,19 @@ int main(int argc, char **argv)
 	simpleerror(1, 500, "Internal Error", "The server could not access its own data.");
 	exit(1);
     }
+    if(contype == NULL)
+	contype = getmimetype(file, &sb);
     
     checkcache(file, &sb);
     
     printf("HTTP/1.1 200 OK\r\n");
-    printf("Content-Type: %s\r\n", getmimetype(file, &sb));
+    printf("Content-Type: %s\r\n", contype);
     printf("Content-Length: %ji\r\n", (intmax_t)sb.st_size);
     printf("Last-Modified: %s\r\n", fmthttpdate(sb.st_mtime));
     printf("Date: %s\r\n", fmthttpdate(time(NULL)));
     printf("\r\n");
     fflush(stdout);
-    if(strcasecmp(argv[1], "head"))
+    if(strcasecmp(argv[optind], "head"))
 	passdata(fd, 1);
     return(0);
 }
