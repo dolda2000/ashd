@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <stdint.h>
 #include <time.h>
+#include <magic.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -32,6 +33,8 @@
 #include <utils.h>
 #include <log.h>
 #include <resp.h>
+
+static magic_t cookie = NULL;
 
 static void passdata(int in, int out)
 {
@@ -63,21 +66,16 @@ static int strrcmp(char *str, char *end)
     return(strcmp(str + strlen(str) - strlen(end), end));
 }
 
-static char *getmimetype(char *file, struct stat *sb)
+static const char *getmimetype(char *file, struct stat *sb)
 {
-    /* Rewrite with libmagic. */
-    if(!strrcmp(file, ".html"))
-	return("text/html");
-    if(!strrcmp(file, ".xhtml"))
-	return("application/xhtml+xml");
-    if(!strrcmp(file, ".txt"))
-	return("text/plain");
-    if(!strrcmp(file, ".css"))
-	return("text/css");
-    if(!strrcmp(file, ".py"))
-	return("text/plain");
-    if(!strrcmp(file, ".c"))
-	return("text/plain");
+    const char *ret;
+    
+    if(cookie == NULL) {
+	cookie = magic_open(MAGIC_MIME_TYPE);
+	magic_load(cookie, NULL);
+    }
+    if((ret = magic_file(cookie, file)) != NULL)
+	return(ret);
     return("application/octet-stream");
 }
 
@@ -107,7 +105,7 @@ int main(int argc, char **argv)
     char *file;
     struct stat sb;
     int fd;
-    char *contype;
+    const char *contype;
     
     contype = NULL;
     while((c = getopt(argc, argv, "c:")) >= 0) {

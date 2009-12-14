@@ -7,3 +7,5 @@ debugsink_SOURCES = debugsink.c
 
 LDADD = $(top_srcdir)/lib/libht.a
 AM_CPPFLAGS = -I$(top_srcdir)/lib
+
+sendfile_LDADD = $(LDADD) -lmagic
