@@ -161,28 +161,35 @@ static ssize_t mtwrite(void *cookie, const char *buf, size_t len)
 {
     struct stdiofd *d = cookie;
     int ev;
+    size_t off;
     ssize_t ret;
     
-    while(1) {
+    off = 0;
+    while(off < len) {
 	if(d->sock)
-	    ret = send(d->fd, buf, len, MSG_DONTWAIT | MSG_NOSIGNAL);
+	    ret = send(d->fd, buf + off, len - off, MSG_DONTWAIT | MSG_NOSIGNAL);
 	else
-	    ret = write(d->fd, buf, len);
-	if((ret < 0) && (errno == EAGAIN)) {
-	    ev = block(d->fd, EV_WRITE, d->timeout);
-	    if(ev < 0) {
-		/* If we just go on, we should get the real error. */
-		continue;
-	    } else if(ev == 0) {
-		errno = ETIMEDOUT;
-		return(-1);
+	    ret = write(d->fd, buf + off, len - off);
+	if(ret < 0) {
+	    if(errno == EAGAIN) {
+		ev = block(d->fd, EV_WRITE, d->timeout);
+		if(ev < 0) {
+		    /* If we just go on, we should get the real error. */
+		    continue;
+		} else if(ev == 0) {
+		    errno = ETIMEDOUT;
+		    return(off);
+		} else {
+		    continue;
+		}
 	    } else {
-		continue;
+		return(off);
 	    }
 	} else {
-	    return(ret);
+	    off += ret;
 	}
     }
+    return(off);
 }
 
 static int mtclose(void *cookie)
