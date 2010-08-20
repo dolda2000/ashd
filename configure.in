@@ -12,6 +12,26 @@ dnl AM_PROG_LIBTOOL
 
 AC_HEADER_STDC
 
+AH_TEMPLATE(HAVE_XATTR, [define to compile support for filesystem extended attributes])
+AC_ARG_WITH(xattr, [  --with-xattr            Enable XATTR support])
+HAS_XATTR=""
+if test "$with_xattr" = no; then HAS_XATTR=no; fi
+if test -z "$HAS_XATTR"; then
+	AC_CHECK_LIB(attr, getxattr, [:], [HAS_XATTR=no])
+fi
+if test -z "$HAS_XATTR"; then
+	AC_CHECK_HEADER(attr/xattr.h, [], [HAS_XATTR=no])
+fi
+if test "$HAS_XATTR" != no; then HAS_XATTR=yes; fi
+if test "$with_xattr" = yes -a "$HAS_XATTR" = no; then
+	AC_MSG_ERROR([*** cannot find xattr support on this system])
+fi
+if test "$HAS_XATTR" = yes; then
+	XATTR_LIBS=-lattr
+	AC_DEFINE(HAVE_XATTR)
+fi
+AC_SUBST(XATTR_LIBS)
+
 AC_OUTPUT([
 Makefile
 src/Makefile

@@ -34,6 +34,10 @@
 #include <log.h>
 #include <resp.h>
 
+#ifdef HAVE_XATTR
+#include <attr/xattr.h>
+#endif
+
 static magic_t cookie = NULL;
 
 static void passdata(int in, int out)
@@ -66,10 +70,40 @@ static int strrcmp(char *str, char *end)
     return(strcmp(str + strlen(str) - strlen(end), end));
 }
 
+static char *attrmimetype(char *file)
+{
+#ifdef HAVE_XATTR
+    static char buf[1024];
+    int i;
+    ssize_t sz;
+    
+    if((sz = getxattr(file, "user.ash-mime-type", buf, sizeof(buf) - 1)) > 0)
+	goto found;
+    if((sz = getxattr(file, "user.mime-type", buf, sizeof(buf) - 1)) > 0)
+	goto found;
+    if((sz = getxattr(file, "user.mime_type", buf, sizeof(buf) - 1)) > 0)
+	goto found;
+    if((sz = getxattr(file, "user.Content-Type", buf, sizeof(buf) - 1)) > 0)
+	goto found;
+    return(NULL);
+found:
+    for(i = 0; i < sz; i++) {
+	if((buf[sz] < 32) || (buf[sz] >= 128))
+	    return(NULL);
+    }
+    buf[sz] = 0;
+    return(buf);
+#else
+    return(NULL);
+#endif
+}
+
 static const char *getmimetype(char *file, struct stat *sb)
 {
     const char *ret;
     
+    if((ret = attrmimetype(file)) != NULL)
+	return(ret);
     if(cookie == NULL) {
 	cookie = magic_open(MAGIC_MIME_TYPE);
 	magic_load(cookie, NULL);
