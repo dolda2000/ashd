@@ -120,10 +120,10 @@ static void checkcache(char *file, struct stat *sb)
     if((hdr = getenv("REQ_IF_MODIFIED_SINCE")) != NULL) {
 	if(parsehttpdate(hdr) < sb->st_mtime)
 	    return;
-	printf("HTTP/1.1 304 Not Modified\r\n");
-	printf("Date: %s\r\n", fmthttpdate(time(NULL)));
-	printf("Content-Length: 0\r\n");
-	printf("\r\n");
+	printf("HTTP/1.1 304 Not Modified\n");
+	printf("Date: %s\n", fmthttpdate(time(NULL)));
+	printf("Content-Length: 0\n");
+	printf("\n");
 	exit(0);
     }
 }
@@ -175,12 +175,12 @@ int main(int argc, char **argv)
     
     checkcache(file, &sb);
     
-    printf("HTTP/1.1 200 OK\r\n");
-    printf("Content-Type: %s\r\n", contype);
-    printf("Content-Length: %ji\r\n", (intmax_t)sb.st_size);
-    printf("Last-Modified: %s\r\n", fmthttpdate(sb.st_mtime));
-    printf("Date: %s\r\n", fmthttpdate(time(NULL)));
-    printf("\r\n");
+    printf("HTTP/1.1 200 OK\n");
+    printf("Content-Type: %s\n", contype);
+    printf("Content-Length: %ji\n", (intmax_t)sb.st_size);
+    printf("Last-Modified: %s\n", fmthttpdate(sb.st_mtime));
+    printf("Date: %s\n", fmthttpdate(time(NULL)));
+    printf("\n");
     fflush(stdout);
     if(strcasecmp(argv[optind], "head"))
 	passdata(fd, 1);

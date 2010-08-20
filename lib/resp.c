@@ -74,10 +74,10 @@ void simpleerror(int fd, int code, char *msg, char *fmt, ...)
     bufcatstr(buf, "</html>\r\n");
     free(tmp2);
     out = fdopen(fd, "w");
-    fprintf(out, "HTTP/1.1 %i %s\r\n", code, msg);
-    fprintf(out, "Content-Type: text/html\r\n");
-    fprintf(out, "Content-Length: %zi\r\n", buf.d);
-    fprintf(out, "\r\n");
+    fprintf(out, "HTTP/1.1 %i %s\n", code, msg);
+    fprintf(out, "Content-Type: text/html\n");
+    fprintf(out, "Content-Length: %zi\n", buf.d);
+    fprintf(out, "\n");
     fwrite(buf.b, 1, buf.d, out);
     fclose(out);
     buffree(buf);

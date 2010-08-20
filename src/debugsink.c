@@ -47,9 +47,9 @@ int main(int argc, char **argv)
 	printf("%s %s %s %s %s\n", req->method, req->url, req->ver, req->rest, getheader(req, "x-ash-address"));
 	out = fdopen(fd, "w");
 	if(!strcmp(req->rest, "")) {
-	    fprintf(out, "HTTP/1.1 200 OK\r\n");
-	    fprintf(out, "Content-Type: text/html; charset=utf8\r\n");
-	    fprintf(out, "\r\n");
+	    fprintf(out, "HTTP/1.1 200 OK\n");
+	    fprintf(out, "Content-Type: text/html; charset=utf8\n");
+	    fprintf(out, "\n");
 	    fprintf(out, "<html>\n<body>\n<form action=\"/post\" method=\"post\">\n<input type=\"submit\" name=\"barda\" />\n</form>\n</body>\n</html>\n");
 	} else if(!strcmp(req->rest, "post")) {
 	    nb = 0;
@@ -61,19 +61,19 @@ int main(int argc, char **argv)
 		    break;
 		nb += ret;
 	    }
-	    fprintf(out, "HTTP/1.1 200 OK\r\n");
-	    fprintf(out, "Content-Type: text/plain; charset=utf8\r\n");
-	    fprintf(out, "\r\n");
+	    fprintf(out, "HTTP/1.1 200 OK\n");
+	    fprintf(out, "Content-Type: text/plain; charset=utf8\n");
+	    fprintf(out, "\n");
 	    fprintf(out, "%i\n", (int)nb);
 	} else if(!strcmp(req->rest, "inf")) {
-	    fprintf(out, "HTTP/1.1 200 OK\r\n");
-	    fprintf(out, "Content-Type: text/plain\r\n");
-	    fprintf(out, "\r\n");
+	    fprintf(out, "HTTP/1.1 200 OK\n");
+	    fprintf(out, "Content-Type: text/plain\n");
+	    fprintf(out, "\n");
 	    while(1)
 		fprintf(out, "0123456789012345678901234567890123456789012345678901234567890123456789\n");
 	} else {
-	    fprintf(out, "HTTP/1.1 404 Not Found\r\n");
-	    fprintf(out, "\r\n");
+	    fprintf(out, "HTTP/1.1 404 Not Found\n");
+	    fprintf(out, "\n");
 	}
 	fclose(out);
     }

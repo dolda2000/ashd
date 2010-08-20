@@ -258,13 +258,13 @@ static void sendstatus(char **headers, FILE *out)
     }
     if(status) {
 	if(strchr(status, ' '))
-	    fprintf(out, "HTTP/1.1 %s\r\n", status);
+	    fprintf(out, "HTTP/1.1 %s\n", status);
 	else
-	    fprintf(out, "HTTP/1.1 %i %s\r\n", atoi(status), defstatus(atoi(status)));
+	    fprintf(out, "HTTP/1.1 %i %s\n", atoi(status), defstatus(atoi(status)));
     } else if(location) {
-	fprintf(out, "HTTP/1.1 303 See Other\r\n");
+	fprintf(out, "HTTP/1.1 303 See Other\n");
     } else {
-	fprintf(out, "HTTP/1.1 200 OK\r\n");
+	fprintf(out, "HTTP/1.1 200 OK\n");
     }
 }
 
@@ -272,7 +272,7 @@ static void sendheaders(char **headers, FILE *out)
 {
     while(*headers) {
 	if(**headers)
-	    fprintf(out, "%s: %s\r\n", headers[0], headers[1]);
+	    fprintf(out, "%s: %s\n", headers[0], headers[1]);
 	headers += 2;
     }
 }
@@ -329,7 +329,7 @@ int main(int argc, char **argv, char **envp)
     }
     sendstatus(headers, stdout);
     sendheaders(headers, stdout);
-    printf("\r\n");
+    printf("\n");
     passdata(out, stdout);
     return(0);
 }
