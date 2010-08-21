@@ -1,6 +1,8 @@
 #ifndef _LIB_MTIO_H
 #define _LIB_MTIO_H
 
+#include <stdio.h>
+
 #define EV_READ 1
 #define EV_WRITE 2
 

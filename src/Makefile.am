@@ -1,7 +1,7 @@
 bin_PROGRAMS = htparser dirplex sendfile callcgi patplex
 noinst_PROGRAMS = debugsink
 
-htparser_SOURCES = htparser.c
+htparser_SOURCES = htparser.c htparser.h plaintcp.c
 dirplex_SOURCES = dirplex.c
 debugsink_SOURCES = debugsink.c
 

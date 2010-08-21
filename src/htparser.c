@@ -35,55 +35,9 @@
 #include <req.h>
 #include <proc.h>
 
+#include "htparser.h"
+
 static int plex;
-
-static int listensock4(int port)
-{
-    struct sockaddr_in name;
-    int fd;
-    int valbuf;
-    
-    memset(&name, 0, sizeof(name));
-    name.sin_family = AF_INET;
-    name.sin_port = htons(port);
-    if((fd = socket(PF_INET, SOCK_STREAM, 0)) < 0)
-	return(-1);
-    valbuf = 1;
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &valbuf, sizeof(valbuf));
-    if(bind(fd, (struct sockaddr *)&name, sizeof(name))) {
-	close(fd);
-	return(-1);
-    }
-    if(listen(fd, 16) < 0) {
-	close(fd);
-	return(-1);
-    }
-    return(fd);
-}
-
-static int listensock6(int port)
-{
-    struct sockaddr_in6 name;
-    int fd;
-    int valbuf;
-    
-    memset(&name, 0, sizeof(name));
-    name.sin6_family = AF_INET6;
-    name.sin6_port = htons(port);
-    if((fd = socket(PF_INET6, SOCK_STREAM, 0)) < 0)
-	return(-1);
-    valbuf = 1;
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &valbuf, sizeof(valbuf));
-    if(bind(fd, (struct sockaddr *)&name, sizeof(name))) {
-	close(fd);
-	return(-1);
-    }
-    if(listen(fd, 16) < 0) {
-	close(fd);
-	return(-1);
-    }
-    return(fd);
-}
 
 static struct hthead *parsereq(FILE *in)
 {
@@ -253,18 +207,14 @@ static int hasheader(struct hthead *head, char *name, char *val)
     return(!strcasecmp(hd, val));
 }
 
-static void serve(struct muth *muth, va_list args)
+void serve(FILE *in, struct conn *conn)
 {
-    vavar(int, fd);
-    vavar(struct sockaddr_storage, name);
     int pfds[2];
-    FILE *in, *out;
+    FILE *out;
     struct hthead *req, *resp;
-    char nmbuf[256];
     char *hd, *p;
     off_t dlen;
     
-    in = mtstdopen(fd, 1, 60, "r+");
     out = NULL;
     req = resp = NULL;
     while(1) {
@@ -276,14 +226,9 @@ static void serve(struct muth *muth, va_list args)
 	if((p = strchr(req->rest, '?')) != NULL)
 	    *p = 0;
 	
-	if(name.ss_family == AF_INET) {
-	    headappheader(req, "X-Ash-Address", inet_ntop(AF_INET, &((struct sockaddr_in *)&name)->sin_addr, nmbuf, sizeof(nmbuf)));
-	    headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in *)&name)->sin_port)));
-	} else if(name.ss_family == AF_INET6) {
-	    headappheader(req, "X-Ash-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&name)->sin6_addr, nmbuf, sizeof(nmbuf)));
-	    headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&name)->sin6_port)));
-	}
-
+	if((conn->initreq != NULL) && conn->initreq(conn, req))
+	    break;
+	
 	if(block(plex, EV_WRITE, 60) <= 0)
 	    break;
 	if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
@@ -365,28 +310,6 @@ static void serve(struct muth *muth, va_list args)
     fclose(in);
 }
 
-static void listenloop(struct muth *muth, va_list args)
-{
-    vavar(int, ss);
-    int ns;
-    struct sockaddr_storage name;
-    socklen_t namelen;
-    
-    while(1) {
-	namelen = sizeof(name);
-	block(ss, EV_READ, 0);
-	ns = accept(ss, (struct sockaddr *)&name, &namelen);
-	if(ns < 0) {
-	    flog(LOG_ERR, "accept: %s", strerror(errno));
-	    goto out;
-	}
-	mustart(serve, ns, name);
-    }
-    
-out:
-    close(ss);
-}
-
 static void plexwatch(struct muth *muth, va_list args)
 {
     vavar(int, fd);
@@ -409,30 +332,87 @@ static void plexwatch(struct muth *muth, va_list args)
     }
 }
 
-int main(int argc, char **argv)
+static void usage(FILE *out)
 {
-    int fd;
+    fprintf(out, "usage: htparser [-h] PORTSPEC... -- ROOT [ARGS...]\n");
+    fprintf(out, "\twhere PORTSPEC is HANDLER[:PAR[=VAL][(,PAR[=VAL])...]] (try HANDLER:help)\n");
+    fprintf(out, "\tavailable handlers are `plain'.\n");
+}
+
+static void addport(char *spec)
+{
+    char *nm, *p, *p2, *n;
+    struct charvbuf pars, vals;
     
-    if(argc < 2) {
-	fprintf(stderr, "usage: htparser ROOT [ARGS...]\n");
+    bufinit(pars);
+    bufinit(vals);
+    if((p = strchr(spec, ':')) == NULL) {
+	nm = spec;
+    } else {
+	nm = spec;
+	*(p++) = 0;
+	do {
+	    if((n = strchr(p, ',')) != NULL)
+		*(n++) = 0;
+	    if((p2 = strchr(p, '=')) != NULL)
+		*(p2++) = 0;
+	    if(!*p) {
+		usage(stderr);
+		exit(1);
+	    }
+	    bufadd(pars, p);
+	    if(p2)
+		bufadd(vals, p2);
+	    else
+		bufadd(vals, "");
+	} while((p = n) != NULL);
+    }
+    
+    /* XXX: It would be nice to decentralize this, but, meh... */
+    if(!strcmp(nm, "plain")) {
+	handleplain(pars.d, pars.b, vals.b);
+    } else {
+	flog(LOG_ERR, "htparser: unknown port handler `%s'", nm);
 	exit(1);
     }
-    if((plex = stdmkchild(argv + 1)) < 0) {
+    
+    buffree(pars);
+    buffree(vals);
+}
+
+int main(int argc, char **argv)
+{
+    int c;
+    int i, s1;
+    
+    while((c = getopt(argc, argv, "+h")) >= 0) {
+	switch(c) {
+	case 'h':
+	    usage(stdout);
+	    exit(0);
+	default:
+	    usage(stderr);
+	    exit(1);
+	}
+    }
+    if((argc - optind) < 3) {
+	usage(stderr);
+	exit(1);
+    }
+    s1 = 0;
+    for(i = optind; i < argc; i++) {
+	if(!strcmp(argv[i], "--"))
+	    break;
+	s1 = 1;
+	addport(argv[i]);
+    }
+    if(!s1 || (i == argc)) {
+	usage(stderr);
+	exit(1);
+    }
+    if((plex = stdmkchild(argv + ++i)) < 0) {
 	flog(LOG_ERR, "could not spawn root multiplexer: %s", strerror(errno));
 	return(1);
-    }
-    if((fd = listensock6(8080)) < 0) {
-	flog(LOG_ERR, "could not listen on IPv6: %s", strerror(errno));
-	return(1);
-    }
-    mustart(listenloop, fd);
-    if((fd = listensock4(8080)) < 0) {
-	if(errno != EADDRINUSE) {
-	    flog(LOG_ERR, "could not listen on IPv4: %s", strerror(errno));
-	    return(1);
-	}
-    } else {
-	mustart(listenloop, fd);
     }
     mustart(plexwatch, plex);
     ioloop();
