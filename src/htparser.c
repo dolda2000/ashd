@@ -415,10 +415,6 @@ int main(int argc, char **argv)
 	    exit(1);
 	}
     }
-    if((argc - optind) < 3) {
-	usage(stderr);
-	exit(1);
-    }
     s1 = 0;
     for(i = optind; i < argc; i++) {
 	if(!strcmp(argv[i], "--"))
