@@ -21,8 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include <pwd.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -334,7 +333,7 @@ static void plexwatch(struct muth *muth, va_list args)
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: htparser [-h] PORTSPEC... -- ROOT [ARGS...]\n");
+    fprintf(out, "usage: htparser [-hSf] [-u USER] [-r ROOT] PORTSPEC... -- ROOT [ARGS...]\n");
     fprintf(out, "\twhere PORTSPEC is HANDLER[:PAR[=VAL][(,PAR[=VAL])...]] (try HANDLER:help)\n");
     fprintf(out, "\tavailable handlers are `plain'.\n");
 }
@@ -384,12 +383,33 @@ int main(int argc, char **argv)
 {
     int c;
     int i, s1;
+    int daemonize, logsys;
+    char *root;
+    struct passwd *pwent;
     
-    while((c = getopt(argc, argv, "+h")) >= 0) {
+    daemonize = logsys = 0;
+    root = NULL;
+    pwent = NULL;
+    while((c = getopt(argc, argv, "+hSfu:r:")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage(stdout);
 	    exit(0);
+	case 'f':
+	    daemonize = 1;
+	    break;
+	case 'S':
+	    logsys = 1;
+	    break;
+	case 'u':
+	    if((pwent = getpwnam(optarg)) == NULL) {
+		flog(LOG_ERR, "could not find user %s", optarg);
+		exit(1);
+	    }
+	    break;
+	case 'r':
+	    root = optarg;
+	    break;
 	default:
 	    usage(stderr);
 	    exit(1);
@@ -415,6 +435,27 @@ int main(int argc, char **argv)
 	return(1);
     }
     mustart(plexwatch, plex);
+    if(logsys)
+	opensyslog();
+    if(root) {
+	if(chroot(root)) {
+	    flog(LOG_ERR, "could not chroot to %s: %s", root, strerror(errno));
+	    exit(1);
+	}
+    }
+    if(pwent) {
+	if(setgid(pwent->pw_gid)) {
+	    flog(LOG_ERR, "could not switch group to %i: %s", (int)pwent->pw_gid, strerror(errno));
+	    exit(1);
+	}
+	if(setuid(pwent->pw_uid)) {
+	    flog(LOG_ERR, "could not switch user to %i: %s", (int)pwent->pw_uid, strerror(errno));
+	    exit(1);
+	}
+    }
+    if(daemonize) {
+	daemon(0, 0);
+    }
     ioloop();
     return(0);
 }
