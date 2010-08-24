@@ -33,9 +33,7 @@
 #include <req.h>
 #include <proc.h>
 #include <resp.h>
-
-#define CH_SOCKET 0
-#define CH_FORK 1
+#include <cf.h>
 
 #define PAT_REST 0
 #define PAT_URL 1
@@ -49,14 +47,6 @@
 struct config {
     struct child *children;
     struct pattern *patterns;
-};
-
-struct child {
-    struct child *next;
-    char *name;
-    int type;
-    char **argv;
-    int fd;
 };
 
 struct rule {
@@ -91,28 +81,6 @@ static void freepattern(struct pattern *pat)
     if(pat->childnm != NULL)
 	free(pat->childnm);
     free(pat);
-}
-
-static void freechild(struct child *ch)
-{
-    if(ch->fd != -1)
-	close(ch->fd);
-    if(ch->name != NULL)
-	free(ch->name);
-    if(ch->argv != NULL)
-	freeca(ch->argv);
-    free(ch);
-}
-
-static struct child *newchild(char *name, int type)
-{
-    struct child *ch;
-    
-    omalloc(ch);
-    ch->name = sstrdup(name);
-    ch->type = type;
-    ch->fd = -1;
-    return(ch);
 }
 
 static struct child *getchild(struct config *cf, char *name)
@@ -163,202 +131,144 @@ static regex_t *regalloc(char *regex, int flags)
     return(ret);
 }
 
-static struct config *readconfig(char *filename)
+static struct pattern *parsepattern(struct cfstate *s)
 {
-    int i;
-    struct config *cf;
-    FILE *s;
-    char line[1024];
-    char *p, **w;
-    int ind, eof;
-    int lno;
-    int state;
-    int rv;
-    int argc;
-    struct child *child;
     struct pattern *pat;
+    int sl;
     struct rule *rule;
     regex_t *regex;
     int rxfl;
     
-    if((s = fopen(filename, "r")) == NULL)
+    if(!strcmp(s->argv[0], "match")) {
+	s->expstart = 1;
+	pat = newpattern();
+    } else {
 	return(NULL);
-    omalloc(cf);
-    eof = 0;
-    state = 0;
-    w = NULL;
-    lno = 0;
-    do {
-	if(fgets(line, sizeof(line), s) == NULL) {
-	    eof = 1;
-	    line[0] = 0;
-	}
-	lno++;
-	for(p = line; *p; p++) {
-	    if(*p == '#')
-		continue;
-	    if(!isspace(*p))
-		break;
-	}
-	ind = isspace(line[0]);
-	w = tokenize(line);
-	argc = calen(w);
-	
-    retry:
-	if(state == 0) {
-	    if(ind) {
-		flog(LOG_WARNING, "%s%i: unexpected line indentation in global scope", filename, lno);
-		goto next;
-	    } else {
-		if(!w[0]) {
-		} else if(!strcmp(w[0], "child")) {
-		    if(argc < 2) {
-			flog(LOG_WARNING, "%s:%i: missing name in child declaration", filename, lno);
-			goto next;
-		    }
-		    child = newchild(w[1], CH_SOCKET);
-		    state = 1;
-		} else if(!strcmp(w[0], "fchild")) {
-		    if(argc < 2) {
-			flog(LOG_WARNING, "%s:%i: missing name in child declaration", filename, lno);
-			goto next;
-		    }
-		    child = newchild(w[1], CH_FORK);
-		    state = 1;
-		} else if(!strcmp(w[0], "match")) {
-		    pat = newpattern();
-		    state = 2;
-		} else {
-		    flog(LOG_WARNING, "%s:%i: unknown directive %s", filename, lno, w[0]);
-		}
-	    }
-	} else if(state == 1) {
-	    if(ind) {
-		if(!w[0]) {
-		} else if(!strcmp(w[0], "exec")) {
-		    if(argc < 2) {
-			flog(LOG_WARNING, "%s:%i: too few parameters to `exec'", filename, lno);
-			goto next;
-		    }
-		    child->argv = szmalloc(sizeof(*child->argv) * argc);
-		    for(i = 0; i < argc - 1; i++)
-			child->argv[i] = sstrdup(w[i + 1]);
-		} else {
-		    flog(LOG_WARNING, "%s:%i: unknown directive %s", filename, lno, w[0]);
-		}
-	    } else {
-		state = 0;
-		if(child->argv == NULL) {
-		    flog(LOG_WARNING, "%s:%i: missing `exec' in child declaration %s", filename, lno, child->name);
-		    freechild(child);
-		    goto retry;
-		}
-		child->next = cf->children;
-		cf->children = child;
-		goto retry;
-	    }
-	} else if(state == 2) {
-	    if(ind) {
-		rxfl = 0;
-		if(!w[0]) {
-		} else if(!strcmp(w[0], "point") ||
-			  !strcmp(w[0], "url") ||
-			  !strcmp(w[0], "method")) {
-		    if(argc < 2) {
-			flog(LOG_WARNING, "%s:%i: missing pattern for `%s' match", w[0], filename, lno);
-			goto next;
-		    }
-		    if(argc >= 3) {
-			if(strchr(w[2], 'i'))
-			    rxfl |= REG_ICASE;
-		    }
-		    if((regex = regalloc(w[1], rxfl)) == NULL) {
-			flog(LOG_WARNING, "%s:%i: invalid regex for `%s' match", w[0], filename, lno);
-			goto next;
-		    }
-		    rule = newrule(pat);
-		    if(!strcmp(w[0], "point"))
-			rule->type = PAT_REST;
-		    else if(!strcmp(w[0], "url"))
-			rule->type = PAT_URL;
-		    else if(!strcmp(w[0], "method"))
-			rule->type = PAT_METHOD;
-		    rule->pattern = regex;
-		    if(argc >= 3) {
-			if(strchr(w[2], 's'))
-			    rule->fl |= PATFL_MSS;
-		    }
-		} else if(!strcmp(w[0], "header")) {
-		    if(argc < 3) {
-			flog(LOG_WARNING, "%s:%i: missing header name or pattern for `header' match", filename, lno);
-			goto next;
-		    }
-		    if(argc >= 4) {
-			if(strchr(w[3], 'i'))
-			    rxfl |= REG_ICASE;
-		    }
-		    if((regex = regalloc(w[2], rxfl)) == NULL) {
-			flog(LOG_WARNING, "%s:%i: invalid regex for `header' match", filename, lno);
-			goto next;
-		    }
-		    rule = newrule(pat);
-		    rule->type = PAT_HEADER;
-		    rule->header = sstrdup(w[1]);
-		    rule->pattern = regex;
-		    if(argc >= 4) {
-			if(strchr(w[3], 's'))
-			    rule->fl |= PATFL_MSS;
-		    }
-		} else if(!strcmp(w[0], "all")) {
-		    newrule(pat)->type = PAT_ALL;
-		} else if(!strcmp(w[0], "default")) {
-		    newrule(pat)->type = PAT_DEFAULT;
-		} else if(!strcmp(w[0], "handler")) {
-		    if(argc < 2) {
-			flog(LOG_WARNING, "%s:%i: missing child name for `handler' directive", filename, lno);
-			goto next;
-		    }
-		    if(pat->childnm != NULL)
-			free(pat->childnm);
-		    pat->childnm = sstrdup(w[1]);
-		} else if(!strcmp(w[0], "restpat")) {
-		    if(argc < 2) {
-			flog(LOG_WARNING, "%s:%i: missing pattern for `restpat' directive", filename, lno);
-			goto next;
-		    }
-		    if(pat->restpat != NULL)
-			free(pat->restpat);
-		    pat->restpat = sstrdup(w[1]);
-		} else {
-		    flog(LOG_WARNING, "%s:%i: unknown directive %s", filename, lno, w[0]);
-		}
-	    } else {
-		state = 0;
-		if(pat->rules[0] == NULL) {
-		    flog(LOG_WARNING, "%s:%i: missing rules in match declaration", filename, lno);
-		    freepattern(pat);
-		    goto retry;
-		}
-		if(pat->childnm == NULL) {
-		    flog(LOG_WARNING, "%s:%i: missing handler in match declaration", filename, lno);
-		    freepattern(pat);
-		    goto retry;
-		}
-		pat->next = cf->patterns;
-		cf->patterns = pat;
-		goto retry;
-	    }
-	}
-	
-    next:
-	freeca(w);
-	w = NULL;
-    } while(!eof);
-    rv = 0;
+    }
     
-    if(w != NULL)
-	freeca(w);
-    fclose(s);
+    sl = s->lno;
+    while(1) {
+	getcfline(s);
+	if(!strcmp(s->argv[0], "point") ||
+	   !strcmp(s->argv[0], "url") ||
+	   !strcmp(s->argv[0], "method")) {
+	    if(s->argc < 2) {
+		flog(LOG_WARNING, "%s:%i: missing pattern for `%s' match", s->file, s->lno, s->argv[0]);
+		continue;
+	    }
+	    if(s->argc >= 3) {
+		if(strchr(s->argv[2], 'i'))
+		    rxfl |= REG_ICASE;
+	    }
+	    if((regex = regalloc(s->argv[1], rxfl)) == NULL) {
+		flog(LOG_WARNING, "%s:%i: invalid regex for `%s' match", s->file, s->lno, s->argv[0]);
+		continue;
+	    }
+	    rule = newrule(pat);
+	    if(!strcmp(s->argv[0], "point"))
+		rule->type = PAT_REST;
+	    else if(!strcmp(s->argv[0], "url"))
+		rule->type = PAT_URL;
+	    else if(!strcmp(s->argv[0], "method"))
+		rule->type = PAT_METHOD;
+	    rule->pattern = regex;
+	    if(s->argc >= 3) {
+		if(strchr(s->argv[2], 's'))
+		    rule->fl |= PATFL_MSS;
+	    }
+	} else if(!strcmp(s->argv[0], "header")) {
+	    if(s->argc < 3) {
+		flog(LOG_WARNING, "%s:%i: missing header name or pattern for `header' match", s->file, s->lno);
+		continue;
+	    }
+	    if(s->argc >= 4) {
+		if(strchr(s->argv[3], 'i'))
+		    rxfl |= REG_ICASE;
+	    }
+	    if((regex = regalloc(s->argv[2], rxfl)) == NULL) {
+		flog(LOG_WARNING, "%s:%i: invalid regex for `header' match", s->file, s->lno);
+		continue;
+	    }
+	    rule = newrule(pat);
+	    rule->type = PAT_HEADER;
+	    rule->header = sstrdup(s->argv[1]);
+	    rule->pattern = regex;
+	    if(s->argc >= 4) {
+		if(strchr(s->argv[3], 's'))
+		    rule->fl |= PATFL_MSS;
+	    }
+	} else if(!strcmp(s->argv[0], "all")) {
+	    newrule(pat)->type = PAT_ALL;
+	} else if(!strcmp(s->argv[0], "default")) {
+	    newrule(pat)->type = PAT_DEFAULT;
+	} else if(!strcmp(s->argv[0], "handler")) {
+	    if(s->argc < 2) {
+		flog(LOG_WARNING, "%s:%i: missing child name for `handler' directive", s->file, s->lno);
+		continue;
+	    }
+	    if(pat->childnm != NULL)
+		free(pat->childnm);
+	    pat->childnm = sstrdup(s->argv[1]);
+	} else if(!strcmp(s->argv[0], "restpat")) {
+	    if(s->argc < 2) {
+		flog(LOG_WARNING, "%s:%i: missing pattern for `restpat' directive", s->file, s->lno);
+		continue;
+	    }
+	    if(pat->restpat != NULL)
+		free(pat->restpat);
+	    pat->restpat = sstrdup(s->argv[1]);
+	} else if(!strcmp(s->argv[0], "end") || !strcmp(s->argv[0], "eof")) {
+	    break;
+	} else {
+	    flog(LOG_WARNING, "%s:%i: unknown directive `%s' in pattern declaration", s->file, s->lno, s->argv[0]);
+	}
+    }
+    
+    if(pat->rules[0] == NULL) {
+	flog(LOG_WARNING, "%s:%i: missing rules in match declaration", s->file, sl);
+	freepattern(pat);
+	return(NULL);
+    }
+    if(pat->childnm == NULL) {
+	flog(LOG_WARNING, "%s:%i: missing handler in match declaration", s->file, sl);
+	freepattern(pat);
+	return(NULL);
+    }
+    return(pat);
+}
+
+static struct config *readconfig(char *filename)
+{
+    struct cfstate *s;
+    struct config *cf;
+    struct child *ch;
+    struct pattern *pat;
+    FILE *in;
+    
+    if((in = fopen(filename, "r")) == NULL) {
+	flog(LOG_WARNING, "%s: %s", filename, strerror(errno));
+	return(NULL);
+    }
+    s = mkcfparser(in, filename);
+    omalloc(cf);
+    
+    while(1) {
+	getcfline(s);
+	if((ch = parsechild(s)) != NULL) {
+	    ch->next = cf->children;
+	    cf->children = ch;
+	} else if((pat = parsepattern(s)) != NULL) {
+	    pat->next = cf->patterns;
+	    cf->patterns = pat;
+	} else if(!strcmp(s->argv[0], "eof")) {
+	    break;
+	} else {
+	    flog(LOG_WARNING, "%s:%i: unknown directive `%s'", s->file, s->lno, s->argv[0]);
+	}
+    }
+    
+    freecfparser(s);
+    fclose(in);
     return(cf);
 }
 
@@ -387,10 +297,10 @@ static void exprestpat(struct hthead *req, struct pattern *pat, char **mstr)
 		bufadd(buf, '$');
 		p++;
 	    } else if(*p == '{') {
-		if((p2 = strchr(p, '{')) == NULL) {
+		if((p2 = strchr(p, '}')) == NULL) {
 		    p++;
 		} else {
-		    hdr = getheader(req, sprintf3("$.*s", p2 - p - 1, p + 1));
+		    hdr = getheader(req, sprintf3("%.*s", p2 - p - 1, p + 1));
 		    if(hdr)
 			bufcatstr(buf, hdr);
 		}
@@ -478,28 +388,6 @@ static char *findmatch(struct config *cf, struct hthead *req, int trydefault)
     return(NULL);
 }
 
-static void forkchild(struct child *ch)
-{
-    ch->fd = stdmkchild(ch->argv);
-}
-
-static void passreq(struct child *ch, struct hthead *req, int fd)
-{
-    if(ch->fd < 0)
-	forkchild(ch);
-    if(sendreq(ch->fd, req, fd)) {
-	if(errno == EPIPE) {
-	    /* Assume that the child has crashed and restart it. */
-	    forkchild(ch);
-	    if(!sendreq(ch->fd, req, fd))
-		return;
-	}
-	flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
-	close(ch->fd);
-	ch->fd = -1;
-    }
-}
-
 static void serve(struct hthead *req, int fd)
 {
     char *chnm;
@@ -515,11 +403,8 @@ static void serve(struct hthead *req, int fd)
 	return;
     }
     
-    if(ch->type == CH_SOCKET) {
-	passreq(ch, req, fd);
-    } else if(ch->type == CH_FORK) {
-	stdforkserve(ch->argv, req, fd);
-    }
+    if(childhandle(ch, req, fd))
+	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
 }
 
 int main(int argc, char **argv)

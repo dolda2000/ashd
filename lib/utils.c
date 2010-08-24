@@ -163,6 +163,8 @@ void freeca(char **ca)
 {
     char **c;
     
+    if(ca == NULL)
+	return;
     for(c = ca; *c; c++)
 	free(*c);
     free(ca);
