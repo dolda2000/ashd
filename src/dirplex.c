@@ -261,36 +261,53 @@ static struct config *getconfig(char *path)
     return(cf);
 }
 
+static struct config **getconfigs(char *file)
+{
+    static struct config **ret = NULL;
+    struct {
+	struct config **b;
+	size_t s, d;
+    } buf;
+    struct config *cf;
+    char *tmp, *p;
+    
+    if(ret != NULL)
+	free(ret);
+    bufinit(buf);
+    tmp = sstrdup(file);
+    while(1) {
+	if((p = strrchr(tmp, '/')) == NULL)
+	    break;
+	*p = 0;
+	if((cf = getconfig(tmp)) != NULL)
+	    bufadd(buf, cf);
+    }
+    free(tmp);
+    if((cf = getconfig(".")) != NULL)
+	bufadd(buf, cf);
+    bufadd(buf, NULL);
+    return(ret = buf.b);
+}
+
 static struct child *findchild(char *file, char *name)
 {
-    char *buf, *p;
-    struct config *cf;
+    int i;
+    struct config **cfs;
     struct child *ch;
-
-    buf = sstrdup(file);
-    while(1) {
-	ch = NULL;
-	if(!strcmp(buf, "."))
-	    break;
-	if((p = strrchr(buf, '/')) != NULL)
-	    *p = 0;
-	else
-	    strcpy(buf, ".");
-	cf = getconfig(buf);
-	if(cf == NULL)
-	    continue;
-	if((ch = getchild(cf, name)) != NULL)
+    
+    cfs = getconfigs(file);
+    for(i = 0; cfs[i] != NULL; i++) {
+	if((ch = getchild(cfs[i], name)) != NULL)
 	    break;
     }
-    free(buf);
     return(ch);
 }
 
 static struct pattern *findmatch(char *file, int trydefault)
 {
-    int i;
-    char *buf, *p, *bn;
-    struct config *cf;
+    int i, c;
+    char *bn;
+    struct config **cfs;
     struct pattern *pat;
     struct rule *rule;
     
@@ -298,19 +315,9 @@ static struct pattern *findmatch(char *file, int trydefault)
 	bn++;
     else
 	bn = file;
-    buf = sstrdup(file);
-    while(1) {
-	pat = NULL;
-	if(!strcmp(buf, "."))
-	    break;
-	if((p = strrchr(buf, '/')) != NULL)
-	    *p = 0;
-	else
-	    strcpy(buf, ".");
-	cf = getconfig(buf);
-	if(cf == NULL)
-	    continue;
-	for(pat = cf->patterns; pat != NULL; pat = pat->next) {
+    cfs = getconfigs(file);
+    for(c = 0; cfs[c] != NULL; c++) {
+	for(pat = cfs[c]->patterns; pat != NULL; pat = pat->next) {
 	    for(i = 0; (rule = pat->rules[i]) != NULL; i++) {
 		if(rule->type == PAT_BASENAME) {
 		    if(fnmatch(rule->pattern, bn, 0))
@@ -325,13 +332,10 @@ static struct pattern *findmatch(char *file, int trydefault)
 		}
 	    }
 	    if(!rule)
-		goto out;
+		return(pat);
 	}
     }
-
-out:
-    free(buf);
-    return(pat);
+    return(NULL);
 }
 
 static void handlefile(struct hthead *req, int fd, char *path)
