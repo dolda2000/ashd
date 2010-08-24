@@ -107,6 +107,7 @@ static int initreq(struct conn *conn, struct hthead *req)
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&tcp->name)->sin6_port)));
     }
     headappheader(req, "X-Ash-Server-Port", sprintf3("%i", tcp->port->sport));
+    headappheader(req, "X-Ash-Protocol", "http");
     return(0);
 }
 

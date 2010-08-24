@@ -83,6 +83,47 @@ void simpleerror(int fd, int code, char *msg, char *fmt, ...)
     buffree(buf);
 }
 
+void stdredir(struct hthead *req, int fd, int code, char *dst)
+{
+    FILE *out;
+    char *sp, *cp, *ep, *path, *url, *adst, *proto, *host;
+    
+    sp = strchr(dst, '/');
+    cp = strchr(dst, ':');
+    if(cp && (!sp || (cp < sp))) {
+	adst = sstrdup(dst);
+    } else {
+	proto = getheader(req, "X-Ash-Protocol");
+	host = getheader(req, "Host");
+	if((proto == NULL) || (host == NULL)) {
+	    /* Not compliant, but there isn't a whole lot to be done
+	     * about it. */
+	    adst = sstrdup(dst);
+	} else {
+	    if(*dst == '/') {
+		path = sstrdup(dst);
+	    } else {
+		if((*(url = req->url)) == '/')
+		    url++;
+		if((ep = strrchr(url, '/')) != NULL)
+		    ep++;
+		else
+		    ep = url;
+		path = sprintf2("%.*s%s", ep - url, url, dst);
+	    }
+	    adst = sprintf2("%s://%s/%s", proto, host, path);
+	    free(path);
+	}
+    }
+    out = fdopen(fd, "w");
+    fprintf(out, "HTTP/1.1 %i Redirection\n", code);
+    fprintf(out, "Content-Length: 0\n");
+    fprintf(out, "Location: %s\n", adst);
+    fprintf(out, "\n");
+    fclose(out);
+    free(adst);
+}
+
 char *fmthttpdate(time_t time)
 {
     /* I avoid using strftime, since it depends on locale settings. */
