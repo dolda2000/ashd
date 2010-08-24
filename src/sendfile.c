@@ -65,11 +65,6 @@ static void passdata(int in, int out)
     free(buf);
 }
 
-static int strrcmp(char *str, char *end)
-{
-    return(strcmp(str + strlen(str) - strlen(end), end));
-}
-
 static char *attrmimetype(char *file)
 {
 #ifdef HAVE_XATTR
