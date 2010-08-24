@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <fnmatch.h>
+#include <time.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -45,7 +46,7 @@
 struct config {
     struct config *next, *prev;
     char *path;
-    time_t mtime;
+    time_t mtime, lastck;
     struct child *children;
     struct pattern *patterns;
 };
@@ -62,6 +63,7 @@ struct pattern {
 };
 
 struct config *cflist;
+static time_t now;
 
 static void freepattern(struct pattern *pat)
 {
@@ -196,27 +198,28 @@ static struct pattern *parsepattern(struct cfstate *s)
     return(pat);
 }
 
-static struct config *readconfig(char *path)
+static struct config *emptyconfig(void)
+{
+    struct config *cf;
+    
+    omalloc(cf);
+    return(cf);
+}
+
+static struct config *readconfig(char *file)
 {
     struct cfstate *s;
     FILE *in;
     struct config *cf;
     struct child *child;
     struct pattern *pat;
-    struct stat sb;
-    char *p;
     
-    p = sprintf3("%s/.htrc", path);
-    if(stat(p, &sb))
-	return(NULL);
-    if((in = fopen(p, "r")) == NULL) {
-	flog(LOG_WARNING, "%s: %s", p, strerror(errno));
+    if((in = fopen(file, "r")) == NULL) {
+	flog(LOG_WARNING, "%s: %s", file, strerror(errno));
 	return(NULL);
     }
-    s = mkcfparser(in, p);
-    omalloc(cf);
-    cf->mtime = sb.st_mtime;
-    cf->path = sstrdup(path);
+    s = mkcfparser(in, file);
+    cf = emptyconfig();
     
     while(1) {
 	getcfline(s);
@@ -242,22 +245,35 @@ static struct config *getconfig(char *path)
 {
     struct config *cf;
     struct stat sb;
+    char *fn;
+    time_t mtime;
     
+    fn = sprintf3("%s/.htrc", path);
     for(cf = cflist; cf != NULL; cf = cf->next) {
 	if(!strcmp(cf->path, path)) {
-	    if(stat(sprintf3("%s/.htrc", path), &sb))
-		return(NULL);
-	    if(sb.st_mtime != cf->mtime) {
-		freeconfig(cf);
-		break;
+	    if(now - cf->lastck > 5) {
+		if(stat(fn, &sb) || (sb.st_mtime != cf->mtime)) {
+		    freeconfig(cf);
+		    break;
+		}
 	    }
+	    cf->lastck = now;
 	    return(cf);
 	}
     }
-    if((cf = readconfig(path)) != NULL) {
-	cf->next = cflist;
-	cflist = cf;
+    if(access(fn, R_OK) || stat(fn, &sb)) {
+	cf = emptyconfig();
+	mtime = 0;
+    } else {
+	if((cf = readconfig(fn)) == NULL)
+	    return(NULL);
+	mtime = sb.st_mtime;
     }
+    cf->path = sstrdup(path);
+    cf->mtime = mtime;
+    cf->lastck = now;
+    cf->next = cflist;
+    cflist = cf;
     return(cf);
 }
 
@@ -376,6 +392,7 @@ static void serve(struct hthead *req, int fd)
     DIR *dir;
     struct dirent *dent;
     
+    now = time(NULL);
     nm = req->rest;
     path = sstrdup(".");
     p = nm;
