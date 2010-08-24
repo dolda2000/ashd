@@ -38,6 +38,23 @@
 
 static int plex;
 
+static void trimx(struct hthead *req)
+{
+    int i;
+    
+    i = 0;
+    while(i < req->noheaders) {
+	if(!strncasecmp(req->headers[i][0], "x-ash-", 6)) {
+	    free(req->headers[i][0]);
+	    free(req->headers[i][1]);
+	    free(req->headers[i]);
+	    memmove(req->headers + i, req->headers + i + 1, sizeof(*req->headers) * (--req->noheaders - i));
+	} else {
+	    i++;
+	}
+    }
+}
+
 static struct hthead *parsereq(FILE *in)
 {
     struct hthead *req;
@@ -85,6 +102,7 @@ static struct hthead *parsereq(FILE *in)
     req = mkreq(method.b, url.b, ver.b);
     if(parseheaders(req, in))
 	goto fail;
+    trimx(req);
     goto out;
     
 fail:
