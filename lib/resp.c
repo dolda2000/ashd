@@ -17,6 +17,7 @@
 */
 
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -73,7 +74,7 @@ void simpleerror(int fd, int code, char *msg, char *fmt, ...)
     bufcatstr(buf, "</body>\r\n");
     bufcatstr(buf, "</html>\r\n");
     free(tmp2);
-    out = fdopen(fd, "w");
+    out = fdopen(dup(fd), "w");
     fprintf(out, "HTTP/1.1 %i %s\n", code, msg);
     fprintf(out, "Content-Type: text/html\n");
     fprintf(out, "Content-Length: %zi\n", buf.d);
@@ -115,7 +116,7 @@ void stdredir(struct hthead *req, int fd, int code, char *dst)
 	    free(path);
 	}
     }
-    out = fdopen(fd, "w");
+    out = fdopen(dup(fd), "w");
     fprintf(out, "HTTP/1.1 %i Redirection\n", code);
     fprintf(out, "Content-Length: 0\n");
     fprintf(out, "Location: %s\n", adst);
