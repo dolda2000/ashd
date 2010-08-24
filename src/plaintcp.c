@@ -36,8 +36,14 @@
 
 #include "htparser.h"
 
+struct tcpport {
+    int fd;
+    int sport;
+};
+
 struct tcpconn {
     struct sockaddr_storage name;
+    struct tcpport *port;
 };
 
 static int listensock4(int port)
@@ -100,6 +106,7 @@ static int initreq(struct conn *conn, struct hthead *req)
 	headappheader(req, "X-Ash-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&tcp->name)->sin6_addr, nmbuf, sizeof(nmbuf)));
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&tcp->name)->sin6_port)));
     }
+    headappheader(req, "X-Ash-Server-Port", sprintf3("%i", tcp->port->sport));
     return(0);
 }
 
@@ -107,48 +114,49 @@ void servetcp(struct muth *muth, va_list args)
 {
     vavar(int, fd);
     vavar(struct sockaddr_storage, name);
+    vavar(struct tcpport *, stcp);
     FILE *in;
-    struct conn *conn;
-    struct tcpconn *tcp;
+    struct conn conn;
+    struct tcpconn tcp;
     
+    memset(&conn, 0, sizeof(conn));
+    memset(&tcp, 0, sizeof(tcp));
     in = mtstdopen(fd, 1, 60, "r+");
-    omalloc(conn);
-    conn->pdata = omalloc(tcp);
-    conn->initreq = initreq;
-    tcp->name = name;
-    
-    serve(in, conn);
-    
-    free(tcp);
-    free(conn);
+    conn.pdata = &tcp;
+    conn.initreq = initreq;
+    tcp.name = name;
+    tcp.port = stcp;
+    serve(in, &conn);
 }
 
 static void listenloop(struct muth *muth, va_list args)
 {
-    vavar(int, ss);
+    vavar(struct tcpport *, tcp);
     int ns;
     struct sockaddr_storage name;
     socklen_t namelen;
     
     while(1) {
 	namelen = sizeof(name);
-	block(ss, EV_READ, 0);
-	ns = accept(ss, (struct sockaddr *)&name, &namelen);
+	block(tcp->fd, EV_READ, 0);
+	ns = accept(tcp->fd, (struct sockaddr *)&name, &namelen);
 	if(ns < 0) {
 	    flog(LOG_ERR, "accept: %s", strerror(errno));
 	    goto out;
 	}
-	mustart(servetcp, ns, name);
+	mustart(servetcp, ns, name, tcp);
     }
     
 out:
-    close(ss);
+    close(tcp->fd);
+    free(tcp);
 }
 
 void handleplain(int argc, char **argp, char **argv)
 {
     int port, fd;
     int i;
+    struct tcpport *tcp;
     
     port = 80;
     for(i = 0; i < argc; i++) {
@@ -167,13 +175,16 @@ void handleplain(int argc, char **argp, char **argv)
 	flog(LOG_ERR, "could not listen on IPv6 (port %i): %s", port, strerror(errno));
 	exit(1);
     }
-    mustart(listenloop, fd);
+    omalloc(tcp);
+    tcp->fd = fd;
+    tcp->sport = port;
+    mustart(listenloop, tcp);
     if((fd = listensock4(port)) < 0) {
 	if(errno != EADDRINUSE) {
 	    flog(LOG_ERR, "could not listen on IPv4 (port %i): %s", port, strerror(errno));
 	    exit(1);
 	}
     } else {
-	mustart(listenloop, fd);
+	mustart(listenloop, fd, port);
     }
 }
