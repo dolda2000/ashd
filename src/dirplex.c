@@ -441,6 +441,7 @@ static void passreq(struct child *ch, struct hthead *req, int fd)
 	flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
 	close(ch->fd);
 	ch->fd = -1;
+	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
     }
 }
 
