@@ -413,6 +413,10 @@ static void serve(struct hthead *req, int fd)
 		else
 		    path = sprintf2("%s/%s", path, p);
 		free(tmp);
+		if(p2 == NULL) {
+		    stdredir(req, fd, 301, sprintf3("%s/", p));
+		    goto out;
+		}
 		if(checkdir(req, fd, path))
 		    break;
 		goto next;
