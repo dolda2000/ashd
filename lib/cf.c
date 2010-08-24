@@ -289,7 +289,7 @@ int childhandle(struct child *ch, struct hthead *req, int fd)
 		close(ch->fd);
 		ch->fd = stdmkchild(ch->argv);
 		if(!sendreq(ch->fd, req, fd))
-		    return(-1);
+		    return(0);
 	    }
 	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
 	    close(ch->fd);
