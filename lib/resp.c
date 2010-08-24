@@ -102,7 +102,7 @@ void stdredir(struct hthead *req, int fd, int code, char *dst)
 	    adst = sstrdup(dst);
 	} else {
 	    if(*dst == '/') {
-		path = sstrdup(dst);
+		path = sstrdup(dst + 1);
 	    } else {
 		if((*(url = req->url)) == '/')
 		    url++;
