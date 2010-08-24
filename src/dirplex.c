@@ -345,7 +345,7 @@ static void handlefile(struct hthead *req, int fd, char *path)
 
     headappheader(req, "X-Ash-File", path);
     if(((pat = findmatch(path, 0)) == NULL) && ((pat = findmatch(path, 1)) == NULL)) {
-	/* XXX: Send a 500 error? 404? */
+	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 	return;
     }
     if((ch = findchild(path, pat->childnm)) == NULL) {
