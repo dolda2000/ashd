@@ -37,9 +37,6 @@
 #include <resp.h>
 #include <cf.h>
 
-#define CH_SOCKET 0
-#define CH_FORK 1
-
 #define PAT_BASENAME 0
 #define PAT_PATHNAME 1
 #define PAT_ALL 2
@@ -337,29 +334,6 @@ out:
     return(pat);
 }
 
-static void forkchild(struct child *ch)
-{
-    ch->fd = stdmkchild(ch->argv);
-}
-
-static void passreq(struct child *ch, struct hthead *req, int fd)
-{
-    if(ch->fd < 0)
-	forkchild(ch);
-    if(sendreq(ch->fd, req, fd)) {
-	if(errno == EPIPE) {
-	    /* Assume that the child has crashed and restart it. */
-	    forkchild(ch);
-	    if(!sendreq(ch->fd, req, fd))
-		return;
-	}
-	flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
-	close(ch->fd);
-	ch->fd = -1;
-	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
-    }
-}
-
 static void handlefile(struct hthead *req, int fd, char *path)
 {
     struct pattern *pat;
@@ -376,11 +350,8 @@ static void handlefile(struct hthead *req, int fd, char *path)
 	return;
     }
     
-    if(ch->type == CH_SOCKET) {
-	passreq(ch, req, fd);
-    } else if(ch->type == CH_FORK) {
-	stdforkserve(ch->argv, req, fd);
-    }
+    if(childhandle(ch, req, fd))
+	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
 }
 
 static void handledir(struct hthead *req, int fd, char *path)
