@@ -22,6 +22,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <glob.h>
+#include <libgen.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -36,15 +37,52 @@
 #define CH_SOCKET 0
 #define CH_FORK 1
 
+static int parsefile(struct cfstate *s, FILE *in);
+
+static int doinclude(struct cfstate *s, char *spec)
+{
+    int rv, i;
+    FILE *inc;
+    glob_t globm;
+    char *fbk, *dir, *fspec;
+
+    rv = 0;
+    fbk = s->file;
+    if(spec[0] == '/') {
+	fspec = spec;
+    } else {
+	dir = sstrdup(fbk);
+	fspec = sprintf3("%s/%s", dirname(dir), spec);
+	free(dir);
+    }
+    if(glob(fspec, 0, NULL, &globm))
+	return(0);
+    for(i = 0; i < globm.gl_pathc; i++) {
+	if((inc = fopen(globm.gl_pathv[i], "r")) != NULL) {
+	    s->file = globm.gl_pathv[i];
+	    if(parsefile(s, inc)) {
+		fclose(inc);
+		rv = 1;
+		goto out;
+	    }
+	    fclose(inc);
+	    inc = NULL;
+	}
+    }
+    
+out:
+    globfree(&globm);
+    s->file = fbk;
+    return(rv);
+}
+
 static int parsefile(struct cfstate *s, FILE *in)
 {
-    int i, o, ret;
-    glob_t globm;
+    int i;
     char line[1024];
     int eof, argc;
     int ind, indst[80], indl;
-    char *p, **w, *fbk;
-    FILE *inc;
+    char *p, **w;
     
     s->lno = 0;
     indst[indl = 0] = 0;
@@ -114,26 +152,13 @@ static int parsefile(struct cfstate *s, FILE *in)
 	
 	if(indl == 0) {
 	    if(!strcmp(w[0], "include")) {
-		fbk = s->file;
 		for(i = 1; i < argc; i++) {
-		    if((ret = glob(w[i], 0, NULL, &globm)) == 0) {
-			for(o = 0; o < globm.gl_pathc; o++) {
-			    if((inc = fopen(globm.gl_pathv[o], "r")) != NULL) {
-				s->file = globm.gl_pathv[o];
-				if(parsefile(s, inc)) {
-				    fclose(inc);
-				    globfree(&globm);
-				    freeca(w);
-				    return(1);
-				}
-				fclose(inc);
-			    }
-			}
-			globfree(&globm);
+		    if(doinclude(s, w[i])) {
+			freeca(w);
+			return(1);
 		    }
 		}
 		freeca(w);
-		s->file = fbk;
 		continue;
 	    }
 	}
