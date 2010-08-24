@@ -2,6 +2,7 @@
 #define _UTILS_H
 
 #include <stdarg.h>
+#include <sys/types.h>
 
 #define max(a, b) (((b) > (a))?(b):(a))
 #define min(a, b) (((b) < (a))?(b):(a))
