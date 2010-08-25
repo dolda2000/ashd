@@ -93,11 +93,13 @@ static int parsefile(struct cfstate *s, FILE *in)
 	    line[0] = 0;
 	}
 	s->lno++;
-	for(p = line + strlen(line) - 1; p >= line; p--) {
-	    if(isspace(*p))
-		*p = 0;
-	    else
-		break;
+	if(line[0]) {
+	    for(p = line + strlen(line) - 1; p >= line; p--) {
+		if(isspace(*p))
+		    *p = 0;
+		else
+		    break;
+	    }
 	}
 	for(ind = 0, p = line; *p; p++) {
 	    if(*p == ' ') {
