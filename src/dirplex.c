@@ -49,6 +49,7 @@ struct config {
     time_t mtime, lastck;
     struct child *children;
     struct pattern *patterns;
+    char **index;
 };
 
 struct rule {
@@ -106,6 +107,7 @@ static void freeconfig(struct config *cf)
 	npat = pat->next;
 	freepattern(pat);
     }
+    freeca(cf->index);
     free(cf);
 }
 
@@ -251,6 +253,11 @@ static struct config *readconfig(char *file)
 	} else if((pat = parsepattern(s)) != NULL) {
 	    pat->next = cf->patterns;
 	    cf->patterns = pat;
+	} else if(!strcmp(s->argv[0], "index-file")) {
+	    freeca(cf->index);
+	    cf->index = NULL;
+	    if(s->argc > 1)
+		cf->index = cadup(s->argv + 1);
 	} else if(!strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
@@ -413,8 +420,54 @@ static void handlefile(struct hthead *req, int fd, char *path)
 
 static void handledir(struct hthead *req, int fd, char *path)
 {
-    /* XXX: Todo */
-    simpleerror(fd, 403, "Not Authorized", "Will not send directory listings or indices yet.");
+    struct config **cfs;
+    int i, o;
+    struct stat sb;
+    char *inm, *ipath, *p;
+    DIR *dir;
+    struct dirent *dent;
+    
+    cfs = getconfigs(sprintf3("%s/", path));
+    for(i = 0; cfs[i] != NULL; i++) {
+	if(cfs[i]->index != NULL) {
+	    for(o = 0; cfs[i]->index[o] != NULL; o++) {
+		inm = cfs[i]->index[o];
+		ipath = sprintf2("%s/%s", path, inm);
+		if(!stat(ipath, &sb) && S_ISREG(sb.st_mode)) {
+		    handlefile(req, fd, ipath);
+		    free(ipath);
+		    return;
+		}
+		free(ipath);
+		
+		ipath = NULL;
+		if(!strchr(inm, '.') && ((dir = opendir(path)) != NULL)) {
+		    while((dent = readdir(dir)) != NULL) {
+			if((p = strchr(dent->d_name, '.')) == NULL)
+			    continue;
+			if(strncmp(dent->d_name, inm, p - dent->d_name))
+			    continue;
+			ipath = sprintf2("%s/%s", path, dent->d_name);
+			if(stat(ipath, &sb) || !S_ISREG(sb.st_mode)) {
+			    free(ipath);
+			    ipath = NULL;
+			    continue;
+			}
+			break;
+		    }
+		    closedir(dir);
+		}
+		if(ipath != NULL) {
+		    handlefile(req, fd, ipath);
+		    free(ipath);
+		    return;
+		}
+	    }
+	    break;
+	}
+    }
+    /* XXX: Directory listings */
+    simpleerror(fd, 403, "Not Authorized", "Will not send listings for this directory.");
 }
 
 static int checkdir(struct hthead *req, int fd, char *path)
