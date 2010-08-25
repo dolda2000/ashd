@@ -53,7 +53,7 @@ struct config {
 
 struct rule {
     int type;
-    char *pattern;
+    char **patterns;
 };
 
 struct pattern {
@@ -67,15 +67,18 @@ static struct config *cflist;
 static struct config *gconfig, *lconfig;
 static time_t now;
 
+static void freerule(struct rule *rule)
+{
+    freeca(rule->patterns);
+    free(rule);
+}
+
 static void freepattern(struct pattern *pat)
 {
     struct rule **rule;
     
-    for(rule = pat->rules; *rule; rule++) {
-	if((*rule)->pattern != NULL)
-	    free((*rule)->pattern);
-	free(*rule);
-    }
+    for(rule = pat->rules; *rule; rule++)
+	freerule(*rule);
     if(pat->childnm != NULL)
 	free(pat->childnm);
     freeca(pat->fchild);
@@ -138,11 +141,24 @@ static struct pattern *newpattern(void)
     return(pat);
 }
 
+static char **cadup(char **w)
+{
+    char **ret;
+    int i, l;
+    
+    l = calen(w);
+    ret = smalloc(sizeof(*ret) * (l + 1));
+    for(i = 0; i < l; i++)
+	ret[i] = sstrdup(w[i]);
+    ret[i] = NULL;
+    return(ret);
+}
+
 static struct pattern *parsepattern(struct cfstate *s)
 {
     struct pattern *pat;
     struct rule *rule;
-    int sl, i;
+    int sl;
 
     if(!strcmp(s->argv[0], "match")) {
 	s->expstart = 1;
@@ -161,7 +177,7 @@ static struct pattern *parsepattern(struct cfstate *s)
 	    }
 	    rule = newrule(pat);
 	    rule->type = PAT_BASENAME;
-	    rule->pattern = sstrdup(s->argv[1]);
+	    rule->patterns = cadup(s->argv + 1);
 	} else if(!strcmp(s->argv[0], "pathname")) {
 	    if(s->argc < 2) {
 		flog(LOG_WARNING, "%s:%i: missing pattern for `pathname' match", s->file, s->lno);
@@ -169,7 +185,7 @@ static struct pattern *parsepattern(struct cfstate *s)
 	    }
 	    rule = newrule(pat);
 	    rule->type = PAT_PATHNAME;
-	    rule->pattern = sstrdup(s->argv[1]);
+	    rule->patterns = cadup(s->argv + 1);
 	} else if(!strcmp(s->argv[0], "all")) {
 	    newrule(pat)->type = PAT_ALL;
 	} else if(!strcmp(s->argv[0], "default")) {
@@ -183,10 +199,7 @@ static struct pattern *parsepattern(struct cfstate *s)
 		free(pat->childnm);
 	    pat->childnm = sstrdup(s->argv[1]);
 	} else if(!strcmp(s->argv[0], "fork")) {
-	    pat->fchild = smalloc(sizeof(*pat->fchild) * s->argc);
-	    for(i = 0; i < s->argc - 1; i++)
-		pat->fchild[i] = sstrdup(s->argv[i + 1]);
-	    pat->fchild[i] = 0;
+	    pat->fchild = cadup(s->argv + 1);
 	} else if(!strcmp(s->argv[0], "end") || !strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
@@ -334,7 +347,7 @@ static struct child *findchild(char *file, char *name)
 
 static struct pattern *findmatch(char *file, int trydefault)
 {
-    int i, c;
+    int i, o, c;
     char *bn;
     struct config **cfs;
     struct pattern *pat;
@@ -349,10 +362,18 @@ static struct pattern *findmatch(char *file, int trydefault)
 	for(pat = cfs[c]->patterns; pat != NULL; pat = pat->next) {
 	    for(i = 0; (rule = pat->rules[i]) != NULL; i++) {
 		if(rule->type == PAT_BASENAME) {
-		    if(fnmatch(rule->pattern, bn, 0))
+		    for(o = 0; rule->patterns[o] != NULL; o++) {
+			if(!fnmatch(rule->patterns[o], bn, 0))
+			    break;
+		    }
+		    if(rule->patterns[o] == NULL)
 			break;
 		} else if(rule->type == PAT_PATHNAME) {
-		    if(fnmatch(rule->pattern, file, FNM_PATHNAME))
+		    for(o = 0; rule->patterns[o] != NULL; o++) {
+			if(!fnmatch(rule->patterns[o], file, FNM_PATHNAME))
+			    break;
+		    }
+		    if(rule->patterns[o] == NULL)
 			break;
 		} else if(rule->type == PAT_ALL) {
 		} else if(rule->type == PAT_DEFAULT) {
