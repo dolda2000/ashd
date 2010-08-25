@@ -62,7 +62,8 @@ struct pattern {
     struct rule **rules;
 };
 
-struct config *cflist;
+static struct config *cflist;
+static struct config *gconfig, *lconfig;
 static time_t now;
 
 static void freepattern(struct pattern *pat)
@@ -90,7 +91,8 @@ static void freeconfig(struct config *cf)
 	cf->next->prev = cf->prev;
     if(cf == cflist)
 	cflist = cf->next;
-    free(cf->path);
+    if(cf->path != NULL)
+	free(cf->path);
     for(ch = cf->children; ch != NULL; ch = nch) {
 	nch = ch->next;
 	freechild(ch);
@@ -301,6 +303,10 @@ static struct config **getconfigs(char *file)
     free(tmp);
     if((cf = getconfig(".")) != NULL)
 	bufadd(buf, cf);
+    if(lconfig != NULL)
+	bufadd(buf, lconfig);
+    if(gconfig != NULL)
+	bufadd(buf, gconfig);
     bufadd(buf, NULL);
     return(ret = buf.b);
 }
@@ -506,17 +512,53 @@ out:
     free(path);
 }
 
+static void usage(FILE *out)
+{
+    fprintf(out, "usage: dirplex [-hN] [-c CONFIG] DIR\n");
+}
+
 int main(int argc, char **argv)
 {
+    int c;
+    int nodef;
+    char *gcf, *lcf;
     struct hthead *req;
     int fd;
     
-    if(argc < 2) {
-	flog(LOG_ERR, "usage: dirplex DIR");
+    nodef = 0;
+    lcf = NULL;
+    while((c = getopt(argc, argv, "hNc:")) >= 0) {
+	switch(c) {
+	case 'h':
+	    usage(stdout);
+	    exit(0);
+	case 'N':
+	    nodef = 1;
+	    break;
+	case 'c':
+	    lcf = optarg;
+	    break;
+	default:
+	    usage(stderr);
+	    exit(1);
+	}
+    }
+    if(argc - optind < 1) {
+	usage(stderr);
 	exit(1);
     }
-    if(chdir(argv[1])) {
-	flog(LOG_ERR, "could not change directory to %s: %s", argv[1], strerror(errno));
+    if(!nodef) {
+	if((gcf = findstdconf("ashd/dirplex.rc")) != NULL) {
+	    gconfig = readconfig(gcf);
+	    free(gcf);
+	}
+    }
+    if(lcf != NULL) {
+	if((lconfig = readconfig(lcf)) == NULL)
+	    exit(1);
+    }
+    if(chdir(argv[optind])) {
+	flog(LOG_ERR, "could not change directory to %s: %s", argv[optind], strerror(errno));
 	exit(1);
     }
     signal(SIGCHLD, SIG_IGN);

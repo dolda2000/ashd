@@ -221,6 +221,26 @@ void freecfparser(struct cfstate *s)
     free(s);
 }
 
+char *findstdconf(char *name)
+{
+    char *path, *p, *p2, *t;
+    
+    if((path = getenv("PATH")) == NULL)
+	return(NULL);
+    path = sstrdup(path);
+    for(p = strtok(path, ":"); p != NULL; p = strtok(NULL, ":")) {
+	if((p2 = strrchr(p, '/')) == NULL)
+	    continue;
+	*p2 = 0;
+	if(!access(t = sprintf3("%s/etc/%s", p, name), R_OK)) {
+	    free(path);
+	    return(sstrdup(t));
+	}
+    }
+    free(path);
+    return(NULL);
+}
+
 static struct child *newchild(char *name, int type)
 {
     struct child *ch;

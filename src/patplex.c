@@ -63,7 +63,7 @@ struct pattern {
     char *restpat;
 };
 
-static struct config *config;
+static struct config *gconfig, *lconfig;
 
 static void freepattern(struct pattern *pat)
 {
@@ -393,11 +393,29 @@ static void serve(struct hthead *req, int fd)
     char *chnm;
     struct child *ch;
     
-    if(((chnm = findmatch(config, req, 0)) == NULL) && ((chnm = findmatch(config, req, 1)) == NULL)) {
+    chnm = NULL;
+    if(chnm == NULL)
+	chnm = findmatch(lconfig, req, 0);
+    if(chnm == NULL)
+	chnm = findmatch(lconfig, req, 1);
+    if(gconfig != NULL) {
+	if(chnm == NULL)
+	    chnm = findmatch(gconfig, req, 0);
+	if(chnm == NULL)
+	    chnm = findmatch(gconfig, req, 1);
+    }
+    if(chnm == NULL) {
 	simpleerror(fd, 404, "Not Found", "The requested resource could not be found on this server.");
 	return;
     }
-    if((ch = getchild(config, chnm)) == NULL) {
+    ch = NULL;
+    if(ch == NULL)
+	ch = getchild(lconfig, chnm);
+    if(gconfig != NULL) {
+	if(ch == NULL)
+	    ch = getchild(gconfig, chnm);
+    }
+    if(ch == NULL) {
 	flog(LOG_ERR, "child %s requested, but was not declared", chnm);
 	simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", chnm);
 	return;
@@ -407,16 +425,44 @@ static void serve(struct hthead *req, int fd)
 	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
 }
 
+static void usage(FILE *out)
+{
+    fprintf(out, "usage: patplex [-hN] CONFIGFILE\n");
+}
+
 int main(int argc, char **argv)
 {
+    int c;
+    int nodef;
+    char *gcf;
     struct hthead *req;
     int fd;
-
-    if(argc < 2) {
-	flog(LOG_ERR, "usage: patplex CONFIGFILE");
+    
+    nodef = 0;
+    while((c = getopt(argc, argv, "hN")) >= 0) {
+	switch(c) {
+	case 'h':
+	    usage(stdout);
+	    exit(0);
+	case 'N':
+	    nodef = 1;
+	    break;
+	default:
+	    usage(stderr);
+	    exit(1);
+	}
+    }
+    if(argc - optind < 1) {
+	usage(stderr);
 	exit(1);
     }
-    config = readconfig(argv[1]);
+    if(!nodef) {
+	if((gcf = findstdconf("ashd/patplex.rc")) != NULL) {
+	    gconfig = readconfig(gcf);
+	    free(gcf);
+	}
+    }
+    lconfig = readconfig(argv[optind]);
     signal(SIGCHLD, SIG_IGN);
     while(1) {
 	if((fd = recvreq(0, &req)) < 0) {

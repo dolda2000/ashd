@@ -24,6 +24,7 @@ void skipcfblock(struct cfstate *s);
 struct cfstate *mkcfparser(FILE *in, char *name);
 void freecfparser(struct cfstate *s);
 char **getcfline(struct cfstate *s);
+char *findstdconf(char *name);
 
 void freechild(struct child *ch);
 struct child *parsechild(struct cfstate *s);
