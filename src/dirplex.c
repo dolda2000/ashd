@@ -59,6 +59,7 @@ struct rule {
 struct pattern {
     struct pattern *next;
     char *childnm;
+    char **fchild;
     struct rule **rules;
 };
 
@@ -77,6 +78,7 @@ static void freepattern(struct pattern *pat)
     }
     if(pat->childnm != NULL)
 	free(pat->childnm);
+    freeca(pat->fchild);
     free(pat);
 }
 
@@ -140,7 +142,7 @@ static struct pattern *parsepattern(struct cfstate *s)
 {
     struct pattern *pat;
     struct rule *rule;
-    int sl;
+    int sl, i;
 
     if(!strcmp(s->argv[0], "match")) {
 	s->expstart = 1;
@@ -180,6 +182,11 @@ static struct pattern *parsepattern(struct cfstate *s)
 	    if(pat->childnm != NULL)
 		free(pat->childnm);
 	    pat->childnm = sstrdup(s->argv[1]);
+	} else if(!strcmp(s->argv[0], "fork")) {
+	    pat->fchild = smalloc(sizeof(*pat->fchild) * s->argc);
+	    for(i = 0; i < s->argc - 1; i++)
+		pat->fchild[i] = sstrdup(s->argv[i + 1]);
+	    pat->fchild[i] = 0;
 	} else if(!strcmp(s->argv[0], "end") || !strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
@@ -192,7 +199,7 @@ static struct pattern *parsepattern(struct cfstate *s)
 	freepattern(pat);
 	return(NULL);
     }
-    if(pat->childnm == NULL) {
+    if((pat->childnm == NULL) && (pat->fchild == NULL)) {
 	flog(LOG_WARNING, "%s:%i: missing handler in match declaration", s->file, sl);
 	freepattern(pat);
 	return(NULL);
@@ -370,14 +377,17 @@ static void handlefile(struct hthead *req, int fd, char *path)
 	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 	return;
     }
-    if((ch = findchild(path, pat->childnm)) == NULL) {
-	flog(LOG_ERR, "child %s requested, but was not declared", pat->childnm);
-	simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", pat->childnm);
-	return;
+    if(pat->fchild) {
+	stdforkserve(pat->fchild, req, fd);
+    } else {
+	if((ch = findchild(path, pat->childnm)) == NULL) {
+	    flog(LOG_ERR, "child %s requested, but was not declared", pat->childnm);
+	    simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", pat->childnm);
+	    return;
+	}
+	if(childhandle(ch, req, fd))
+	    simpleerror(fd, 500, "Server Error", "The request handler crashed.");
     }
-    
-    if(childhandle(ch, req, fd))
-	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
 }
 
 static void handledir(struct hthead *req, int fd, char *path)
