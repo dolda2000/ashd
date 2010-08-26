@@ -232,7 +232,7 @@ out:
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: userplex [-hI] [-g GROUP] [-m MIN-UID] [-d PUB-DIR] [PROGRAM ARGS...]");
+    fprintf(out, "usage: userplex [-hI] [-g GROUP] [-m MIN-UID] [-d PUB-DIR] [PROGRAM ARGS...]\n");
 }
 
 int main(int argc, char **argv)
