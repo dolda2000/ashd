@@ -302,6 +302,9 @@ static struct config *getconfig(char *path)
     cf->mtime = mtime;
     cf->lastck = now;
     cf->next = cflist;
+    cf->prev = NULL;
+    if(cflist != NULL)
+	cflist->prev = cf;
     cflist = cf;
     return(cf);
 }
@@ -445,7 +448,7 @@ static void handledir(struct hthead *req, int fd, char *path)
 		    while((dent = readdir(dir)) != NULL) {
 			if((p = strchr(dent->d_name, '.')) == NULL)
 			    continue;
-			if(strncmp(dent->d_name, inm, p - dent->d_name))
+			if(strncmp(dent->d_name, inm, strlen(inm)))
 			    continue;
 			ipath = sprintf2("%s/%s", path, dent->d_name);
 			if(stat(ipath, &sb) || !S_ISREG(sb.st_mode)) {
