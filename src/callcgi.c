@@ -93,7 +93,7 @@ static void forkchild(int inpath, char *prog, char *file, char *method, char *ur
 	putenv(sprintf2("SERVER_SOFTWARE=ashd/%s", VERSION));
 	putenv("GATEWAY_INTERFACE=CGI/1.1");
 	if(getenv("HTTP_VERSION"))
-	    putenv(sprintf2("SERVER_PROTOCOL=HTTP/%s", getenv("HTTP_VERSION")));
+	    putenv(sprintf2("SERVER_PROTOCOL=%s", getenv("HTTP_VERSION")));
 	putenv(sprintf2("REQUEST_METHOD=%s", method));
 	putenv(sprintf2("PATH_INFO=%s", rest));
 	putenv(sprintf2("SCRIPT_NAME=%s", url));
