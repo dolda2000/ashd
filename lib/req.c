@@ -268,3 +268,37 @@ fail:
     errno = EPROTO;
     return(-1);
 }
+
+char *unquoteurl(char *in)
+{
+    struct charbuf buf;
+    char *p;
+    int c;
+    
+    bufinit(buf);
+    p = in;
+    while(*p) {
+	if(*p == '%') {
+	    if(!p[1] || !p[2])
+		goto fail;
+	    c = 0;
+	    if((p[1] >= '0') && (p[1] <= '9'))          c |= (p[1] - '0') << 4;
+	    else if((p[1] >= 'a') && (p[1] <= 'f'))     c |= (p[1] - 'a' + 10) << 4;
+	    else if((p[1] >= 'A') && (p[1] <= 'F'))     c |= (p[1] - 'A' + 10) << 4;
+	    else                                        goto fail;
+	    if((p[2] >= '0') && (p[2] <= '9'))          c |= (p[2] - '0');
+	    else if((p[2] >= 'a') && (p[2] <= 'f'))     c |= (p[2] - 'a' + 10);
+	    else if((p[2] >= 'A') && (p[2] <= 'F'))     c |= (p[2] - 'A' + 10);
+	    else                                        goto fail;
+	    bufadd(buf, c);
+	    p += 3;
+	} else {
+	    bufadd(buf, *(p++));
+	}
+    }
+    bufadd(buf, 0);
+    return(buf.b);
+fail:
+    buffree(buf);
+    return(NULL);
+}

@@ -22,5 +22,6 @@ int recvreq(int sock, struct hthead **reqp);
 void replrest(struct hthead *head, char *rest);
 int parseheaders(struct hthead *head, FILE *in);
 int writeresp(FILE *out, struct hthead *resp);
+char *unquoteurl(char *in);
 
 #endif

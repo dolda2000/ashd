@@ -494,6 +494,12 @@ static void serve(struct hthead *req, int fd)
 	} else {
 	    *(p2++) = 0;
 	}
+	if((tmp = unquoteurl(p)) == NULL) {
+	    simpleerror(fd, 400, "Bad Request", "The requested URL contains an invalid escape sequence.");
+	    goto fail;
+	}
+	strcpy(p, tmp);
+	free(tmp);
 	
 	if(!*p) {
 	    if(p2 == NULL) {
