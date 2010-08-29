@@ -85,11 +85,6 @@ static void forkchild(int inpath, char *prog, char *file, char *method, char *ur
 	    close(i);
 	if((qp = strchr(url, '?')) != NULL)
 	    *(qp++) = 0;
-	/*
-	 * XXX: Currently missing:
-	 *  SERVER_NAME (Partially)
-	 *  SERVER_PORT
-	 */
 	putenv(sprintf2("SERVER_SOFTWARE=ashd/%s", VERSION));
 	putenv("GATEWAY_INTERFACE=CGI/1.1");
 	if(getenv("HTTP_VERSION"))
@@ -100,6 +95,10 @@ static void forkchild(int inpath, char *prog, char *file, char *method, char *ur
 	putenv(sprintf2("QUERY_STRING=%s", qp?qp:""));
 	if(getenv("REQ_HOST"))
 	    putenv(sprintf2("SERVER_NAME=%s", getenv("REQ_HOST")));
+	if(getenv("REQ_X_ASH_SERVER_PORT"))
+	    putenv(sprintf2("SERVER_PORT=%s", getenv("REQ_X_ASH_SERVER_PORT")));
+	if(getenv("REQ_X_ASH_PROTOCOL") && !strcmp(getenv("REQ_X_ASH_PROTOCOL"), "https"))
+	    putenv("HTTPS=ON");
 	if(getenv("REQ_X_ASH_ADDRESS"))
 	    putenv(sprintf2("REMOTE_ADDR=%s", getenv("REQ_X_ASH_ADDRESS")));
 	if(getenv("REQ_CONTENT_TYPE"))
