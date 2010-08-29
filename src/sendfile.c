@@ -26,6 +26,8 @@
 #include <stdint.h>
 #include <time.h>
 #include <magic.h>
+#include <locale.h>
+#include <langinfo.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -108,6 +110,15 @@ static const char *getmimetype(char *file, struct stat *sb)
     return("application/octet-stream");
 }
 
+/* XXX: This could be made far better and check for other attributes
+ * and stuff, but not now. */
+static const char *ckctype(const char *ctype)
+{
+    if(!strncmp(ctype, "text/", 5) && (strchr(ctype, ';') == NULL))
+	return(sprintf2("%s; charset=%s", ctype, nl_langinfo(CODESET)));
+    return(ctype);
+}
+
 static void checkcache(char *file, struct stat *sb)
 {
     char *hdr;
@@ -136,6 +147,7 @@ int main(int argc, char **argv)
     int fd;
     const char *contype;
     
+    setlocale(LC_ALL, "");
     contype = NULL;
     while((c = getopt(argc, argv, "c:")) >= 0) {
 	switch(c) {
@@ -167,6 +179,7 @@ int main(int argc, char **argv)
     }
     if(contype == NULL)
 	contype = getmimetype(file, &sb);
+    contype = ckctype(contype);
     
     checkcache(file, &sb);
     
