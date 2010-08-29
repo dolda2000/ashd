@@ -102,7 +102,7 @@ static const char *getmimetype(char *file, struct stat *sb)
     if((ret = attrmimetype(file)) != NULL)
 	return(ret);
     if(cookie == NULL) {
-	cookie = magic_open(MAGIC_MIME_TYPE);
+	cookie = magic_open(MAGIC_MIME_TYPE | MAGIC_SYMLINK);
 	magic_load(cookie, NULL);
     }
     if((ret = magic_file(cookie, file)) != NULL)
