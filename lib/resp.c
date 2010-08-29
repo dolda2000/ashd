@@ -30,10 +30,45 @@
 #include <utils.h>
 #include <resp.h>
 
+static char safechars[128] = {
+ /* x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xa xb xc xd xe xf */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1,
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0,
+};
+
+char *urlquote(char *text)
+{
+    static char *ret = NULL;
+    struct charbuf buf;
+    unsigned char c;
+    
+    if(ret != NULL)
+	free(ret);
+    bufinit(buf);
+    for(; *text; text++) {
+	c = *text;
+	if(!c < 128 && safechars[(int)c])
+	    bufadd(buf, *text);
+	else
+	    bprintf(&buf, "%%%02X", (int)c);
+    }
+    bufadd(buf, 0);
+    return(ret = buf.b);
+}
+
 char *htmlquote(char *text)
 {
+    static char *ret = NULL;
     struct charbuf buf;
     
+    if(ret != NULL)
+	free(ret);
     bufinit(buf);
     for(; *text; text++) {
 	if(*text == '<')
@@ -42,25 +77,25 @@ char *htmlquote(char *text)
 	    bufcatstr(buf, "&gt;");
 	else if(*text == '&')
 	    bufcatstr(buf, "&amp;");
+	else if(*text == '\"')
+	    bufcatstr(buf, "&quot;");
 	else
 	    bufadd(buf, *text);
     }
     bufadd(buf, 0);
-    return(buf.b);
+    return(ret = buf.b);
 }
 
 void simpleerror(int fd, int code, char *msg, char *fmt, ...)
 {
     struct charbuf buf;
-    char *tmp1, *tmp2;
+    char *tmp;
     va_list args;
     FILE *out;
     
     va_start(args, fmt);
-    tmp1 = vsprintf2(fmt, args);
+    tmp = vsprintf2(fmt, args);
     va_end(args);
-    tmp2 = htmlquote(tmp1);
-    free(tmp1);
     bufinit(buf);
     bufcatstr(buf, "<?xml version=\"1.0\" encoding=\"US-ASCII\"?>\r\n");
     bufcatstr(buf, "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\r\n");
@@ -70,10 +105,9 @@ void simpleerror(int fd, int code, char *msg, char *fmt, ...)
     bufcatstr(buf, "</head>\r\n");
     bufcatstr(buf, "<body>\r\n");
     bprintf(&buf, "<h1>%s</h1>\r\n", msg);
-    bprintf(&buf, "<p>%s</p>\r\n", tmp2);
+    bprintf(&buf, "<p>%s</p>\r\n", htmlquote(tmp));
     bufcatstr(buf, "</body>\r\n");
     bufcatstr(buf, "</html>\r\n");
-    free(tmp2);
     out = fdopen(dup(fd), "w");
     fprintf(out, "HTTP/1.1 %i %s\n", code, msg);
     fprintf(out, "Content-Type: text/html\n");

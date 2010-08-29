@@ -43,6 +43,7 @@ struct dentry {
 
 static int dispmtime = 0;
 static int dispsize = 0;
+static char *stylesheet = NULL;
 
 static void checkcache(struct stat *sb)
 {
@@ -72,14 +73,27 @@ static int dcmp(const void *ap, const void *bp)
 
 static void head(char *name, struct charbuf *dst)
 {
-    char *title;
+    char *title, *tmp;
     
+    title = sstrdup(htmlquote(name));
     bprintf(dst, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     bprintf(dst, "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n");
     bprintf(dst, "<html xmlns=\"http://www.w3.org/1999/xhtml\">\n");
     bprintf(dst, "<head>\n");
-    title = htmlquote(name);
     bprintf(dst, "<title>Index of %s</title>\n", title);
+    if(stylesheet) {
+	bprintf(dst, "<link rel=\"stylesheet\" type=\"text/css\" href=\"%s\" />\n", htmlquote(tmp));
+    } else {
+	bprintf(dst, "<style>\n");
+	bprintf(dst, "body {font-family: sans-serif; background: #eee;}\n");
+	bprintf(dst, ".dirindex {background: white; padding: 1em; border: thin solid #ccc;}\n");
+	bprintf(dst, ".dirindex table {border-collapse: collapse;}\n");
+	bprintf(dst, ".dirindex td {padding: 0 1em;}\n");
+	bprintf(dst, ".dentry:hover {background: #ddd;}\n");
+	bprintf(dst, ".dir {background: #ddf;}\n");
+	bprintf(dst, ".exec {background: #dfd;}\n");
+	bprintf(dst, "</style>\n");
+    }
     bprintf(dst, "</head>\n");
     bprintf(dst, "<body>\n");
     bprintf(dst, "<h1>Index of %s</h1>\n", title);
@@ -123,32 +137,37 @@ static void mkindex(char *name, DIR *dir, struct charbuf *dst)
 	bufadd(dirbuf, f);
     }
     qsort(dirbuf.b, dirbuf.d, sizeof(struct dentry), dcmp);
-    bprintf(dst, "<table class=\"dirindex\">\n");
+    bprintf(dst, "<div class=\"dirindex\"><table>\n");
     for(i = 0; i < dirbuf.d; i++) {
 	bprintf(dst, "<tr class=\"dentry");
-	if(S_ISDIR(dirbuf.b[i].sb.st_mode))
+	if(S_ISDIR(dirbuf.b[i].sb.st_mode)) {
 	    bprintf(dst, " dir");
+	} else {
+	    if(dirbuf.b[i].x)
+		bprintf(dst, " exec");
+	}
 	if(dirbuf.b[i].w)
 	    bprintf(dst, " writable");
-	if(dirbuf.b[i].x)
-	    bprintf(dst, " exec");
 	bprintf(dst, "\">");	
 	fn = htmlquote(dirbuf.b[i].name);
 	bprintf(dst, "<td class=\"filename\"><a href=\"%s\">%s</a></td>", fn, fn);
-	free(fn);
-	if(dispsize && !S_ISDIR(dirbuf.b[i].sb.st_mode))
-	    bprintf(dst, "<td class=\"filesize\">%ji</td>", (intmax_t)dirbuf.b[i].sb.st_size);
+	if(dispsize) {
+	    bprintf(dst, "<td class=\"filesize\">");
+	    if(!S_ISDIR(dirbuf.b[i].sb.st_mode))
+		bprintf(dst, "%ji", (intmax_t)dirbuf.b[i].sb.st_size);
+	    bprintf(dst, "</td>");
+	}
 	if(dispmtime)
 	    bprintf(dst, "<td class=\"filemtime\">%s</td>", fmthttpdate(dirbuf.b[i].sb.st_mtime));
 	bprintf(dst, "</tr>\n");
 	free(dirbuf.b[i].name);
     }
-    bprintf(dst, "</table>\n");
+    bprintf(dst, "</table></div>\n");
 }
 
 static void usage(void)
 {
-    flog(LOG_ERR, "usage: htls [-hms] METHOD URL REST");
+    flog(LOG_ERR, "usage: htls [-hms] [-c STYLESHEET] METHOD URL REST");
 }
 
 int main(int argc, char **argv)
@@ -160,7 +179,7 @@ int main(int argc, char **argv)
     struct stat sb;
     
     setlocale(LC_ALL, "");
-    while((c = getopt(argc, argv, "hms")) >= 0) {
+    while((c = getopt(argc, argv, "hmsc:")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage();
@@ -170,6 +189,9 @@ int main(int argc, char **argv)
 	    break;
 	case 's':
 	    dispsize = 1;
+	    break;
+	case 'c':
+	    stylesheet = optarg;
 	    break;
 	default:
 	    usage();
