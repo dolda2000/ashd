@@ -66,7 +66,7 @@ static char *absolutify(char *file)
 static void forkchild(int inpath, char *prog, char *file, char *method, char *url, char *rest, int *infd, int *outfd)
 {
     int i;
-    char *qp, **env;
+    char *qp, **env, *name;
     int inp[2], outp[2];
     pid_t pid;
 
@@ -90,8 +90,16 @@ static void forkchild(int inpath, char *prog, char *file, char *method, char *ur
 	if(getenv("HTTP_VERSION"))
 	    putenv(sprintf2("SERVER_PROTOCOL=%s", getenv("HTTP_VERSION")));
 	putenv(sprintf2("REQUEST_METHOD=%s", method));
-	putenv(sprintf2("PATH_INFO=%s", rest));
-	putenv(sprintf2("SCRIPT_NAME=%s", url));
+	putenv(sprintf2("PATH_INFO=/%s", rest));
+	name = url;
+	/* XXX: This is an ugly hack (I think), but though I can think
+	 * of several alternatives, none seem to be better. */
+	if(*rest && (strlen(url) > strlen(rest)) &&
+	   !strcmp(rest, url + strlen(url) - strlen(rest)) &&
+	   (url[strlen(url) - strlen(rest) - 1] == '/')) {
+	    name = sprintf2("%.*s", (int)(strlen(url) - strlen(rest) - 1), url);
+	}
+	putenv(sprintf2("SCRIPT_NAME=%s", name));
 	putenv(sprintf2("QUERY_STRING=%s", qp?qp:""));
 	if(getenv("REQ_HOST"))
 	    putenv(sprintf2("SERVER_NAME=%s", getenv("REQ_HOST")));
