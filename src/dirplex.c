@@ -43,6 +43,9 @@
 #define PAT_ALL 2
 #define PAT_DEFAULT 3
 
+#define PT_FILE 0
+#define PT_DIR 1
+
 struct config {
     struct config *next, *prev;
     char *path;
@@ -59,6 +62,7 @@ struct rule {
 
 struct pattern {
     struct pattern *next;
+    int type;
     char *childnm;
     char **fchild;
     struct rule **rules;
@@ -169,6 +173,8 @@ static struct pattern *parsepattern(struct cfstate *s)
 	return(NULL);
     }
     
+    if((s->argc > 1) && !strcmp(s->argv[1], "directory"))
+	pat->type = PT_DIR;
     sl = s->lno;
     while(1) {
 	getcfline(s);
@@ -355,7 +361,7 @@ static struct child *findchild(char *file, char *name)
     return(ch);
 }
 
-static struct pattern *findmatch(char *file, int trydefault)
+static struct pattern *findmatch(char *file, int trydefault, int dir)
 {
     int i, o, c;
     char *bn;
@@ -370,6 +376,10 @@ static struct pattern *findmatch(char *file, int trydefault)
     cfs = getconfigs(file);
     for(c = 0; cfs[c] != NULL; c++) {
 	for(pat = cfs[c]->patterns; pat != NULL; pat = pat->next) {
+	    if(!dir && (pat->type == PT_DIR))
+		continue;
+	    if(dir && (pat->type != PT_DIR))
+		continue;
 	    for(i = 0; (rule = pat->rules[i]) != NULL; i++) {
 		if(rule->type == PAT_BASENAME) {
 		    for(o = 0; rule->patterns[o] != NULL; o++) {
@@ -395,19 +405,16 @@ static struct pattern *findmatch(char *file, int trydefault)
 		return(pat);
 	}
     }
+    if(!trydefault)
+	return(findmatch(file, 1, dir));
     return(NULL);
 }
 
-static void handlefile(struct hthead *req, int fd, char *path)
+static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
 {
-    struct pattern *pat;
     struct child *ch;
 
     headappheader(req, "X-Ash-File", path);
-    if(((pat = findmatch(path, 0)) == NULL) && ((pat = findmatch(path, 1)) == NULL)) {
-	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
-	return;
-    }
     if(pat->fchild) {
 	stdforkserve(pat->fchild, req, fd);
     } else {
@@ -421,6 +428,17 @@ static void handlefile(struct hthead *req, int fd, char *path)
     }
 }
 
+static void handlefile(struct hthead *req, int fd, char *path)
+{
+    struct pattern *pat;
+
+    if((pat = findmatch(path, 0, 0)) == NULL) {
+	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+	return;
+    }
+    handle(req, fd, path, pat);
+}
+
 static void handledir(struct hthead *req, int fd, char *path)
 {
     struct config **cfs;
@@ -429,8 +447,10 @@ static void handledir(struct hthead *req, int fd, char *path)
     char *inm, *ipath, *p;
     DIR *dir;
     struct dirent *dent;
+    struct pattern *pat;
     
-    cfs = getconfigs(sprintf3("%s/", path));
+    path = sprintf2("%s/", path);
+    cfs = getconfigs(path);
     for(i = 0; cfs[i] != NULL; i++) {
 	if(cfs[i]->index != NULL) {
 	    for(o = 0; cfs[i]->index[o] != NULL; o++) {
@@ -439,7 +459,7 @@ static void handledir(struct hthead *req, int fd, char *path)
 		if(!stat(ipath, &sb) && S_ISREG(sb.st_mode)) {
 		    handlefile(req, fd, ipath);
 		    free(ipath);
-		    return;
+		    goto out;
 		}
 		free(ipath);
 		
@@ -463,14 +483,20 @@ static void handledir(struct hthead *req, int fd, char *path)
 		if(ipath != NULL) {
 		    handlefile(req, fd, ipath);
 		    free(ipath);
-		    return;
+		    goto out;
 		}
 	    }
 	    break;
 	}
     }
-    /* XXX: Directory listings */
+    if((pat = findmatch(path, 0, 1)) != NULL) {
+	handle(req, fd, path, pat);
+	goto out;
+    }
     simpleerror(fd, 403, "Not Authorized", "Will not send listings for this directory.");
+    
+out:
+    free(path);
 }
 
 static int checkdir(struct hthead *req, int fd, char *path)
