@@ -73,7 +73,7 @@ static int dcmp(const void *ap, const void *bp)
 
 static void head(char *name, struct charbuf *dst)
 {
-    char *title, *tmp;
+    char *title;
     
     title = sstrdup(htmlquote(name));
     bprintf(dst, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -82,7 +82,7 @@ static void head(char *name, struct charbuf *dst)
     bprintf(dst, "<head>\n");
     bprintf(dst, "<title>Index of %s</title>\n", title);
     if(stylesheet) {
-	bprintf(dst, "<link rel=\"stylesheet\" type=\"text/css\" href=\"%s\" />\n", htmlquote(tmp));
+	bprintf(dst, "<link rel=\"stylesheet\" type=\"text/css\" href=\"%s\" />\n", htmlquote(stylesheet));
     } else {
 	bprintf(dst, "<style>\n");
 	bprintf(dst, "body {font-family: sans-serif; background: #eee;}\n");
