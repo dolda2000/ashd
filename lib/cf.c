@@ -232,10 +232,11 @@ char *findstdconf(char *name)
 	if((p2 = strrchr(p, '/')) == NULL)
 	    continue;
 	*p2 = 0;
-	if(!access(t = sprintf3("%s/etc/%s", p, name), R_OK)) {
+	if(!access(t = sprintf2("%s/etc/%s", p, name), R_OK)) {
 	    free(path);
-	    return(sstrdup(t));
+	    return(t);
 	}
+	free(t);
     }
     free(path);
     return(NULL);

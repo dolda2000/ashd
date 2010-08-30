@@ -640,7 +640,7 @@ int main(int argc, char **argv)
 {
     int c;
     int nodef;
-    char *gcf, *lcf;
+    char *gcf, *lcf, *clcf;
     struct hthead *req;
     int fd;
     
@@ -673,8 +673,18 @@ int main(int argc, char **argv)
 	}
     }
     if(lcf != NULL) {
-	if((lconfig = readconfig(lcf)) == NULL)
-	    exit(1);
+	if(strchr(lcf, '/') == NULL) {
+	    if((clcf = findstdconf(sprintf3("ashd/%s", lcf))) == NULL) {
+		flog(LOG_ERR, "could not find requested configuration `%s'", lcf);
+		exit(1);
+	    }
+	    if((lconfig = readconfig(clcf)) == NULL)
+		exit(1);
+	    free(clcf);
+	} else {
+	    if((lconfig = readconfig(lcf)) == NULL)
+		exit(1);
+	}
     }
     if(chdir(argv[optind])) {
 	flog(LOG_ERR, "could not change directory to %s: %s", argv[optind], strerror(errno));
