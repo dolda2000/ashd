@@ -149,8 +149,9 @@ static void mkindex(char *name, DIR *dir, struct charbuf *dst)
 	if(dirbuf.b[i].w)
 	    bprintf(dst, " writable");
 	bprintf(dst, "\">");	
-	fn = htmlquote(dirbuf.b[i].name);
-	bprintf(dst, "<td class=\"filename\"><a href=\"%s\">%s</a></td>", fn, fn);
+	bprintf(dst, "<td class=\"filename\"><a href=\"%s\">", htmlquote(urlquote(dirbuf.b[i].name)));
+	bprintf(dst, "%s", htmlquote(dirbuf.b[i].name));
+	bprintf(dst, "</a></td>");
 	if(dispsize) {
 	    bprintf(dst, "<td class=\"filesize\">");
 	    if(!S_ISDIR(dirbuf.b[i].sb.st_mode))
