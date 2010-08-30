@@ -91,6 +91,7 @@ static void head(char *name, struct charbuf *dst)
 	bprintf(dst, ".dirindex td {padding: 0 1em;}\n");
 	bprintf(dst, ".dentry:hover {background: #ddd;}\n");
 	bprintf(dst, ".dir {background: #ddf;}\n");
+	bprintf(dst, ".dir .filename:before {content: \"\342\206\263 \"}\n");
 	bprintf(dst, ".exec {background: #dfd;}\n");
 	bprintf(dst, "</style>\n");
     }
