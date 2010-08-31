@@ -242,7 +242,7 @@ int main(int argc, char **argv)
     int fd;
     struct charvbuf csbuf;
     
-    while((c = getopt(argc, argv, "hIg:m:d:")) >= 0) {
+    while((c = getopt(argc, argv, "+hIg:m:d:")) >= 0) {
 	switch(c) {
 	case 'I':
 	    ignore = 1;
