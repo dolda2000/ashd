@@ -519,6 +519,8 @@ int main(int argc, char **argv)
 	    reload = 0;
 	}
 	if((fd = recvreq(0, &req)) < 0) {
+	    if(errno == EINTR)
+		continue;
 	    if(errno != 0)
 		flog(LOG_ERR, "recvreq: %s", strerror(errno));
 	    break;
