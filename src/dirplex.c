@@ -444,13 +444,13 @@ static void handledir(struct hthead *req, int fd, char *path)
     struct config **cfs;
     int i, o;
     struct stat sb;
-    char *inm, *ipath, *p;
+    char *inm, *ipath, *p, *cpath;
     DIR *dir;
     struct dirent *dent;
     struct pattern *pat;
     
-    path = sprintf2("%s/", path);
-    cfs = getconfigs(path);
+    cpath = sprintf2("%s/", path);
+    cfs = getconfigs(cpath);
     for(i = 0; cfs[i] != NULL; i++) {
 	if(cfs[i]->index != NULL) {
 	    for(o = 0; cfs[i]->index[o] != NULL; o++) {
@@ -489,14 +489,14 @@ static void handledir(struct hthead *req, int fd, char *path)
 	    break;
 	}
     }
-    if((pat = findmatch(path, 0, 1)) != NULL) {
-	handle(req, fd, path, pat);
+    if((pat = findmatch(cpath, 0, 1)) != NULL) {
+	handle(req, fd, cpath, pat);
 	goto out;
     }
     simpleerror(fd, 403, "Not Authorized", "Will not send listings for this directory.");
     
 out:
-    free(path);
+    free(cpath);
 }
 
 static int checkdir(struct hthead *req, int fd, char *path)
