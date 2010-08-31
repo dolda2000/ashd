@@ -84,7 +84,7 @@ int sendfd(int sock, int fd, char *data, size_t datalen)
 int recvfd(int sock, char **data, size_t *datalen)
 {
     int ret, fd;
-    char *buf, cbuf[1024];;
+    char *buf, cbuf[1024];
     struct msghdr msg;
     struct cmsghdr *cmsg;
     struct iovec bufvec;

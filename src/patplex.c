@@ -64,6 +64,7 @@ struct pattern {
 };
 
 static struct config *gconfig, *lconfig;
+static volatile int reload = 0;
 
 static void freepattern(struct pattern *pat)
 {
@@ -81,6 +82,22 @@ static void freepattern(struct pattern *pat)
     if(pat->childnm != NULL)
 	free(pat->childnm);
     free(pat);
+}
+
+static void freeconfig(struct config *cf)
+{
+    struct child *ch, *nch;
+    struct pattern *pat, *npat;
+    
+    for(ch = cf->children; ch != NULL; ch = nch) {
+	nch = ch->next;
+	freechild(ch);
+    }
+    for(pat = cf->patterns; pat != NULL; pat = npat) {
+	npat = pat->next;
+	freepattern(pat);
+    }
+    free(cf);
 }
 
 static struct child *getchild(struct config *cf, char *name)
@@ -425,6 +442,34 @@ static void serve(struct hthead *req, int fd)
 	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
 }
 
+static void reloadconf(char *nm)
+{
+    struct config *cf;
+    struct child *ch1, *ch2;
+    
+    if((cf = readconfig(nm)) == NULL) {
+	flog(LOG_WARNING, "could not reload configuration file `%s'", nm);
+	return;
+    }
+    for(ch1 = cf->children; ch1 != NULL; ch1 = ch1->next) {
+	for(ch2 = lconfig->children; ch2 != NULL; ch2 = ch2->next) {
+	    if(!strcmp(ch1->name, ch2->name)) {
+		ch1->fd = ch2->fd;
+		ch2->fd = -1;
+		break;
+	    }
+	}
+    }
+    freeconfig(lconfig);
+    lconfig = cf;
+}
+
+static void sighandler(int sig)
+{
+    if(sig == SIGHUP)
+	reload = 1;
+}
+
 static void usage(FILE *out)
 {
     fprintf(out, "usage: patplex [-hN] CONFIGFILE\n");
@@ -462,9 +507,17 @@ int main(int argc, char **argv)
 	    free(gcf);
 	}
     }
-    lconfig = readconfig(argv[optind]);
+    if((lconfig = readconfig(argv[optind])) == NULL) {
+	flog(LOG_ERR, "could not read `%s'", argv[optind]);
+	exit(1);
+    }
     signal(SIGCHLD, SIG_IGN);
+    signal(SIGHUP, sighandler);
     while(1) {
+	if(reload) {
+	    reloadconf(argv[optind]);
+	    reload = 0;
+	}
 	if((fd = recvreq(0, &req)) < 0) {
 	    if(errno != 0)
 		flog(LOG_ERR, "recvreq: %s", strerror(errno));
