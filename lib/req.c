@@ -95,9 +95,11 @@ static void trim(struct charbuf *buf)
 {
     char *p;
     
-    for(p = buf->b; (p - buf->b < buf->d) && isspace(*p); p++);
-    memmove(buf->b, p, buf->d -= (p - buf->b));
-    for(p = buf->b + buf->d - 1; (p > buf->b) && isspace(*p); p--, buf->d--);
+    if(buf->d > 0) {
+	for(p = buf->b; (p - buf->b < buf->d) && isspace(*p); p++);
+	memmove(buf->b, p, buf->d -= (p - buf->b));
+	for(p = buf->b + buf->d - 1; (p > buf->b) && isspace(*p); p--, buf->d--);
+    }
 }
 
 int parseheaders(struct hthead *head, FILE *in)
