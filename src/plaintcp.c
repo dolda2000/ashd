@@ -186,6 +186,9 @@ void handleplain(int argc, char **argp, char **argv)
 	    exit(1);
 	}
     } else {
-	mustart(listenloop, fd, port);
+	omalloc(tcp);
+	tcp->fd = fd;
+	tcp->sport = port;
+	mustart(listenloop, tcp);
     }
 }
