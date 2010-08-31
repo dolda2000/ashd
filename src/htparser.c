@@ -37,6 +37,7 @@
 #include "htparser.h"
 
 static int plex;
+static char *pidfile = NULL;
 
 static void trimx(struct hthead *req)
 {
@@ -351,7 +352,7 @@ static void plexwatch(struct muth *muth, va_list args)
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: htparser [-hSf] [-u USER] [-r ROOT] PORTSPEC... -- ROOT [ARGS...]\n");
+    fprintf(out, "usage: htparser [-hSf] [-u USER] [-r ROOT] [-p PIDFILE] PORTSPEC... -- ROOT [ARGS...]\n");
     fprintf(out, "\twhere PORTSPEC is HANDLER[:PAR[=VAL][(,PAR[=VAL])...]] (try HANDLER:help)\n");
     fprintf(out, "\tavailable handlers are `plain' and `ssl'.\n");
 }
@@ -407,12 +408,13 @@ int main(int argc, char **argv)
     int i, s1;
     int daemonize, logsys;
     char *root;
+    FILE *pidout;
     struct passwd *pwent;
     
     daemonize = logsys = 0;
     root = NULL;
     pwent = NULL;
-    while((c = getopt(argc, argv, "+hSfu:r:")) >= 0) {
+    while((c = getopt(argc, argv, "+hSfu:r:p:")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage(stdout);
@@ -431,6 +433,9 @@ int main(int argc, char **argv)
 	    break;
 	case 'r':
 	    root = optarg;
+	    break;
+	case 'p':
+	    pidfile = optarg;
 	    break;
 	default:
 	    usage(stderr);
@@ -453,6 +458,13 @@ int main(int argc, char **argv)
 	return(1);
     }
     mustart(plexwatch, plex);
+    pidout = NULL;
+    if(pidfile != NULL) {
+	if((pidout = fopen(pidfile, "w")) == NULL) {
+	    flog(LOG_ERR, "could not open %s for writing: %s", pidfile, strerror(errno));
+	    return(1);
+	}
+    }
     if(logsys)
 	opensyslog();
     if(root) {
@@ -474,6 +486,9 @@ int main(int argc, char **argv)
     if(daemonize) {
 	daemon(0, 0);
     }
+    if(pidout != NULL)
+	fprintf(pidout, "%i\n", getpid());
+    fclose(pidout);
     ioloop();
     return(0);
 }
