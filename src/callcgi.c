@@ -90,7 +90,10 @@ static void forkchild(int inpath, char *prog, char *file, char *method, char *ur
 	if(getenv("HTTP_VERSION"))
 	    putenv(sprintf2("SERVER_PROTOCOL=%s", getenv("HTTP_VERSION")));
 	putenv(sprintf2("REQUEST_METHOD=%s", method));
-	putenv(sprintf2("PATH_INFO=/%s", rest));
+	if(*rest)
+	    putenv(sprintf2("PATH_INFO=/%s", rest));
+	else
+	    putenv("PATH_INFO=");
 	name = url;
 	/* XXX: This is an ugly hack (I think), but though I can think
 	 * of several alternatives, none seem to be better. */
