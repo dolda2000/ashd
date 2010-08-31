@@ -106,7 +106,7 @@ static void forkchild(int inpath, char *prog, char *file, char *method, char *ur
 	if(getenv("REQ_X_ASH_SERVER_PORT"))
 	    putenv(sprintf2("SERVER_PORT=%s", getenv("REQ_X_ASH_SERVER_PORT")));
 	if(getenv("REQ_X_ASH_PROTOCOL") && !strcmp(getenv("REQ_X_ASH_PROTOCOL"), "https"))
-	    putenv("HTTPS=ON");
+	    putenv("HTTPS=on");
 	if(getenv("REQ_X_ASH_ADDRESS"))
 	    putenv(sprintf2("REMOTE_ADDR=%s", getenv("REQ_X_ASH_ADDRESS")));
 	if(getenv("REQ_CONTENT_TYPE"))
