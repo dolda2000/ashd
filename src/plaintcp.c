@@ -46,7 +46,7 @@ struct tcpconn {
     struct tcpport *port;
 };
 
-static int listensock4(int port)
+int listensock4(int port)
 {
     struct sockaddr_in name;
     int fd;
@@ -70,7 +70,7 @@ static int listensock4(int port)
     return(fd);
 }
 
-static int listensock6(int port)
+int listensock6(int port)
 {
     struct sockaddr_in6 name;
     int fd;
@@ -163,7 +163,8 @@ void handleplain(int argc, char **argp, char **argv)
     for(i = 0; i < argc; i++) {
 	if(!strcmp(argp[i], "help")) {
 	    printf("plain handler parameters:\n");
-	    printf("\tport=TCP-PORT (default is 80)\n");
+	    printf("\tport=TCP-PORT   [80]\n");
+	    printf("\t\tThe TCP port to listen on.\n");
 	    exit(0);
 	} else if(!strcmp(argp[i], "port")) {
 	    port = atoi(argv[i]);

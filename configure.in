@@ -32,6 +32,28 @@ if test "$HAS_XATTR" = yes; then
 fi
 AC_SUBST(XATTR_LIBS)
 
+AH_TEMPLATE(HAVE_GNUTLS, [define to use the GnuTLS library for SSL support])
+AC_ARG_WITH(gnutls, [  --with-gnutls           Enable SSL support with the GnuTLS library])
+HAS_GNUTLS=""
+if test "$with_gnutls" = no; then HAS_GNUTLS=no; fi
+if test -z "$HAS_GNUTLS"; then
+	AC_CHECK_LIB(gnutls, gnutls_global_init, [:], [HAS_GNUTLS=no])
+fi
+if test -z "$HAS_GNUTLS";  then
+	AC_CHECK_HEADER(gnutls/gnutls.h, [], [HAS_GNUTLS=no])
+fi
+if test "$HAS_GNUTLS" != no; then HAS_GNUTLS=yes; fi
+if test "$with_gnutls" = yes -a "$HAS_GNUTLS" = no; then
+	AC_MSG_ERROR([*** cannot find GnuTLS on this system])
+fi
+if test "$HAS_GNUTLS" = yes; then
+	GNUTLS_LIBS=-lgnutls
+	GNUTLS_CPPFLAGS=-D_GNU_SOURCE
+	AC_DEFINE(HAVE_GNUTLS)
+fi
+AC_SUBST(GNUTLS_CPPFLAGS)
+AC_SUBST(GNUTLS_LIBS)
+
 AC_OUTPUT([
 Makefile
 src/Makefile

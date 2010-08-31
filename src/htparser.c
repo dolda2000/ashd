@@ -353,7 +353,7 @@ static void usage(FILE *out)
 {
     fprintf(out, "usage: htparser [-hSf] [-u USER] [-r ROOT] PORTSPEC... -- ROOT [ARGS...]\n");
     fprintf(out, "\twhere PORTSPEC is HANDLER[:PAR[=VAL][(,PAR[=VAL])...]] (try HANDLER:help)\n");
-    fprintf(out, "\tavailable handlers are `plain'.\n");
+    fprintf(out, "\tavailable handlers are `plain' and `ssl'.\n");
 }
 
 static void addport(char *spec)
@@ -388,6 +388,10 @@ static void addport(char *spec)
     /* XXX: It would be nice to decentralize this, but, meh... */
     if(!strcmp(nm, "plain")) {
 	handleplain(pars.d, pars.b, vals.b);
+#ifdef HAVE_GNUTLS
+    } else if(!strcmp(nm, "ssl")) {
+	handlegnussl(pars.d, pars.b, vals.b);
+#endif
     } else {
 	flog(LOG_ERR, "htparser: unknown port handler `%s'", nm);
 	exit(1);
