@@ -486,9 +486,10 @@ int main(int argc, char **argv)
     if(daemonize) {
 	daemon(0, 0);
     }
-    if(pidout != NULL)
+    if(pidout != NULL) {
 	fprintf(pidout, "%i\n", getpid());
-    fclose(pidout);
+	fclose(pidout);
+    }
     ioloop();
     return(0);
 }
