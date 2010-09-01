@@ -466,6 +466,11 @@ static void handledir(struct hthead *req, int fd, char *path)
 		ipath = NULL;
 		if(!strchr(inm, '.') && ((dir = opendir(path)) != NULL)) {
 		    while((dent = readdir(dir)) != NULL) {
+			/* Ignore backup files.
+			 * XXX: There is probably a better and more
+			 * extensible way to do this. */
+			if(dent->d_name[strlen(dent->d_name) - 1] == '~')
+			    continue;
 			if((p = strchr(dent->d_name, '.')) == NULL)
 			    continue;
 			if(strncmp(dent->d_name, inm, strlen(inm)))
@@ -583,6 +588,11 @@ static void serve(struct hthead *req, int fd)
 	if(!strchr(p, '.') && ((dir = opendir(path)) != NULL)) {
 	    while((dent = readdir(dir)) != NULL) {
 		buf = sprintf3("%s/%s", path, dent->d_name);
+		/* Ignore backup files.
+		 * XXX: There is probably a better and more
+		 * extensible way to do this. */
+		if(dent->d_name[strlen(dent->d_name) - 1] == '~')
+		    continue;
 		if((p3 = strchr(dent->d_name, '.')) != NULL)
 		    *p3 = 0;
 		if(strcmp(dent->d_name, p))
