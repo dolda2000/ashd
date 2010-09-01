@@ -84,7 +84,7 @@ static void head(char *name, struct charbuf *dst)
     if(stylesheet) {
 	bprintf(dst, "<link rel=\"stylesheet\" type=\"text/css\" href=\"%s\" />\n", htmlquote(stylesheet));
     } else {
-	bprintf(dst, "<style>\n");
+	bprintf(dst, "<style type=\"text/css\">\n");
 	bprintf(dst, "body {font-family: sans-serif; background: #eee;}\n");
 	bprintf(dst, ".dirindex {background: white; padding: 1em; border: thin solid #ccc;}\n");
 	bprintf(dst, ".dirindex table {border-collapse: collapse;}\n");
