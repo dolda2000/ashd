@@ -200,7 +200,7 @@ static void startlisten(void)
 
 static void startnolisten(void)
 {
-    int i;
+    int i, fd;
     
     if((child = fork()) < 0) {
 	flog(LOG_ERR, "could not fork: %s", strerror(errno));
@@ -209,6 +209,12 @@ static void startnolisten(void)
     if(child == 0) {
 	for(i = 3; i < FD_SETSIZE; i++)
 	    close(i);
+	if((fd = open("/dev/null", O_RDONLY)) < 0) {
+	    flog(LOG_ERR, "/dev/null: %s", strerror(errno));
+	    exit(127);
+	}
+	dup2(fd, 0);
+	close(fd);
 	execvp(*progspec, progspec);
 	exit(127);
     }
@@ -262,11 +268,11 @@ retry:
 	    }
 	    break;
 	}
-	if(tries++ < nolisten) {
-	    sleep(1);
-	    goto retry;
-	}
 	if(fd < 0) {
+	    if(tries++ < nolisten) {
+		sleep(1);
+		goto retry;
+	    }
 	    flog(LOG_ERR, "could not connect to specified TCP address: %s", strerror(errno));
 	    exit(1);
 	}
@@ -436,7 +442,7 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
     if((h = getheader(req, "X-Ash-File")) != NULL)
 	bufaddenv(dst, "SCRIPT_FILENAME", "%s", absolutify(h));
     for(i = 0; i < req->noheaders; i++) {
-	h = sstrdup(req->headers[i][0]);
+	h = sprintf2("HTTP_%s", req->headers[i][0]);
 	for(p = h; *p; p++) {
 	    if(isalnum(*p))
 		*p = toupper(*p);
