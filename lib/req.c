@@ -191,6 +191,21 @@ void headappheader(struct hthead *head, const char *name, const char *val)
     head->headers[i][1] = sstrdup(val);
 }
 
+void headrmheader(struct hthead *head, const char *name)
+{
+    int i;
+    
+    for(i = 0; i < head->noheaders; i++) {
+	if(!strcasecmp(head->headers[i][0], name)) {
+	    free(head->headers[i][0]);
+	    free(head->headers[i][1]);
+	    free(head->headers[i]);
+	    memmove(head->headers + i, head->headers + i + 1, --head->noheaders - i);
+	    return;
+	}
+    }
+}
+
 int writeresp(FILE *out, struct hthead *resp)
 {
     int i;

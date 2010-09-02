@@ -1,4 +1,4 @@
-bin_PROGRAMS = htparser dirplex sendfile callcgi patplex userplex htls
+bin_PROGRAMS = htparser dirplex sendfile callcgi patplex userplex htls callscgi
 noinst_PROGRAMS = debugsink
 
 htparser_SOURCES = htparser.c htparser.h plaintcp.c ssl-gnutls.c
