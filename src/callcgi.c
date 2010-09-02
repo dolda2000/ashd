@@ -289,14 +289,14 @@ static void sendheaders(char **headers, FILE *out)
 
 static void usage(void)
 {
-    flog(LOG_ERR, "usage: callcgi [-p PROGRAM] METHOD URL REST");
+    flog(LOG_ERR, "usage: callcgi [-c] [-p PROGRAM] METHOD URL REST");
 }
 
 int main(int argc, char **argv, char **envp)
 {
     int c;
-    char *file, *prog;
-    int inpath;
+    char *file, *prog, *sp;
+    int inpath, cd;
     int infd, outfd;
     FILE *in, *out;
     char **headers;
@@ -306,8 +306,12 @@ int main(int argc, char **argv, char **envp)
     
     prog = NULL;
     inpath = 0;
-    while((c = getopt(argc, argv, "p:")) >= 0) {
+    cd = 0;
+    while((c = getopt(argc, argv, "cp:")) >= 0) {
 	switch(c) {
+	case 'c':
+	    cd = 1;
+	    break;
 	case 'p':
 	    prog = optarg;
 	    inpath = 1;
@@ -326,6 +330,21 @@ int main(int argc, char **argv, char **envp)
 	flog(LOG_ERR, "callcgi: needs to be called with the X-Ash-File header");
 	exit(1);
     }
+    
+    if(cd) {
+	/* This behavior is encouraged by the CGI specification (RFC 3875, 7.2),
+	 * but not strictly required, and I get the feeling it might break some
+	 * relative paths here or there, so it's not the default for now. */
+	if((sp = strrchr(file, '/')) != NULL) {
+	    *sp = 0;
+	    if(chdir(file)) {
+		*sp = '/';
+	    } else {
+		file = sp + 1;
+	    }
+	}
+    }
+    
     if(prog == NULL)
 	prog = file;
     forkchild(inpath, prog, file, argv[optind], argv[optind + 1], argv[optind + 2], &infd, &outfd);
