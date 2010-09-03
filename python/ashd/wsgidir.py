@@ -42,20 +42,20 @@ def chain(path, env, startreq):
         return (mod.wmain())(env, startreq)
     elif hasattr(mod, "application"):
         return mod.application(env, startreq)
-    return wsgi.simpleerror(env, startreq, 500, "Internal Error", "Invalid WSGI handler.")
+    return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "Invalid WSGI handler.")
 exts["wsgi"] = chain
 
 def application(env, startreq):
     if not "SCRIPT_FILENAME" in env:
-        return wsgiutil.simplerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
+        return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
     path = env["SCRIPT_FILENAME"]
     base = os.path.basename(path)
     p = base.rfind('.')
     if p < 0 or not os.access(path, os.R_OK):
-        return wsgiutil.simplerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
+        return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
     ext = base[p + 1:]
     if not ext in exts:
-        return wsgiutil.simplerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
+        return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
     return(exts[ext](path, env, startreq))
 
 def wmain(argv):
