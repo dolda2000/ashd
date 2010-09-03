@@ -194,6 +194,7 @@ static void startlisten(void)
 	for(i = 3; i < FD_SETSIZE; i++)
 	    close(i);
 	execvp(*progspec, progspec);
+	flog(LOG_ERR, "callscgi: %s: %s", *progspec, strerror(errno));
 	exit(127);
     }
     close(fd);
@@ -217,6 +218,7 @@ static void startnolisten(void)
 	dup2(fd, 0);
 	close(fd);
 	execvp(*progspec, progspec);
+	flog(LOG_ERR, "callscgi: %s: %s", *progspec, strerror(errno));
 	exit(127);
     }
 }
