@@ -430,7 +430,7 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
 	bufaddenv(dst, "SERVER_NAME", "%s", h);
     if((h = getheader(req, "X-Ash-Server-Port")) != NULL)
 	bufaddenv(dst, "SERVER_PORT", "%s", h);
-    if(((h = getheader(req, "X-Ash-Server-Protocol")) != NULL) && !strcmp(h, "https"))
+    if(((h = getheader(req, "X-Ash-Protocol")) != NULL) && !strcmp(h, "https"))
 	bufaddenv(dst, "HTTPS", "on");
     if((h = getheader(req, "X-Ash-Address")) != NULL)
 	bufaddenv(dst, "REMOTE_ADDR", "%s", h);
