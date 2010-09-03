@@ -200,7 +200,7 @@ void headrmheader(struct hthead *head, const char *name)
 	    free(head->headers[i][0]);
 	    free(head->headers[i][1]);
 	    free(head->headers[i]);
-	    memmove(head->headers + i, head->headers + i + 1, --head->noheaders - i);
+	    memmove(head->headers + i, head->headers + i + 1, sizeof(head->headers) * (--head->noheaders - i));
 	    return;
 	}
     }
