@@ -580,6 +580,11 @@ static void listenloop(struct muth *muth, va_list args)
     }
 }
 
+static void sigexit(int sig)
+{
+    exit(0);
+}
+
 static void usage(FILE *out)
 {
     fprintf(out, "usage: servescgi [-h] [-N RETRIES] [-i ID] [-u UNIX-PATH] [-t [HOST:]TCP-PORT] [PROGRAM [ARGS...]]\n");
@@ -617,6 +622,8 @@ int main(int argc, char **argv)
 	exit(1);
     }
     signal(SIGCHLD, SIG_IGN);
+    signal(SIGINT, sigexit);
+    signal(SIGTERM, sigexit);
     mustart(listenloop, 0);
     atexit(killcuraddr);
     ioloop();
