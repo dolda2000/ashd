@@ -22,6 +22,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <pwd.h>
+#include <sys/signal.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -483,6 +484,7 @@ int main(int argc, char **argv)
 	    exit(1);
 	}
     }
+    signal(SIGPIPE, SIG_IGN);
     if(daemonize) {
 	daemon(0, 0);
     }
