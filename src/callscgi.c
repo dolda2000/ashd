@@ -98,13 +98,14 @@ static char *mkanonid(void)
     
     home = getenv("HOME");
     if(home && !access(sprintf3("%s/.ashd/sockets/", home), X_OK))
-	tmpl = sprintf2("%s/.ashd/sockets/scgi-a-XXXXXX");
+	tmpl = sprintf2("%s/.ashd/sockets/scgi-a-XXXXXX", home);
     else
 	tmpl = sprintf2("/tmp/scgi-a-%i-XXXXXX", getuid());
     if((fd = mkstemp(tmpl)) < 0) {
 	flog(LOG_ERR, "could not create anonymous socket `%s': %s", tmpl, strerror(errno));
 	exit(1);
     }
+    close(fd);
     unlink(tmpl);
     return(tmpl);
 }
