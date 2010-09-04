@@ -66,6 +66,7 @@ int block(int fd, int ev, time_t to)
 	bl->p->n = bl->n;
     if(bl == blockers)
 	blockers = bl->n;
+    free(bl);
     return(rv);
 }
 
