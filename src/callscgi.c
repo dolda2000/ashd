@@ -411,19 +411,15 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
     bufaddenv(dst, "SERVER_PROTOCOL", "%s", req->ver);
     bufaddenv(dst, "REQUEST_METHOD", "%s", req->method);
     bufaddenv(dst, "REQUEST_URI", "%s", req->url);
-    if(*req->rest)
-	bufaddenv(dst, "PATH_INFO", "/%s", req->rest);
-    else
-	bufaddenv(dst, "PATH_INFO", "");
+    bufaddenv(dst, "PATH_INFO", req->rest);
     url = sstrdup(req->url);
     if((qp = strchr(url, '?')) != NULL)
 	*(qp++) = 0;
     /* XXX: This is an ugly hack (I think), but though I can think of
      * several alternatives, none seem to be better. */
-    if(*req->rest && (strlen(url) > strlen(req->rest)) &&
-       !strcmp(req->rest, url + strlen(url) - strlen(req->rest)) &&
-       (url[strlen(url) - strlen(req->rest) - 1] == '/')) {
-	bufaddenv(dst, "SCRIPT_NAME", "%.*s", (int)(strlen(url) - strlen(req->rest) - 1), url);
+    if(*req->rest && (strlen(url) >= strlen(req->rest)) &&
+       !strcmp(req->rest, url + strlen(url) - strlen(req->rest))) {
+	bufaddenv(dst, "SCRIPT_NAME", "%.*s", (int)(strlen(url) - strlen(req->rest)), url);
     } else {
 	bufaddenv(dst, "SCRIPT_NAME", "%s", url);
     }

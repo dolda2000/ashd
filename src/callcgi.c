@@ -90,17 +90,13 @@ static void forkchild(int inpath, char *prog, char *file, char *method, char *ur
 	if(getenv("HTTP_VERSION"))
 	    putenv(sprintf2("SERVER_PROTOCOL=%s", getenv("HTTP_VERSION")));
 	putenv(sprintf2("REQUEST_METHOD=%s", method));
-	if(*rest)
-	    putenv(sprintf2("PATH_INFO=/%s", rest));
-	else
-	    putenv("PATH_INFO=");
+	putenv(sprintf2("PATH_INFO=%s", rest));
 	name = url;
 	/* XXX: This is an ugly hack (I think), but though I can think
 	 * of several alternatives, none seem to be better. */
-	if(*rest && (strlen(url) > strlen(rest)) &&
-	   !strcmp(rest, url + strlen(url) - strlen(rest)) &&
-	   (url[strlen(url) - strlen(rest) - 1] == '/')) {
-	    name = sprintf2("%.*s", (int)(strlen(url) - strlen(rest) - 1), url);
+	if(*rest && (strlen(url) >= strlen(rest)) &&
+	   !strcmp(rest, url + strlen(url) - strlen(rest))) {
+	    name = sprintf2("%.*s", (int)(strlen(url) - strlen(rest)), url);
 	}
 	putenv(sprintf2("SCRIPT_NAME=%s", name));
 	putenv(sprintf2("QUERY_STRING=%s", qp?qp:""));
