@@ -326,16 +326,16 @@ struct child *parsechild(struct cfstate *s)
     return(ch);
 }
 
-int childhandle(struct child *ch, struct hthead *req, int fd)
+int childhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
 {
     if(ch->type == CH_SOCKET) {
 	if(ch->fd < 0)
-	    ch->fd = stdmkchild(ch->argv);
+	    ch->fd = stdmkchild(ch->argv, chinit, idata);
 	if(sendreq(ch->fd, req, fd)) {
 	    if(errno == EPIPE) {
 		/* Assume that the child has crashed and restart it. */
 		close(ch->fd);
-		ch->fd = stdmkchild(ch->argv);
+		ch->fd = stdmkchild(ch->argv, chinit, idata);
 		if(!sendreq(ch->fd, req, fd))
 		    return(0);
 	    }
@@ -345,7 +345,7 @@ int childhandle(struct child *ch, struct hthead *req, int fd)
 	    return(-1);
 	}
     } else if(ch->type == CH_FORK) {
-	if(stdforkserve(ch->argv, req, fd) < 0)
+	if(stdforkserve(ch->argv, req, fd, chinit, idata) < 0)
 	    return(-1);
     }
     return(0);

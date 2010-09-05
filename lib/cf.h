@@ -28,6 +28,6 @@ char *findstdconf(char *name);
 
 void freechild(struct child *ch);
 struct child *parsechild(struct cfstate *s);
-int childhandle(struct child *ch, struct hthead *req, int fd);
+int childhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata);
 
 #endif

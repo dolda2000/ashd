@@ -454,7 +454,7 @@ int main(int argc, char **argv)
 	usage(stderr);
 	exit(1);
     }
-    if((plex = stdmkchild(argv + ++i)) < 0) {
+    if((plex = stdmkchild(argv + ++i, NULL, NULL)) < 0) {
 	flog(LOG_ERR, "could not spawn root multiplexer: %s", strerror(errno));
 	return(1);
     }

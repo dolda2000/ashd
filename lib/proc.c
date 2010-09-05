@@ -31,7 +31,7 @@
 #include <proc.h>
 #include <req.h>
 
-int stdmkchild(char **argv)
+int stdmkchild(char **argv, void (*chinit)(void *), void *idata)
 {
     int i;
     pid_t pid;
@@ -42,6 +42,8 @@ int stdmkchild(char **argv)
     if((pid = fork()) < 0)
 	return(-1);
     if(pid == 0) {
+	if(chinit != NULL)
+	    chinit(idata);
 	for(i = 3; i < FD_SETSIZE; i++) {
 	    if(i != fd[0])
 		close(i);
@@ -124,7 +126,7 @@ int recvfd(int sock, char **data, size_t *datalen)
     return(fd);
 }
 
-pid_t stdforkserve(char **argv, struct hthead *req, int fd)
+pid_t stdforkserve(char **argv, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
 {
     int i;
     char *ebuf, *p;
@@ -134,6 +136,9 @@ pid_t stdforkserve(char **argv, struct hthead *req, int fd)
     if((pid = fork()) < 0)
 	return(-1);
     if(pid == 0) {
+	if(chinit != NULL)
+	    chinit(idata);
+	
 	dup2(fd, 0);
 	dup2(fd, 1);
 	for(i = 3; i < FD_SETSIZE; i++)

@@ -47,14 +47,14 @@ static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
 
     headappheader(req, "X-Ash-File", path);
     if(pat->fchild) {
-	stdforkserve(pat->fchild, req, fd);
+	stdforkserve(pat->fchild, req, fd, NULL, NULL);
     } else {
 	if((ch = findchild(path, pat->childnm)) == NULL) {
 	    flog(LOG_ERR, "child %s requested, but was not declared", pat->childnm);
 	    simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", pat->childnm);
 	    return;
 	}
-	if(childhandle(ch, req, fd))
+	if(childhandle(ch, req, fd, NULL, NULL))
 	    simpleerror(fd, 500, "Server Error", "The request handler crashed.");
     }
 }

@@ -438,7 +438,7 @@ static void serve(struct hthead *req, int fd)
 	return;
     }
     
-    if(childhandle(ch, req, fd))
+    if(childhandle(ch, req, fd, NULL, NULL))
 	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
 }
 
