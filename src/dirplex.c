@@ -439,14 +439,48 @@ static void handlefile(struct hthead *req, int fd, char *path)
     handle(req, fd, path, pat);
 }
 
+static char *findfile(char *path, char *name, struct stat *sb)
+{
+    DIR *dir;
+    struct stat sbuf;
+    struct dirent *dent;
+    char *p, *fp, *ret;
+    
+    if(sb == NULL)
+	sb = &sbuf;
+    if((dir = opendir(path)) == NULL)
+	return(NULL);
+    ret = NULL;
+    while((dent = readdir(dir)) != NULL) {
+	/* Ignore backup files.
+	 * XXX: There is probably a better and more extensible way to
+	 * do this. */
+	if(dent->d_name[strlen(dent->d_name) - 1] == '~')
+	    continue;
+	if((p = strchr(dent->d_name, '.')) == NULL)
+	    continue;
+	if(p - dent->d_name != strlen(name))
+	    continue;
+	if(strncmp(dent->d_name, name, strlen(name)))
+	    continue;
+	fp = sprintf3("%s/%s", path, dent->d_name);
+	if(stat(fp, sb))
+	    continue;
+	if(!S_ISREG(sb->st_mode))
+	    continue;
+	ret = sstrdup(fp);
+	break;
+    }
+    closedir(dir);
+    return(ret);
+}
+
 static void handledir(struct hthead *req, int fd, char *path)
 {
     struct config **cfs;
     int i, o;
     struct stat sb;
-    char *inm, *ipath, *p, *cpath;
-    DIR *dir;
-    struct dirent *dent;
+    char *inm, *ipath, *cpath;
     struct pattern *pat;
     
     cpath = sprintf2("%s/", path);
@@ -463,29 +497,7 @@ static void handledir(struct hthead *req, int fd, char *path)
 		}
 		free(ipath);
 		
-		ipath = NULL;
-		if(!strchr(inm, '.') && ((dir = opendir(path)) != NULL)) {
-		    while((dent = readdir(dir)) != NULL) {
-			/* Ignore backup files.
-			 * XXX: There is probably a better and more
-			 * extensible way to do this. */
-			if(dent->d_name[strlen(dent->d_name) - 1] == '~')
-			    continue;
-			if((p = strchr(dent->d_name, '.')) == NULL)
-			    continue;
-			if(strncmp(dent->d_name, inm, strlen(inm)))
-			    continue;
-			ipath = sprintf2("%s/%s", path, dent->d_name);
-			if(stat(ipath, &sb) || !S_ISREG(sb.st_mode)) {
-			    free(ipath);
-			    ipath = NULL;
-			    continue;
-			}
-			break;
-		    }
-		    closedir(dir);
-		}
-		if(ipath != NULL) {
+		if(!strchr(inm, '.') && ((ipath = findfile(path, inm, NULL)) != NULL)) {
 		    handlefile(req, fd, ipath);
 		    free(ipath);
 		    goto out;
@@ -504,141 +516,98 @@ out:
     free(cpath);
 }
 
-static int checkdir(struct hthead *req, int fd, char *path)
+static int checkpath(struct hthead *req, int fd, char *path, char *rest);
+
+static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *el)
 {
+    struct stat sb;
+    char *newpath;
+    int rv;
+    
+    if(!el == '.') {
+	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+	return(1);
+    }
+    if(!stat(sprintf3("%s/%s", path, el), &sb)) {
+	if(S_ISDIR(sb.st_mode)) {
+	    if(!*rest) {
+		stdredir(req, fd, 301, sprintf3("%s/", el));
+		return(1);
+	    }
+	    newpath = sprintf2("%s/%s", path, el);
+	    rv = checkpath(req, fd, newpath, rest + 1);
+	    free(newpath);
+	    return(rv);
+	} else if(S_ISREG(sb.st_mode)) {
+	    newpath = sprintf2("%s/%s", path, el);
+	    replrest(req, rest);
+	    handlefile(req, fd, newpath);
+	    free(newpath);
+	    return(1);
+	}
+	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+	return(1);
+    }
+    if(!strchr(el, '.') && ((newpath = findfile(path, el, NULL)) != NULL)) {
+	replrest(req, rest);
+	handlefile(req, fd, newpath);
+	free(newpath);
+	return(1);
+    }
     return(0);
+}
+
+static int checkpath(struct hthead *req, int fd, char *path, char *rest)
+{
+    struct config *cf;
+    char *p, *el;
+    int rv;
+    
+    el = NULL;
+    rv = 0;
+    
+    if(!strncmp(path, "./", 2))
+	path += 2;
+    cf = getconfig(path);
+    
+    if((p = strchr(rest, '/')) == NULL) {
+	el = unquoteurl(rest);
+	rest = "";
+    } else {
+	char buf[p - rest + 1];
+	memcpy(buf, rest, p - rest);
+	buf[p - rest] = 0;
+	el = unquoteurl(buf);
+	rest = p;
+    }
+    if(el == NULL) {
+	simpleerror(fd, 400, "Bad Request", "The requested URL contains an invalid escape sequence.");
+	rv = 1;
+	goto out;
+    }
+    if(strchr(el, '/') || (!*el && *rest)) {
+	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+	rv = 1;
+	goto out;
+    }
+    if(!*el) {
+	replrest(req, rest);
+	handledir(req, fd, path);
+	return(1);
+    }
+    rv = checkentry(req, fd, path, rest, el);
+    
+out:
+    if(el != NULL)
+	free(el);
+    return(rv);
 }
 
 static void serve(struct hthead *req, int fd)
 {
-    char *p, *p2, *path, *tmp, *buf, *p3, *nm;
-    struct stat sb;
-    DIR *dir;
-    struct dirent *dent;
-    
     now = time(NULL);
-    nm = req->rest;
-    path = sstrdup(".");
-    p = nm;
-    while(1) {
-	if((p2 = strchr(p, '/')) == NULL) {
-	} else {
-	    *(p2++) = 0;
-	}
-	if((tmp = unquoteurl(p)) == NULL) {
-	    simpleerror(fd, 400, "Bad Request", "The requested URL contains an invalid escape sequence.");
-	    goto fail;
-	}
-	strcpy(p, tmp);
-	free(tmp);
-	
-	if(!*p) {
-	    if(p2 == NULL) {
-		if(stat(path, &sb)) {
-		    flog(LOG_WARNING, "failed to stat previously stated directory %s: %s", path, strerror(errno));
-		    simpleerror(fd, 500, "Internal Server Error", "The server encountered an unexpected condition.");
-		    goto fail;
-		}
-		break;
-	    } else {
-		simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
-		goto fail;
-	    }
-	}
-	if(*p == '.') {
-	    simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
-	    goto fail;
-	}
-	
-	getconfig(path);
-	
-	/*
-	 * First, check the name verbatimely:
-	 */
-	buf = sprintf3("%s/%s", path, p);
-	if(!stat(buf, &sb)) {
-	    if(S_ISDIR(sb.st_mode)) {
-		tmp = path;
-		if(!strcmp(path, "."))
-		    path = sstrdup(p);
-		else
-		    path = sprintf2("%s/%s", path, p);
-		free(tmp);
-		if(p2 == NULL) {
-		    stdredir(req, fd, 301, sprintf3("%s/", p));
-		    goto out;
-		}
-		if(checkdir(req, fd, path))
-		    break;
-		goto next;
-	    }
-	    if(S_ISREG(sb.st_mode)) {
-		tmp = path;
-		path = sprintf2("%s/%s", path, p);
-		free(tmp);
-		break;
-	    }
-	    simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
-	    goto fail;
-	}
-
-	/*
-	 * Check the file extensionlessly:
-	 */
-	if(!strchr(p, '.') && ((dir = opendir(path)) != NULL)) {
-	    while((dent = readdir(dir)) != NULL) {
-		buf = sprintf3("%s/%s", path, dent->d_name);
-		/* Ignore backup files.
-		 * XXX: There is probably a better and more
-		 * extensible way to do this. */
-		if(dent->d_name[strlen(dent->d_name) - 1] == '~')
-		    continue;
-		if((p3 = strchr(dent->d_name, '.')) != NULL)
-		    *p3 = 0;
-		if(strcmp(dent->d_name, p))
-		    continue;
-		if(stat(buf, &sb))
-		    continue;
-		if(!S_ISREG(sb.st_mode))
-		    continue;
-		tmp = path;
-		path = sstrdup(buf);
-		free(tmp);
-		break;
-	    }
-	    closedir(dir);
-	    if(dent != NULL)
-		break;
-	}
-	
+    if(!checkpath(req, fd, ".", req->rest))
 	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
-	goto fail;
-	
-    next:
-	if(p2 == NULL)
-	    break;
-	p = p2;
-    }
-    if(p2 == NULL)
-	replrest(req, "");
-    else
-	replrest(req, p2);
-    if(!strncmp(path, "./", 2))
-	memmove(path, path + 2, strlen(path + 2) + 1);
-    if(S_ISDIR(sb.st_mode)) {
-	handledir(req, fd, path);
-    } else if(S_ISREG(sb.st_mode)) {
-	handlefile(req, fd, path);
-    } else {
-	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
-	goto fail;
-    }
-    goto out;
-    
-fail:
-    /* No special handling, for now at least. */
-out:
-    free(path);
 }
 
 static void usage(FILE *out)
