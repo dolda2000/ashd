@@ -240,9 +240,24 @@ struct config *readconfig(char *file)
     return(cf);
 }
 
+static void mergechildren(struct config *dst, struct config *src)
+{
+    struct child *ch1, *ch2;
+    
+    for(ch1 = dst->children; ch1 != NULL; ch1 = ch1->next) {
+	for(ch2 = src->children; ch2 != NULL; ch2 = ch2->next) {
+	    if(!strcmp(ch1->name, ch2->name)) {
+		ch1->fd = ch2->fd;
+		ch2->fd = -1;
+		break;
+	    }
+	}
+    }
+}
+
 struct config *getconfig(char *path)
 {
-    struct config *cf;
+    struct config *cf, *ocf;
     struct stat sb;
     char *fn;
     time_t mtime;
@@ -251,15 +266,14 @@ struct config *getconfig(char *path)
     for(cf = cflist; cf != NULL; cf = cf->next) {
 	if(!strcmp(cf->path, path)) {
 	    if(now - cf->lastck > 5) {
-		if(stat(fn, &sb) || (sb.st_mtime != cf->mtime)) {
-		    freeconfig(cf);
+		if(stat(fn, &sb) || (sb.st_mtime != cf->mtime))
 		    break;
-		}
 	    }
 	    cf->lastck = now;
 	    return(cf);
 	}
     }
+    ocf = cf;
     if(access(fn, R_OK) || stat(fn, &sb)) {
 	cf = emptyconfig();
 	mtime = 0;
@@ -267,6 +281,10 @@ struct config *getconfig(char *path)
 	if((cf = readconfig(fn)) == NULL)
 	    return(NULL);
 	mtime = sb.st_mtime;
+    }
+    if(ocf != NULL) {
+	mergechildren(cf, ocf);
+	freeconfig(ocf);
     }
     cf->path = sstrdup(path);
     cf->mtime = mtime;
