@@ -459,6 +459,8 @@ static char *findfile(char *path, char *name, struct stat *sb)
 	    continue;
 	if((p = strchr(dent->d_name, '.')) == NULL)
 	    continue;
+	if(p - dent->d_name != strlen(name))
+	    continue;
 	if(strncmp(dent->d_name, name, strlen(name)))
 	    continue;
 	fp = sprintf3("%s/%s", path, dent->d_name);
