@@ -43,7 +43,7 @@ struct user {
 
 static int ignore = 0;
 static char *mgroup = NULL;
-static char *dirname = "htpub";
+static char *dirname = NULL;
 static char **childspec;
 static uid_t minuid = 0;
 static struct user *users = NULL;
@@ -269,8 +269,9 @@ int main(int argc, char **argv)
     }
     if(optind < argc) {
 	childspec = argv + optind;
-	dirname = NULL;
     } else {
+	if(dirname == NULL)
+	    dirname = "htpub";
 	bufinit(csbuf);
 	bufadd(csbuf, "dirplex");
 	bufadd(csbuf, dirname);
