@@ -57,5 +57,6 @@ AC_SUBST(GNUTLS_LIBS)
 AC_OUTPUT([
 Makefile
 src/Makefile
+src/dirplex/Makefile
 lib/Makefile
 ])
