@@ -121,7 +121,7 @@ void simpleerror(int fd, int code, char *msg, char *fmt, ...)
 void stdredir(struct hthead *req, int fd, int code, char *dst)
 {
     FILE *out;
-    char *sp, *cp, *ep, *path, *url, *adst, *proto, *host;
+    char *sp, *cp, *ep, *qs, *path, *url, *adst, *proto, *host;
     
     sp = strchr(dst, '/');
     cp = strchr(dst, ':');
@@ -140,11 +140,14 @@ void stdredir(struct hthead *req, int fd, int code, char *dst)
 	    } else {
 		if((*(url = req->url)) == '/')
 		    url++;
-		if((ep = strrchr(url, '/')) != NULL)
-		    ep++;
-		else
-		    ep = url;
-		path = sprintf2("%.*s%s", ep - url, url, dst);
+		if((ep = strchr(url, '?')) == NULL) {
+		    ep = url + strlen(url);
+		    qs = "";
+		} else {
+		    qs = ep;
+		}
+		for(; (ep > url) && (ep[-1] != '/'); ep--);
+		path = sprintf2("%.*s%s%s", ep - url, url, dst, qs);
 	    }
 	    adst = sprintf2("%s://%s/%s", proto, host, path);
 	    free(path);
