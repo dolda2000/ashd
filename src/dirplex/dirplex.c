@@ -217,9 +217,34 @@ static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *
     return(0);
 }
 
+static int checkdir(struct hthead *req, int fd, char *path, char *rest)
+{
+    char *cpath;
+    struct config *cf, *ccf;
+    struct child *ch;
+    
+    cf = getconfig(path);
+    if(cf->capture != NULL) {
+	cpath = sprintf2("%s/", path);
+	if((ch = findchild(cpath, cf->capture, &ccf)) == NULL) {
+	    free(cpath);
+	    flog(LOG_ERR, "child %s requested for capture, but was not declared", cf->capture);
+	    simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", cf->capture);
+	    return(1);
+	}
+	free(cpath);
+	if(*rest == '/')
+	    rest++;
+	replrest(req, rest);
+	if(childhandle(ch, req, fd, chinit, ccf->path))
+	    simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+	return(1);
+    }
+    return(0);
+}
+
 static int checkpath(struct hthead *req, int fd, char *path, char *rest)
 {
-    struct config *cf;
     char *p, *el;
     int rv;
     
@@ -228,7 +253,8 @@ static int checkpath(struct hthead *req, int fd, char *path, char *rest)
     
     if(!strncmp(path, "./", 2))
 	path += 2;
-    cf = getconfig(path);
+    if(checkdir(req, fd, path, rest))
+	return(1);
     
     if((p = strchr(rest, '/')) == NULL) {
 	el = unquoteurl(rest);

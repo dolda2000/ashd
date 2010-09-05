@@ -16,6 +16,7 @@ struct config {
     struct child *children;
     struct pattern *patterns;
     char **index;
+    char *capture;
 };
 
 struct rule {

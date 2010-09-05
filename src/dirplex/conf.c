@@ -76,6 +76,8 @@ static void freeconfig(struct config *cf)
 	freepattern(pat);
     }
     freeca(cf->index);
+    if(cf->capture != NULL)
+	free(cf->capture);
     free(cf);
 }
 
@@ -228,6 +230,14 @@ struct config *readconfig(char *file)
 	    cf->index = NULL;
 	    if(s->argc > 1)
 		cf->index = cadup(s->argv + 1);
+	} else if(!strcmp(s->argv[0], "capture")) {
+	    if(s->argc < 2) {
+		flog(LOG_WARNING, "%s:%i: missing argument to capture declaration", s->file, s->lno);
+		continue;
+	    }
+	    if(cf->capture != NULL)
+		free(cf->capture);
+	    cf->capture = sstrdup(s->argv[1]);
 	} else if(!strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
