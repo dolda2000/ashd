@@ -41,20 +41,49 @@
 
 time_t now;
 
+static void chinit(void *idata)
+{
+    char *twd = idata;
+    
+    if(twd != NULL) {
+	/* This should never be able to fail other than for critical
+	 * I/O errors or some such, since the path has already been
+	 * traversed. */
+	if(chdir(twd))
+	    exit(127);
+    }
+}
+
 static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
 {
     struct child *ch;
+    struct config *ccf;
+    char *twd;
 
-    headappheader(req, "X-Ash-File", path);
     if(pat->fchild) {
+	headappheader(req, "X-Ash-File", path);
 	stdforkserve(pat->fchild, req, fd, NULL, NULL);
     } else {
-	if((ch = findchild(path, pat->childnm)) == NULL) {
+	if((ch = findchild(path, pat->childnm, &ccf)) == NULL) {
 	    flog(LOG_ERR, "child %s requested, but was not declared", pat->childnm);
 	    simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", pat->childnm);
 	    return;
 	}
-	if(childhandle(ch, req, fd, NULL, NULL))
+	twd = NULL;
+	if((twd = ccf->path) != NULL) {
+	    if(!strcmp(twd, ".")) {
+		twd = NULL;
+	    } else if(strncmp(path, twd, strlen(twd)) || (path[strlen(twd)] != '/')) {
+		/* Should be an impossible case under the current (and
+		 * foreseeable) scheme. */
+		simpleerror(fd, 500, "Server Error", "An internal server error occurred.");
+		return;
+	    } else {
+		path = path + strlen(twd) + 1;
+	    }
+	}
+	headappheader(req, "X-Ash-File", path);
+	if(childhandle(ch, req, fd, chinit, twd))
 	    simpleerror(fd, 500, "Server Error", "The request handler crashed.");
     }
 }

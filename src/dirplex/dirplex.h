@@ -35,7 +35,7 @@ struct child *getchild(struct config *cf, char *name);
 struct config *readconfig(char *file);
 struct config *getconfig(char *path);
 struct config **getconfigs(char *file);
-struct child *findchild(char *file, char *name);
+struct child *findchild(char *file, char *name, struct config **cf);
 struct pattern *findmatch(char *file, int trydefault, int dir);
 
 extern time_t now;

@@ -329,7 +329,7 @@ struct config **getconfigs(char *file)
     return(ret = buf.b);
 }
 
-struct child *findchild(char *file, char *name)
+struct child *findchild(char *file, char *name, struct config **cf)
 {
     int i;
     struct config **cfs;
@@ -337,10 +337,13 @@ struct child *findchild(char *file, char *name)
     
     cfs = getconfigs(file);
     for(i = 0; cfs[i] != NULL; i++) {
-	if((ch = getchild(cfs[i], name)) != NULL)
-	    break;
+	if((ch = getchild(cfs[i], name)) != NULL) {
+	    if(cf != NULL)
+		*cf = cfs[i];
+	    return(ch);
+	}
     }
-    return(ch);
+    return(NULL);
 }
 
 struct pattern *findmatch(char *file, int trydefault, int dir)
