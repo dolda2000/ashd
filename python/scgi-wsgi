@@ -15,7 +15,7 @@ for o, a in opts:
         usage(sys.stdout)
         sys.exit(0)
     elif o == "-p":
-        sys.path.append(0, a)
+        sys.path.insert(0, a)
     elif o == "-T":
         sk = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         p = a.rfind(":")
