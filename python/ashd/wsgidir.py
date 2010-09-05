@@ -1,6 +1,12 @@
 import os, threading, types
 import wsgiutil
 
+class cachedmod:
+    def __init__(self, mod, mtime):
+        self.lock = threading.Lock()
+        self.mod = mod
+        self.mtime = mtime
+
 exts = {}
 modcache = {}
 cachelock = threading.Lock()
@@ -19,9 +25,10 @@ def getmod(path):
     cachelock.acquire()
     try:
         if path in modcache:
-            mod, mtime = modcache[path]
-            if sb.st_mtime <= mtime:
-                return mod
+            entry = modcache[path]
+            if sb.st_mtime <= entry.mtime:
+                return entry
+        
         f = open(path)
         try:
             text = f.read()
@@ -31,17 +38,30 @@ def getmod(path):
         mod = types.ModuleType(mangle(path))
         mod.__file__ = path
         exec code in mod.__dict__
-        modcache[path] = mod, sb.st_mtime
-        return mod
+        entry = cachedmod(mod, sb.st_mtime)
+        modcache[path] = entry
+        return entry
     finally:
         cachelock.release()
 
 def chain(path, env, startreq):
     mod = getmod(path)
-    if hasattr(mod, "wmain"):
-        return (mod.wmain())(env, startreq)
-    elif hasattr(mod, "application"):
-        return mod.application(env, startreq)
+    entry = None
+    if mod is not None:
+        mod.lock.acquire()
+        try:
+            if hasattr(mod, "entry"):
+                entry = mod.entry
+            else:
+                if hasattr(mod.mod, "wmain"):
+                    entry = mod.mod.wmain([])
+                elif hasattr(mod.mod, "application"):
+                    entry = mod.mod.application
+                mod.entry = entry
+        finally:
+            mod.lock.release()
+    if entry is not None:
+        return entry(env, startreq)
     return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "Invalid WSGI handler.")
 exts["wsgi"] = chain
 
