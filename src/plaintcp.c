@@ -44,6 +44,7 @@ struct tcpport {
 struct tcpconn {
     struct sockaddr_storage name;
     struct tcpport *port;
+    int fd;
 };
 
 int listensock4(int port)
@@ -97,6 +98,8 @@ int listensock6(int port)
 static int initreq(struct conn *conn, struct hthead *req)
 {
     struct tcpconn *tcp = conn->pdata;
+    struct sockaddr_storage sa;
+    socklen_t salen;
     char nmbuf[256];
     
     if(tcp->name.ss_family == AF_INET) {
@@ -105,6 +108,13 @@ static int initreq(struct conn *conn, struct hthead *req)
     } else if(tcp->name.ss_family == AF_INET6) {
 	headappheader(req, "X-Ash-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&tcp->name)->sin6_addr, nmbuf, sizeof(nmbuf)));
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&tcp->name)->sin6_port)));
+    }
+    salen = sizeof(sa);
+    if(!getsockname(tcp->fd, (struct sockaddr *)&sa, &salen)) {
+	if(sa.ss_family == AF_INET)
+	    headappheader(req, "X-Ash-Server-Address", inet_ntop(AF_INET, &((struct sockaddr_in *)&sa)->sin_addr, nmbuf, sizeof(nmbuf)));
+	else if(sa.ss_family == AF_INET6)
+	    headappheader(req, "X-Ash-Server-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&sa)->sin6_addr, nmbuf, sizeof(nmbuf)));
     }
     headappheader(req, "X-Ash-Server-Port", sprintf3("%i", tcp->port->sport));
     headappheader(req, "X-Ash-Protocol", "http");
@@ -125,6 +135,7 @@ void servetcp(struct muth *muth, va_list args)
     in = mtstdopen(fd, 1, 60, "r+");
     conn.pdata = &tcp;
     conn.initreq = initreq;
+    tcp.fd = fd;
     tcp.name = name;
     tcp.port = stcp;
     serve(in, &conn);
