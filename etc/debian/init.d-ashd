@@ -1,0 +1,51 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          ashd
+# Required-Start:    $local_fs $remote_fs $network $syslog
+# Required-Stop:     $local_fs $remote_fs $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: The ashd HTTP server
+### END INIT INFO
+
+set -e
+
+. /lib/lsb/init-functions
+
+PATH=/usr/local/bin:/usr/local/sbin:$PATH
+HTPARSER="$(which htparser || true)"
+PIDFILE=/var/run/ashd.pid
+PORTSPEC="plain"
+ROOTSPEC="patplex /usr/local/etc/ashd/rootpat"
+[ -r /etc/default/locale ] && . /etc/default/locale
+[ -r /etc/default/ashd ] && . /etc/default/ashd
+[ -x "$HTPARSER" ] || exit 0
+
+start() {
+    export LANG
+    log_daemon_msg "Starting HTTP server" "ashd"
+    ulimit -c unlimited
+    start-stop-daemon -S -p "$PIDFILE" -qx "$HTPARSER" -- -Sf -p "$PIDFILE" -u nobody -r /var/tmp $PORTSPEC -- $ROOTSPEC
+    log_end_msg $?
+}
+
+stop() {
+    log_daemon_msg "Stopping HTTP server" "ashd"
+    start-stop-daemon -K -p "$PIDFILE" -qx "$HTPARSER"
+    log_end_msg $?
+}
+
+case "$1" in
+    start)
+	start
+	;;
+    stop)
+	stop
+	;;
+    restart)
+	stop
+	start
+	;;
+esac
+
+exit 0
