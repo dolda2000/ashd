@@ -1,0 +1,6 @@
+fchild stdcgi
+  exec callcgi
+
+match
+  filename *.cgi
+  handler stdcgi

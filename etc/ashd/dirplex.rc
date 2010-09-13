@@ -1,0 +1,3 @@
+include dirplex.d/*.rc
+
+index-file index

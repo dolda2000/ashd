@@ -1,0 +1,17 @@
+match
+  filename *.html
+  fork sendfile -c text/html
+match
+  filename *.css
+  fork sendfile -c text/css
+
+# Image types
+match
+  filename *.gif
+  fork sendfile -c image/gif
+match
+  filename *.png
+  fork sendfile -c image/png
+match
+  filename *.jpg *.jpeg
+  fork sendfile -c image/jpeg

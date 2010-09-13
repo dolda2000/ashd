@@ -1,0 +1,6 @@
+fchild php
+  exec callcgi -p php-cgi
+
+match
+  filename *.php
+  handler php
