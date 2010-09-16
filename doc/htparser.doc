@@ -1,0 +1,86 @@
+htparser(1)
+===========
+
+NAME
+----
+htparser - Root HTTP server for use with *ashd*(7)
+
+SYNOPSIS
+--------
+*htparser* [*-hSf*] [*-u* 'USER'] [*-r* 'ROOT'] [*-p* 'PIDFILE'] 'PORTSPEC'... `--` 'ROOT' ['ARGS'...]
+
+DESCRIPTION
+-----------
+
+The *htparser* program is the root HTTP server of *ashd*(7). It
+listens to specified TCP ports, speaks HTTP with connecting clients,
+and passes requests on to the root handler program.
+
+When *htparser* starts, it will first begin listening to all ports
+specified by 'PORTSPEC'. Once all ports have been bound successfully,
+it will fork off and start the root handler specified by 'ROOT',
+searching the *PATH* environment variable if necessary, and passing it
+all the 'ARGS' as command-line arguments. Only after that will
+*htparser* do any daemonizing or chrooting as specified by options.
+
+The root handler must be a persistent program as specified in
+*ashd*(7). If the handler program exits, *htparser* will exit too.
+
+PORT SPECIFICATION
+------------------
+
+'PORTSPEC' is given in the form
+'HANDLER'[*:*'PAR'[*=*'VAL'][(*,*'PAR'[*=*'VAL'])...]]. The
+'PAR'='VAL' pairs are used for specifying key-value arguments to the
+'HANDLER'. An example of a valid 'PORTSPEC' is `plain:port=8080`.
+
+Currently, the available 'HANDLERs' are *plain* and *ssl*, for
+handling plain TCP connections and SSL/TLS-protected connections,
+respectively. For details regarding the arguments that each handler
+accept, simply run *htparser* with 'HANDLER':*help*. For example, the
+command "`htparser ssl:help`" will display help for the *ssl* handler to
+standard output and then exit.
+
+The port specifications must be followed by the `--` argument to
+distinguish them from the root handler specification.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief usage message on standard output and exit.
+
+*-S*::
+
+	Log messages to *syslog*(3) instead of standard error.
+
+*-f*::
+
+	Daemonize after all specified ports have been successfully
+	bound and the root handler has been started.
+
+*-u*::
+
+	Change UID to 'USER' once all specified ports have been
+	successfully bound and the root handler has been
+	started. 'USER' must be specified symbolically (i.e. not as a
+	numeric UID).
+
+*-r*::
+
+	Change root directory to 'ROOT' once all specified ports have
+	been successfully bound and the root handler has been started.
+
+*-p*::
+
+	After having daemonized, write the PID of the new process to
+	'PIDFILE'.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*ashd*(7)
