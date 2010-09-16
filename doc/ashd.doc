@@ -1,0 +1,167 @@
+ashd(7)
+=======
+
+NAME
+----
+ashd - A Sane HTTP Daemon
+
+DESCRIPTION
+-----------
+
+This document describes the architecture and protocol of ashd
+technically. If you want a brief overview, please see the homepage at
+<http://www.dolda2000.com/~fredrik/ashd/>.
+
+The basic premise of ashd is that of standard Unix philosophy; it
+consists of a number of different programs, each specialized to one
+precise task, passing HTTP requests around to each other in a manner
+akin to standard Unix pipelines. This document describes the protocols
+and conventions used between such programs that allows them to
+interoperate.
+
+REQUESTS
+--------
+
+All requests within ashd are created by 'htparser(1)', which speaks
+HTTP with its clients, translates the requests it receives into ashd
+format, and passes them to a specified handler program. The handler
+program may choose to respond to the request itself, or pass it on to
+another handler for further processing.
+
+A request in ashd format consists of 4 structural parts:
+
+HTTP method, URL and version::
+
+	The HTTP header line information, exactly as specified by the
+	client. That is, any escape sequences in the URL are passed
+	around in non-processed form, since each program needs to
+	handle escape processing in its own way.
+
+The rest string::
+
+	The 'rest string' (sometimes referred to as the 'point', in
+	deference to Emacs parlance) is the part of the URL which
+	remains to be processed. Each handler program is free to
+	modify the rest string (usually, but not necessarily, by
+	removing leading parts of it) before passing the request on to
+	another handler. When 'htparser(1)' initially constructs a
+	request, it forms the rest string from the URL by stripping
+	off the initial slash and the query parameters. In other
+	words, a request to `/a/b/c?d=e` will be given the initial
+	rest string `a/b/c`.
+
+The HTTP headers::
+
+	The HTTP headers are parsed and passed along with the request
+	as they are, but 'htparser(1)' itself, and some handler
+	programs, add some more headers, prefixed with `X-Ash-`,
+	and to safeguard any potentially sensitive such headers from
+	forgery, 'htparser(1)' strips any headers with that prefix
+	from the incoming request.
+
+The response socket::
+
+	Along with the request information, a socket for responding is
+	passed. A handler program that wishes to actually respond to a
+	request needs only output a well-formed HTTP response on this
+	socket and then close it. The details are covered below, but
+	note that the socket is connected to 'htparser(1)' rather than
+	the client itself, and that 'htparser' will do any transfer
+	encoding that may be required for HTTP keep-alive. The
+	response socket is also used for reading the request-body, if
+	the client provides one.
+
+HANDLERS
+--------
+
+Handler programs are started either by 'htparser(1)' itself, or in
+turn by other handler programs, and certain conventions are observed
+in that process.
+
+There are two basic types of handler programs, persistent and
+transient, which determines the convention used in starting them. A
+persistent program will continue running indefinitely, and handle any
+amount of requests during its lifetime, while a transient program will
+handle one request only and then exit. The convention of transient
+programs was created mainly for convenience, since it is easier to
+write such programs. The 'htparser(1)' program will only start a
+persistent program as the root handler.
+
+A persistent handler program, when started, is passed a Unix socket of
+SEQPACKET type on standard input. Its parent program will then pass
+one datagram per request on that socket, containing the above listed
+parts of the request using the datagram format described below. By
+convention, the handler program should exit normally if it receives
+end-of-file on the socket.
+
+A transient program, when started, has the response socket connected
+to its standard input and output (standard error is inherited from the
+parent process). It may be provided arbitrary arguments as supplied by
+the program starting it, but the last three arguments are the HTTP
+method, the raw URL and the rest string, in that order. The HTTP
+headers are converted into environment variables by turning them into
+uppercase, replacing any dashs with underscores, and prefixing them
+with `REQ_`. For example, the HTTP `Host` header will be passed as
+`REQ_HOST`. The HTTP protocol version is passed in an environment
+variable called `HTTP_VERSION`. It is passed in full; i.e. as
+`HTTP/1.1`, rather than just `1.1`.
+
+The response socket, as mentioned above, is also used for reading the
+request-body if the client provides one. For such purposes,
+'htparser(1)' ensures that the reader sees end-of-file at the end of
+the request-body, so that the reader (unlike in, for example, CGI)
+does not have to worry about the Content-Length header and counting
+bytes when reading.
+
+To respond, the handler program needs to write an ordinary HTTP
+response to the response socket. That is, one line containing the HTTP
+version, status code and status text, followed by any number of lines
+with headers, followed by an empty line, followed by the
+response-body. Basic familiarity with HTTP should relieve this
+document of detailing the exact format of such a response, but the
+following points are noteworthy:
+
+ * The HTTP version is actually ignored; it must simply be there for
+   completeness.
+
+ * In the header, Unix line endings are accepted; 'htparser(1)' will
+   still use CRLF line endings when passing the response to the
+   client.
+
+ * The response socket should be closed when the entire body has been
+   written. 'htparser(1)' itself will take care of anything needed for
+   HTTP keep-alive, such as chunking. It is recommended, however, that
+   the handler program provides the Content-Length header if it can be
+   calculated in advance, since 'htparser(1)' will not need to add
+   chunking in such cases.
+
+ * 'htparser(1)' will not provide an error message to the client in
+   case the response socket is closed before a complete response has
+   been written to it, so a handler program should always provide an
+   error message by itself if a request cannot be handled for some
+   reason.
+
+PROTOCOL
+--------
+
+The datagram format used for persistent handler programs is simply a
+sequence of NUL-terminated strings. The datagram starts with the HTTP
+method, the URL, the HTTP version and the rest string, in that
+order. They are followed by an arbitrary number of string pairs, one
+for each header; the first string in a pair being the header name, and
+the second being the value. The headers are terminated by one instance
+of the empty string.
+
+Along with the datagram, the response socket is passed using the
+SCM_RIGHTS ancillary message for Unix sockets. See 'unix(7)',
+'recvmsg(2)' and 'sendmsg(2)' for more information. Each datagram will
+have exactly one associated socket passed with it.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+
+'htparser(1)'
