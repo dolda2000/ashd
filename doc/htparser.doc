@@ -77,6 +77,42 @@ OPTIONS
 	After having daemonized, write the PID of the new process to
 	'PIDFILE'.
 
+EXAMPLES
+--------
+
+`htparser plain -- dirplex /srv/www`::
+
+	This simple invocation will simply listen for HTTP requests on
+	port 80 and use *dirplex*(1) to serve files from the /srv/www
+	directory.
+
+`htparser plain:port=8080 -- dirplex /srv/www`::
+
+	The same as the previous example, but uses port 8080 instead,
+	so that it can be started without root privileges.]
+
+`htparser plain ssl:cert=/etc/ssl/private/web.pem -- dirplex /srv/www`::
+
+	The same as above, but will listen on port 443 for SSL
+	connections as well. The file `/etc/ssl/privte/web.pem` needs
+	to contain both the server certificate and its private key.
+
+`htparser plain -- sudo -u www-user dirplex /srv/www`::
+
+	The same as above, but uses *sudo*(8) to ensure that *dirplex*
+	runs as a non-privileged user.
+
+`htparser -f -u nobody -r /var/empty plain -- patplex /etc/ashd/rootpat`::
+
+	Will listen to port 80 for plain HTTP requests and use the
+	*patplex*(1) program to serve requests based on patterns
+	specified in the `/etc/ashd/rootpat` file. *htparser* will
+	daemonize, change user-ID to `nobody` and change its root
+	directory to `/var/empty` once *patplex* has been
+	started. Note that *patplex* still runs as root in the normal
+	file system, so that it can start other handler programs as
+	needed.
+
 X-ASH HEADERS
 -------------
 
