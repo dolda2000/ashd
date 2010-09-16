@@ -1,0 +1,296 @@
+dirplex(1)
+==========
+
+NAME
+----
+dirplex - Physical directory handler for ashd(7)
+
+SYNOPSIS
+--------
+*dirplex* [*-hN*] [*-c* 'CONFIG'] 'DIR'
+
+DESCRIPTION
+-----------
+
+The *dirplex* handler maps URLs into physical files or directories,
+and, having found a matching file or directory, it performs various
+kinds of pattern-matching against its physical name to determine what
+handler to call in order to serve the request. The mapping procedure
+and pattern matching are described below.
+
+Having found a handler to serve a file or directory with, *dirplex*
+adds the `X-Ash-File` header to the request with a path to the
+physical file, before passing the request on to the handler.
+
+*dirplex* is a persistent handler, as defined in *ashd*(7).
+
+OPTIONS
+-------
+
+*-h*::
+
+	Display a brief help message to standard output and exit.
+
+*-N*::
+
+	Do not read the global configuration file `dirplex.rc`.
+
+*-c* 'CONFIG'::
+
+	Read an extra configuration file. If 'CONFIG' contains any
+	slashes, it is opened by that exact name. Otherwise, it is
+	searched for in the same way as the global configuration file
+	(see CONFIGURATION below).
+
+URL-TO-FILE MAPPING
+-------------------
+
+Mapping URLs into physical files is an iterative procedure, each step
+looking in one single physical directory, starting with 'DIR'. For
+each step, a path element is stripped off the beginning of the rest
+string and examined, the path element being either the leading part of
+the rest string up until the first slash, or the entire rest string if
+it contains no slashes. If the rest string is empty, the directory
+being examined is considered the result of the mapping. Otherwise, any
+escape sequences in the path element under consideration are unescaped
+before examining it.
+
+Any path element that begins with a dot is considered invalid and
+results in a 404 response to the client. If the path element names a
+directory in the current directory, the procedure continues in that
+directory. If it names a file, that file is considered the result of
+the mapping (even if the rest string has not been exhausted yet).
+
+If the path element does not name anything in the directory under
+consideration, but contains no dots, then the directory is searched
+for a file whose name before the first dot matches the path
+element. If there is such a file, it is considered the result of the
+mapping.
+
+If the result of the mapping procedure is a directory, it is checked
+for the presence of a filed named by the *index-file* configuration
+directive (see CONFIGURATION below). If there is such a file, it is
+considered the final result instead of the directory itself. If the
+index file name contains no dots and there is no exact match, then,
+again, the directory is searched for a file whose name before the
+first dot matches the index file name.
+
+CONFIGURATION
+-------------
+
+Configuration in *dirplex* comes from several sources. When *dirplex*
+starts, unless the *-N* option is given, it tries to find a global
+configuration file named `dirplex.rc`. It looks in all directories
+named by the *PATH* environment variable, appended with `../etc`. For
+example, then, if *PATH* is `/usr/local/bin:/bin:/usr/bin`, the
+directories `/usr/local/etc`, `/etc` and `/usr/etc` are searched for
+`dirplex.rc`, in that order. Only the first file found is used, should
+there exist several.
+
+If the *-c* option is given to *dirplex*, it too specifies a
+configuration file to load. If the name given contains any slashes, it
+is opened by that exact name. Otherwise, it is searched for in the
+same manner as the global configuration file.
+
+In addition, all directories traversed by *dirplex* when mapping a URL
+into a physical file may contain a file called `.htrc`, which may
+specify extra configuration options for all files in and beneath that
+directory.
+
+`.htrc` files are checked periodically and reread if changed. The
+global configuration file and any file named by the *-c* option,
+however, are never reexamined.
+
+When using the configuration files for deciding what to do with a
+found file, they are examined in order of their "distance" from that
+file. `.htrc` files found in the directory or directories containing
+the file are considered "closest" to the file under consideration,
+followed by any configuration file named by the *-c* option, followed
+by the global configuration file.
+
+Each configuration file is a sequence of configuration stanzas, each
+stanza being an unindented starting line, followed by zero or more
+indented follow-up lines adding options to the stanza. The starting
+line of a stanza is referred to as a "configuration directive"
+below. Each line is a sequence of whitespace-separated words. A word
+may contain whitespace if such whitespace is escaped, either by
+enclosing the word in double quotes, or by escaping individual
+whitespace characters with a preceding backslash. Backslash quoting
+may also be used to treat double quotes or another backslash literally
+as part of the word. Empty lines are ignored, and lines whose first
+character after leading whitespace is a hash character (`#`) are
+treated as comments and ignored.
+
+The follow configuration directives are recognized:
+
+*index-file* ['FILENAME'...]::
+
+	The given 'FILENAMEs' are used for finding index files (see
+	URL-TO-FILE MAPPING above). Specifying *index-file* overrides
+	entirely any previous specification in a more distant
+	configuration file, rather than adding to it. Zero 'FILENAMEs'
+	may be given to turn off index file searching completely. The
+	*index-file* directive accepts no follow-up lines.
+
+*child* 'NAME'::
+
+	Declares a named, persistent request handler (see *ashd*(7)
+	for a more detailed description of persistent handlers). It
+	must contain exactly one follow-up line, *exec* 'PROGRAM'
+	['ARGS'...], specifying the program to execute and the
+	arguments to pass it. If given in a `.htrc` file, the program
+	will be started in the same directory as the `.htrc` file
+	itself. The *child* stanza itself serves as the identity of
+	the forked process -- only one child process will be forked
+	per stanza, and if that child process exits, it will be
+	restarted the next time the stanza would be used. If a `.htrc`
+	file containing *child* stanzas is reloaded, any currently
+	running children are reused for *child* stanzas in the new
+	file with matching names (even if the *exec* line has
+	changed).
+
+*fchild* 'NAME'::
+
+	Declares a named, transient request handler (see *ashd*(7) for
+	a more detailed description of persistent handlers). It must
+	contains exactly one follow-up line, *exec* 'PROGRAM'
+	['ARGS'...], specifying the program to execute and the
+	arguments to pass it. In addition to the specified arguments,
+	the HTTP method, raw URL and the rest string will be appended
+	added as described in *ashd*(7). If given in a `.htrc` file,
+	the program will be started in the same directory as the
+	`.htrc` file itself.
+
+*match* [*directory*]::
+
+	Specifies a filename pattern-matching rule. The
+	pattern-matching procedure and the follow-up lines accepted by
+	this stanza are described below, under MATCHING.
+
+*capture* 'HANDLER'::
+
+	Only meaningful in `.htrc` files. If a *capture* directive is
+	specified, then the URL-to-file mapping procedure as described
+	above is aborted as soon as the directory containing the
+	`.htrc` file is encountered. The request is passed, with any
+	remaining rest string, to the specified 'HANDLER', which must
+	by a named request handler specified either in the same
+	`.htrc` file or elsewhere. The *capture* directive accepts no
+	follow-up lines.
+
+MATCHING
+--------
+
+When a file or directory has been found by the mapping procedure (see
+URL-TO-FILE MAPPING above), the name of the physical file is examined
+to determine a request handler to pass the request to. Note that only
+the physical file name is ever considered; any logical request
+parameters such as the request URL or the rest string are entirely
+ignored.
+
+To match a file, any *match* stanzas specified by any `.htrc` file or
+in the global configuration files are searched in order of their
+"distance" (see CONFIGURATION above) from the actual file. If it is a
+directory which is being considered, only *match* stanzas with the
+*directory* parameter are considered; otherwise, if it is a file, only
+*match* stanzas without the *directory* parameter are considered.
+
+A *match* stanza must contain at least one follow-up line specifying
+match rules. All rules must match for the stanza as a whole to match.
+The following rules are recognized:
+
+*filename* 'PATTERN'...::
+
+	Matches if the name of the file under consideration matches
+	any of the 'PATTERNs'. A 'PATTERN' is an ordinary glob
+	pattern, such as `*.php`. See *fnmatch*(3) for more
+	information.
+
+*pathname* 'PATTERN'...::
+
+	Matches if the entire path (relative as considered from the
+	root directory being served) of the file under consideration
+	matches any of the 'PATTERNs'. A 'PATTERN' is an ordinary glob
+	pattern, except that slashes are not matched by wildcards. See
+	*fnmatch*(3) for more information.
+
+*default*::
+
+	Matches if and only if no *match* stanza without a *default*
+	rule has matched.
+
+In addition to the rules, a *match* stanza must contain exactly one
+follow-up line specifying the action to take if it matches. The
+following actions are recognized:
+
+*handler* 'HANDLER'::
+
+	'HANDLER' must be a named handler (see CONFIGURATION
+	above). The named handler is searched for not only in the same
+	configuration file as the *match* stanza, but in all
+	configuration files that are valid for the file under
+	consideration, in order of distance. As such, a more deeply
+	nested `.htrc` file may override the specified handler without
+	having to specify any new *match* stanzas.
+
+*fork* 'PROGRAM' ['ARGS'...]::
+
+	Run a transient handler for this file, as if it were specified
+	by a *fchild* stanza. This action exists mostly for
+	convenience.
+
+If no *match* stanza matches, a 404 response is returned to the
+client.
+
+EXAMPLES
+--------
+
+The *sendfile*(1) program can be used to serve HTML files as follows.
+
+--------
+match
+  filename *.html
+  fork sendfile -c text/html
+--------
+
+Assuming the PHP CGI interpreter is installed on the system, PHP
+scripts can be used with the following configuration, using the
+*callcgi*(1) program.
+
+--------
+fchild php
+  exec callcgi -p php-cgi
+match
+  filename *.php
+  handler php
+--------
+
+If there is a directory without an index file, a file listing can be
+automatically generated by the *htls*(1) program as follows.
+
+--------
+match directory
+  default
+  fork htls
+--------
+
+If you want an entire directory to be dedicated to some external SCGI
+script engine, you can use the *callscgi*(1) program to serve it as
+follows. Note that *callscgi*, and therefore the script engine itself,
+is started in the directory itself, so that arbitrary code modules or
+data files can be put directly in that directory and easily found.
+
+--------
+child foo
+  exec callscgi scgi-wsgi -p . foo
+
+capture foo
+--------
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*ashd*(7)

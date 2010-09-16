@@ -3,7 +3,7 @@ htparser(1)
 
 NAME
 ----
-htparser - Root HTTP server for use with *ashd*(7)
+htparser - Root HTTP server for use with ashd(7)
 
 SYNOPSIS
 --------
