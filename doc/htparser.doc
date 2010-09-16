@@ -77,6 +77,35 @@ OPTIONS
 	After having daemonized, write the PID of the new process to
 	'PIDFILE'.
 
+X-ASH HEADERS
+-------------
+
+*htparser* strips away all headers from incoming requests that begin
+ with the `X-Ash-` prefix, and adds the following headers to requests:
+
+*X-Ash-Address*::
+
+	The IP address that the client connected from. May be an IPv6
+	address.
+
+*X-Ash-Port*::
+
+	The client-side port number of the TCP connection.
+
+*X-Ash-Server-Address*::
+
+	The IP address of the server where the connection was
+	accepted. May be an IPv6 address.
+
+*X-Ash-Server-Port*::
+
+	The server-side port number of the TCP connection.
+
+*X-Ash-Protocol*::
+
+	Either *http* or *https*, depending on whether the request was
+	received by the *plain* or the *ssl* handler.
+
 AUTHOR
 ------
 Fredrik Tolf <fredrik@dolda2000.com>
