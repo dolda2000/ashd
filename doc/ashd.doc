@@ -22,7 +22,7 @@ interoperate.
 REQUESTS
 --------
 
-All requests within ashd are created by 'htparser(1)', which speaks
+All requests within ashd are created by *htparser*(1), which speaks
 HTTP with its clients, translates the requests it receives into ashd
 format, and passes them to a specified handler program. The handler
 program may choose to respond to the request itself, or pass it on to
@@ -44,7 +44,7 @@ The rest string::
 	remains to be processed. Each handler program is free to
 	modify the rest string (usually, but not necessarily, by
 	removing leading parts of it) before passing the request on to
-	another handler. When 'htparser(1)' initially constructs a
+	another handler. When *htparser*(1) initially constructs a
 	request, it forms the rest string from the URL by stripping
 	off the initial slash and the query parameters. In other
 	words, a request to `/a/b/c?d=e` will be given the initial
@@ -53,10 +53,10 @@ The rest string::
 The HTTP headers::
 
 	The HTTP headers are parsed and passed along with the request
-	as they are, but 'htparser(1)' itself, and some handler
+	as they are, but *htparser*(1) itself, and some handler
 	programs, add some more headers, prefixed with `X-Ash-`,
 	and to safeguard any potentially sensitive such headers from
-	forgery, 'htparser(1)' strips any headers with that prefix
+	forgery, *htparser*(1) strips any headers with that prefix
 	from the incoming request.
 
 The response socket::
@@ -65,8 +65,8 @@ The response socket::
 	passed. A handler program that wishes to actually respond to a
 	request needs only output a well-formed HTTP response on this
 	socket and then close it. The details are covered below, but
-	note that the socket is connected to 'htparser(1)' rather than
-	the client itself, and that 'htparser' will do any transfer
+	note that the socket is connected to *htparser*(1) rather than
+	the client itself, and that *htparser* will do any transfer
 	encoding that may be required for HTTP keep-alive. The
 	response socket is also used for reading the request-body, if
 	the client provides one.
@@ -74,7 +74,7 @@ The response socket::
 HANDLERS
 --------
 
-Handler programs are started either by 'htparser(1)' itself, or in
+Handler programs are started either by *htparser*(1) itself, or in
 turn by other handler programs, and certain conventions are observed
 in that process.
 
@@ -84,7 +84,7 @@ persistent program will continue running indefinitely, and handle any
 amount of requests during its lifetime, while a transient program will
 handle one request only and then exit. The convention of transient
 programs was created mainly for convenience, since it is easier to
-write such programs. The 'htparser(1)' program will only start a
+write such programs. The *htparser*(1) program will only start a
 persistent program as the root handler.
 
 A persistent handler program, when started, is passed a Unix socket of
@@ -108,7 +108,7 @@ variable called `HTTP_VERSION`. It is passed in full; i.e. as
 
 The response socket, as mentioned above, is also used for reading the
 request-body if the client provides one. For such purposes,
-'htparser(1)' ensures that the reader sees end-of-file at the end of
+*htparser*(1) ensures that the reader sees end-of-file at the end of
 the request-body, so that the reader (unlike in, for example, CGI)
 does not have to worry about the Content-Length header and counting
 bytes when reading.
@@ -124,18 +124,18 @@ following points are noteworthy:
  * The HTTP version is actually ignored; it must simply be there for
    completeness.
 
- * In the header, Unix line endings are accepted; 'htparser(1)' will
+ * In the header, Unix line endings are accepted; *htparser*(1) will
    still use CRLF line endings when passing the response to the
    client.
 
  * The response socket should be closed when the entire body has been
-   written. 'htparser(1)' itself will take care of anything needed for
+   written. *htparser*(1) itself will take care of anything needed for
    HTTP keep-alive, such as chunking. It is recommended, however, that
    the handler program provides the Content-Length header if it can be
-   calculated in advance, since 'htparser(1)' will not need to add
+   calculated in advance, since *htparser*(1) will not need to add
    chunking in such cases.
 
- * 'htparser(1)' will not provide an error message to the client in
+ * *htparser*(1) will not provide an error message to the client in
    case the response socket is closed before a complete response has
    been written to it, so a handler program should always provide an
    error message by itself if a request cannot be handled for some
@@ -153,8 +153,8 @@ the second being the value. The headers are terminated by one instance
 of the empty string.
 
 Along with the datagram, the response socket is passed using the
-SCM_RIGHTS ancillary message for Unix sockets. See 'unix(7)',
-'recvmsg(2)' and 'sendmsg(2)' for more information. Each datagram will
+SCM_RIGHTS ancillary message for Unix sockets. See *unix*(7),
+*recvmsg*(2) and *sendmsg*(2) for more information. Each datagram will
 have exactly one associated socket passed with it.
 
 AUTHOR
@@ -163,5 +163,4 @@ Fredrik Tolf <fredrik@dolda2000.com>
 
 SEE ALSO
 --------
-
-'htparser(1)'
+*htparser*(1)
