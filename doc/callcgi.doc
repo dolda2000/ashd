@@ -1,0 +1,50 @@
+callcgi(1)
+==========
+
+NAME
+----
+callcgi - CGI request handler for ashd(7)
+
+SYNOPSIS
+--------
+*callcgi* [*-c*] [*-p* 'PROGRAM'] 'METHOD' 'URL' 'REST'
+
+DESCRIPTION
+-----------
+
+*callcgi* serves CGI scripts by translating the *ashd*(7) request
+environment into a standard CGI environment and executing the target
+file. It needs to be called with the `X-Ash-File` header added to the
+request, as *dirplex*(1) does.
+
+*callcgi* is a transient handler, as defined in *ashd*(7), and the
+'METHOD', 'URL' and 'REST' arguments will normally be added by the
+parent handler.
+
+The CGI script is called with its own filename as the first and only
+command-line parameter.
+
+OPTIONS
+-------
+
+*-c*::
+
+	Change directory to the directory containing the CGI script
+	before running it. This behavior is encouraged by the CGI
+	specification, but is not used by *callcgi* by default.
+
+*-p* 'PROGRAM'::
+
+	Call 'PROGRAM' instead of the file itself. This mechanism can
+	be used to serve e.g. PHP scripts and other programs that have
+	an interpreter that can act as a CGI script. The filename of
+	the actual script is still passed as the first and only
+	command-line parameter to the program.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*dirplex*(1), *ashd*(7), RFC 3875
