@@ -135,6 +135,17 @@ Additionally, a *match* stanza may contain a *restpat* line:
 If no *match* stanza matches, a 404 response is returned to the
 client.
 
+SIGNALS
+-------
+
+SIGHUP::
+
+	Reread the given configuration file (but not the global
+	file). If any named handlers, as specified by *child* stanzas,
+	are currently running and have stanzas with matching names in
+	the new file, they are left running for those stanzas (even if
+	the *exec* line has changed).
+
 EXAMPLES
 --------
 
