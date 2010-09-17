@@ -1,3 +1,3 @@
-SUBDIRS = lib src
+SUBDIRS = lib src doc
 
 EXTRA_DIST = etc

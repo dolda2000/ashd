@@ -59,4 +59,5 @@ Makefile
 src/Makefile
 src/dirplex/Makefile
 lib/Makefile
+doc/Makefile
 ])
