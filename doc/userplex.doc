@@ -1,0 +1,132 @@
+userplex(1)
+===========
+
+NAME
+----
+userplex - User directory multiplexer for ashd(7)
+
+SYNOPSIS
+--------
+*userplex* [*-hI*] [*-g* 'GROUP'] [*-m* 'MIN-UID'] [*-d* 'PUBDIR'] ['PROGRAM' ['ARGS'...]]
+
+DESCRIPTION
+-----------
+
+The *userplex* handler serves user-defined content by logging in as
+the requested user and running a request handler on that user's
+behalf, running as that user.
+
+*userplex* is a persistent handler, as defined in *ashd*(7), and the
+handlers it starts for individual users must also be persistent
+handlers. The same request handler will be reused for each individual
+user as long as it does not exit.
+
+When handling a request, *userplex* strips off the leading part of the
+rest string, up until the first slash, and treats the stripped-off
+part as a user name. If the user name is found on the system and
+matches the criteria specified by the command-line options (see
+OPTIONS below), and a request handler is not already running for that
+user, *userplex* starts a request handler logged in as the user in
+question (see LOGIN below) .
+
+If the user has an executable file named `~/.ashd/handler` in his home
+directory, it will be started and used as the request handler for that
+user. Otherwise, a default handler is used. If the 'PROGRAM' argument
+was given to *userplex*, it will be started as the handler program
+(searching the *PATH* environment variable if it contains no
+slashes). 'ARGS' will be passed to it as command-line arguments. If
+'PROGRAM' was not given, the *dirplex*(1) program will be started by
+default, with 'PUBDIR' passed as its only command-line
+argument. 'PUBDIR' defaults to `htpub` if no 'PROGRAM' was specified.
+
+If 'PUBDIR' was given (either by being specified explicitly, or
+implicitly if no 'PROGRAM' argument was given), it is checked for
+existence. If it does not exist, *userplex* should return a 404
+response to the client (but see BUGS below).
+
+If there exists a file named `~/.ashd/error` in the user's home
+directory, it will be opened in append mode and connected to the
+request handler's standard error. If it does not exist, `/dev/null`
+will be opened and connected to standard error instead. In the same
+manner, `~/.ashd/output` will be opened and connected to the request
+handler's standard output if it exists.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-I*::
+
+	If given, ignore any `~/.ashd/handler` file in a user's home
+	directory and use only the default handler.
+
+*-g* 'GROUP'::
+
+	If given, only users that are members of the named 'GROUP'
+	will be considered for serving. Requesting another user will
+	return a 404 response to the client.
+
+*-m* 'MIN-UID'::
+
+	If given, only users that have a UID of at least 'MIN-UID'
+	will be considered for serving. Requesting another user will
+	return a 404 response to the client.
+
+*-d* 'PUBDIR'::
+
+	If given, 'PUBDIR' will be checked for existence before
+	starting the default request handler for a requested user. If
+	the 'PROGRAM' argument was not given to *userplex*, it will be
+	passed as the single argument to *dirplex*(1), which is
+	invoked by default. If neither the *-d* option nor the
+	'PROGRAM' argument were given to *userplex*, 'PUBDIR'
+	defaults to `htpub`.
+
+LOGIN
+-----
+
+As part of the login procedure, *userplex* does the following:
+
+ * The UID, GID and auxiliary groups of the new process are changed
+   accordingly. For testing purposes, *userplex* may be running as a
+   user other than root, and the child process will, then, simply exit
+   if it is not running as the requested user.
+
+ * The child process will change directory to the user's home
+   directory.
+
+ * The *HOME*, *SHELL*, *USER* and *LOGNAME* environment variables are
+   set appropriately.
+
+Note that no shell is actually spawned, and that no profile scripts or
+similar will therefore be run. If it is important that your personal
+environment variables are set properly, a useful trick is to install a
+simple shell script as `~/.ashd/handler`, containing the following two
+lines:
+
+--------
+#!/bin/sh -l
+exec dirplex htpub
+--------
+
+The standard *-l* switch to the shell (see *sh*(1)) will make it run
+its normal login procedure, and then *exec*(2) the *dirplex*(1)
+handler to serve files normally. Of course, the second line can be
+replaced by whatever other handler one might wish to use.
+
+BUGS
+----
+
+Currently, *userplex* does not, in fact, return a 404 response to the
+client if the 'PUBDIR' directory does not exist.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*dirplex*(1), *patplex*(1) (the EXAMPLES section), *ashd*(7)
