@@ -29,7 +29,7 @@ OPTIONS
 
 *-h*::
 
-	Display a brief help message to standard output and exit.
+	Print a brief help message to standard output and exit.
 
 *-N*::
 

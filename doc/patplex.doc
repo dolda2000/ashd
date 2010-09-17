@@ -1,0 +1,186 @@
+patplex(1)
+==========
+
+NAME
+----
+patplex - Request pattern matcher for ashd(7)
+
+SYNOPSIS
+--------
+*patplex* [*-hN*] 'CONFIGFILE'
+
+DESCRIPTION
+-----------
+
+The *patplex* handler matches requests against the rules specified in
+'CONFIGFILE', and dispatches them to the specified handlers
+accordingly. See CONFIGURATION below for a description of how requests
+are matched.
+
+*patplex* is a persistent handler, as defined in *ashd*(7).
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-N*::
+
+	Do not read the global configuration file `patplex.rc`.
+
+CONFIGURATION
+-------------
+
+In addition to the 'CONFIGFILE' specified on the command-line,
+*patplex* also attempts to find and read a global configuration file
+called `patplex.rc`, unless the *-N* option is given. It looks in all
+directories named by the *PATH* environment variable, appended with
+`../etc`. For example, then, if *PATH* is
+`/usr/local/bin:/bin:/usr/bin`, the directories `/usr/local/etc`,
+`/etc` and `/usr/etc` are searched for `patplex.rc`, in that
+order. Only the first file found is used, should there exist several.
+
+Should the global and the given configuration files conflict, the
+directives from the given file take precedence.
+
+The configuration files follow the same general format as for
+*dirplex*(1), though the recognized stanzas differ. The *child* and
+*fchild* stanzas are also shared with *dirplex*(1), so see its manpage
+for a description thereof.
+
+*patplex* recognizes the *match* stanza, which takes no arguments, but
+must contain at least one follow-up line to specify match rules. All
+rules must match for the stanza as a whole to match. The following
+rules are recognized:
+
+*point* 'REGEX' 'FLAGS'::
+
+	'REGEX' must be an extended regular expression. The rule is
+	considered to match if 'REGEX' matches the rest string of the
+	request. If 'FLAGS' contain the character `i`, 'REGEX' is
+	matched case-independently. If the *match* stanza as a whole
+	matches and contains no *restpat* line (as described below),
+	the rest string of the request is replaced by the remainder of
+	the rest string after the portion that was matched by 'REGEX'.
+
+*url* 'REGEX' 'FLAGS'::
+
+	'REGEX' must be an extended regular expression. The rule is
+	considered to match if 'REGEX' matches the raw URL of the
+	request. If 'FLAGS' contain the character `i`, 'REGEX' is
+	matched case-independently.
+
+*method* 'REGEX' 'FLAGS'::
+
+	'REGEX' must be an extended regular expression. The rule is
+	considered to match if 'REGEX' matches the HTTP method of the
+	request. If 'FLAGS' contain the character `i`, 'REGEX' is
+	matched case-independently.
+
+*header* 'HEADER' 'REGEX' 'FLAGS'::
+
+	'REGEX' must be an extended regular expression. The rule is
+	considered to match if 'REGEX' matches the named 'HEADER' in
+	the request. If the request does not contain the named
+	'HEADER', the rule never matches. If 'FLAGS' contain the
+	character `i`, 'REGEX' is matched case-independently.
+
+*default*::
+
+	Matches if and only if no *match* stanza without a *default*
+	rule has matched.
+
+In addition to the rules, a *match* stanza must contain exactly one
+follow-up line specifying the action to take if it mathces. Currently,
+only the *handler* action is recognized:
+
+*handler* 'HANDLER'::
+
+	'HANDLER' must be a named handler as declared by a *child* or
+	*fchild* stanza, to which the request is passed.
+
+Additionally, a *match* stanza may contain a *restpat* line:
+
+*restpat* 'TEMPLATE'::
+
+	If the *match* stanza as a whole matches, 'TEMPLATE' is
+	expanded and installed as the rest string of the request
+	before it is passed to the specified handler. In 'TEMPLATE',
+	the following parameters are recognized and expanded.
+
+*$0* ... *$9*::
+
+	Exactly one of the *point*, *url*, *method* or *header* rules
+	specified in the *match* stanza must have the `s` character
+	among its 'FLAGS'. *$0* is replaced by the whole text that was
+	matched by the rule's 'REGEX', and any of *$1* to *$9* is
+	replaced by the corresponding parenthesized subgroup of
+	'REGEX'.
+
+*$_*::
+
+	Replaced by the entire rest string, as it was originally.
+
+*$$*::
+
+	Replaced by a single *$*.
+
+*${*'HEADER'*}*::
+
+	Replaced by the value of the named 'HEADER' in the request, or
+	the empty string if the request contained no such header.
+
+If no *match* stanza matches, a 404 response is returned to the
+client.
+
+EXAMPLES
+--------
+
+The following configuration file serves files from the `/srv/www`
+directory by default, and in addition recognizes standard `/~user/`
+URLs as user directories and calls the *userplex*(1) program to serve
+them.
+
+--------
+child root
+  exec sudo -u www-data dirplex /srv/www/htdocs
+child userdir
+  exec userplex -g users
+match
+  default
+  handler root
+match
+  point ^~
+  handler userdir
+--------
+
+The following rules can be used to implement virtual hosts. The actual
+handlers are left out of the example. Note that the dots in the
+regular expressions need to be escaped with double backslashes, since
+the configuration file reader consumes one level of quoting.
+
+--------
+# Match one exact domain name only.
+match
+  header host ^www\\.foo\\.net$ i
+  handler site-foo
+# Match any sub-domain of bar.com.
+match
+  header host (^|\\.)bar\\.com$ i
+  handler site-bar
+# Use the last level of the domain name to enter a subdirectory.
+match
+  header host ^([^.]*)\\.multi\\.org$ is
+  restpat $1$_
+  handler site-multi
+--------
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*dirplex*(1), *ashd*(7), *regex*(7)
