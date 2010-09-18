@@ -1,0 +1,53 @@
+htls(1)
+=======
+
+NAME
+----
+htls - Directory lister for ashd(7)
+
+SYNOPSIS
+--------
+*htls* [*-hms*] [*-c* 'STYLESHEET'] 'METHOD' 'URL' 'REST'
+
+DESCRIPTION
+-----------
+
+*htls* can be called from *dirplex*(1) for generating listings for
+directories that lack an index file. The generated index will be a
+HTML table with links to subdirectories and additional file
+information as specified by command-line options. It needs to be
+called with the `X-Ash-File` header added to the request, as
+*dirplex*(1) does.
+
+*htls* is a transient handler, as defined in *ashd*(7), and the
+'METHOD', 'URL' and 'REST' arguments will normally be added by the
+parent handler.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-m*::
+
+	Include the time the listed files and directories were last
+	modified in the listing.
+
+*-s*::
+
+	Include the size for files listed in the listing.
+
+*-c* 'STYLESHEET'::
+
+	Instead of including an inline stylesheet, insert
+	'STYLESHEET' a stylesheet link in the generated index.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*dirplex*(1) (the EXAMPLES section), *ashd*(7)

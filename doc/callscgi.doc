@@ -1,0 +1,110 @@
+callscgi(1)
+===========
+
+NAME
+----
+callscgi - SCGI request handler for ashd(7)
+
+SYNOPSIS
+--------
+*callscgi* [*-h*] [*-N* 'RETRIES'] [*-i* 'ID'] [*-u* 'UNIXPATH'] [*-t* \[HOST:]'TCPPORT'] ['PROGRAM' ['ARGS'...]]
+
+DESCRIPTION
+-----------
+
+The *callscgi* handler uses SCGI to call an external handler for
+requests. *callscgi* is a persistent handler, as defined in *ashd*(7).
+
+Depending on which arguments are given, *callscgi* will run in one of
+four operating modes.
+
+If an address option is given (see OPTIONS below), but the 'PROGRAM'
+argument is not given, *callscgi* will run in client mode. In client
+mode, *callscgi* will try to connect to a SCGI server listening to the
+given address. If it cannot connect, it will exit, except when failing
+only once, in which case it will retry according to the *-N* option,
+described below.
+
+If no address option is given, but the 'PROGRAM' argument is given,
+*callscgi* will run in anonymous mode. In anonymous mode, *callscgi*
+will create a Unix socket listening on some more-or-less random
+address, and start the given 'PROGRAM', passing the listening socket
+on its standard input, expecting the program to start accepting
+connections on that socket. *callscgi* will then connect to that
+socket for each request. If such a connection is refused, the child
+program will be assumed to have crashed, and *callscgi* will restart
+it. Also in anonymous mode, *callscgi*, will try and kill the child
+program whenever *callscgi* itself exits for whatever reason (commonly
+because its own control socket is closed by its parent handler).
+
+If both an address option and the 'PROGRAM' argument are given, but
+the *-N* option is not given, *callscgi* will run in launching
+mode. In launching mode, *callscgi* will try to connect to a SCGI
+server at the given address, but if (and only if) that fails, it will
+create a socket listening to the given address, and start the given
+'PROGRAM', passing the listening socket on its standard input,
+expecting the program to start accepting connections on that
+socket. Unlike in anonymous mode, *callscgi* will leave any child
+process it has started running even when *callscgi* itself exits.
+
+If both an address option, the 'PROGRAM' argument and the *-N* option
+are given, *callscgi* will run in mixed mode. In mixed mode,
+*callscgi* will try to connect to a SCGI server at the given address,
+but if that fails, it will start the given 'PROGRAM'. Unlike in
+launching mode, however, *callscgi* will not create the listening
+socket itself, but will assume that the 'PROGRAM' will create it
+independently (probably based on any 'ARGS' passed to it). When
+'PROGRAM' is launched, *callscgi* will try to connect to the given
+address once per second, up to 'RETRIES' times. If the connection
+cannot succeed even after 'RETRIES' attempts, *callscgi* will exit.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-u* 'UNIXPATH'::
+
+	Use 'UNIXPATH' as the Unix socket address of the SCGI server.
+
+*-t* \[HOST:]'TCPPORT'::
+
+	Use the given TCP/IP address as the SCGI server address. If
+	'HOST' is not given, use `localhost` instead. 'TCPPORT' may be
+	given symbolically.
+
+*-i* 'ID'::
+
+	Use 'ID' to create a reasonably unique pathname to use as the
+	Unix socket address of the SCGI server. This option is mainly
+	intended for use as a convenience in launching mode, where the
+	SCGI server does not need to know the actual address it is
+	listening to (since it gets passed the listening socket on
+	standard input) to start SCGI servers that can persist even if
+	*callscgi* exits for some reason.
+
+*-N* 'RETRIES'::
+
+	In client mode and mixed mode, try to connect 'RETRIES' times,
+	once per second, to the SCGI server before giving up. If both
+	an address option and the 'PROGRAM' argument are given, the
+	presence of the *-N* option determines whether to run in
+	launching mode or mixed mode, as described above.
+
+SIGNALS
+-------
+
+SIGINT, SIGTERM::
+
+	Exit cleanly, sending SIGTERM to any child process started if
+	running in anonymous mode, as described above.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*ashd*(7)
