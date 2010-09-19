@@ -1,0 +1,96 @@
+		      ashd -- A Sane HTTP Daemon
+
+Ashd  is a  HTTP  server  that follows  standard  Unix philosophy  for
+modularity.  Instead  of  being  a monolithic  program  with  loadable
+modules,  as most  other HTTP  servers seem  to be,  Ashd is  simply a
+collection  of much simpler  programs, passing  HTTP requests  to each
+other using a simple protocol.
+
+Among  the  nice  properties  brought  about by  such  a  design,  the
+following might be said to stand out:
+
+ * Sanity of design -- The  clean delineation of functions allows each
+   program  to be  very  small and  simple  – currently,  each of  the
+   programs  in the collection  (including even  the core  HTTP parser
+   program,  htparser,  as long  as  one  does  not count  its,  quite
+   optional,  SSL implementation)  is implemented  in less  than 1,000
+   lines  of C  code (and  most are  considerably smaller  than that),
+   allowing them to be easily studied and understood.
+
+ * Security -- Since each program runs in a process of its own, it can
+   be  assigned  proper  permissions.   Most noteworthy  of  all,  the
+   userplex program ensures that serving of user home directories only
+   happens by code that is actually logged in as the user in question;
+   and  the htparser  program,  being the  only  program which  speaks
+   directly with  the clients,  can run perfectly  well as  a non-user
+   (like nobody) and be chroot'ed into an empty directory.
+
+ * Persistence -- Though Ashd is a multi-process program, it is not in
+   the same  sense as e.g.  Apache. Each request handler  continues to
+   run  indefinitely and  does not  spawn multiple  copies  of itself,
+   meaning that all process  state persists between requests – session
+   data can be kept in memory, connections to back-end services can be
+   kept open, and so on.
+
+ * Clean modularity -- With only  a rather basic understanding of HTTP
+   and  the internal  Ashd protocol,  it is  quite easy  to  write new
+   request handlers to extend  the server's functionality; and one can
+   do that even without needing root privileges on the system.
+
+			Architecture Overview
+
+Though the  server as  a whole  is called `Ashd',  there is  no actual
+program by  that name.   The `htparser' program  of Ashd  implements a
+minimal HTTP server. It speaks HTTP (1.0 and 1.1) with clients, but it
+does  not  know  anything  about  actually handling  the  requests  it
+receives. Rather, having started a handler program as specified on the
+command-line,  it packages  the requests  up and  passes them  to that
+handler program. That handler program  may choose to only look at part
+of the URL and pass the  request on to other handler programs based on
+what  it sees.  In that  way, the  handler programs  form  a tree-like
+structure, corresponding roughly  to the URL space of  the server.  In
+order to  do that,  the packaged request  which is passed  between the
+handler  programs contains the  part of  the URL  which remains  to be
+parsed, referred to as the  `rest string' or the `point' (in deference
+to Emacs parlance).
+
+For  a technical  description  of the  architecture,  see the  ashd(7)
+manpage, available in the `doc' directory of this source tree.
+
+			       The Cast
+
+As an introduction to the  various programs that compose Ashd, here is
+a listing of  the more important programs. All  of them have manpages,
+so please see those for further details.
+
+ * htparser -- The `actual' HTTP  server. htparser is the program that
+   listens to TCP connections and speaks HTTP with the clients.
+
+ * dirplex  -- dirplex  is the  program  used for  serving files  from
+   actual directories, in a manner  akin to how most other HTTP server
+   work. In order to do that, dirplex maps URLs into existing physical
+   files, and then performs  various kinds of pattern-matching against
+   the names of those physical  files to determine the handler to call
+   to actually serve them.
+
+ * patplex  --  Performs  pattern  matching  against  logical  request
+   parameters  such as  the rest  string,  URL or  various headers  to
+   determine a program to pass the request to. As such, patplex can be
+   used  to implement such  things as  virtual directories  or virtual
+   hosts.
+
+ * sendfile  -- A  simple  handler program  for  sending literal  file
+   contents, normally called by dirplex for serving ordinary files. It
+   handles  caching using  the Last-Modified  and related  headers. It
+   also handles  MIME-type detection if  a specific MIME-type  was not
+   specified.
+
+ * callcgi -- Translates  an Ashd request into a  CGI environment, and
+   runs  either the requested  file directly  as a  CGI script,  or an
+   external CGI handler.  Thus, it can be used  to serve, for example,
+   PHP pages.
+
+ * userplex -- Handles `user directories', to use Apache parlance; you
+   may know them otherwise as /~user/ URLs. When a request is made for
+   the directory  of a specific user,  it makes sure  that the request
+   handler  runs  as the  user  in  question.
