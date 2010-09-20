@@ -578,6 +578,10 @@ static void listenloop(struct muth *muth, va_list args)
     }
 }
 
+static void sigign(int sig)
+{
+}
+
 static void sigexit(int sig)
 {
     exit(0);
@@ -620,6 +624,7 @@ int main(int argc, char **argv)
 	exit(1);
     }
     signal(SIGCHLD, SIG_IGN);
+    signal(SIGPIPE, sigign);
     signal(SIGINT, sigexit);
     signal(SIGTERM, sigexit);
     mustart(listenloop, 0);

@@ -513,6 +513,7 @@ int main(int argc, char **argv)
     }
     signal(SIGCHLD, SIG_IGN);
     signal(SIGHUP, sighandler);
+    signal(SIGPIPE, sighandler);
     while(1) {
 	if(reload) {
 	    reloadconf(argv[optind]);

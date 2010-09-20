@@ -296,6 +296,10 @@ static void serve(struct hthead *req, int fd)
 	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 }
 
+static void sighandler(int sig)
+{
+}
+
 static void usage(FILE *out)
 {
     fprintf(out, "usage: dirplex [-hN] [-c CONFIG] DIR\n");
@@ -356,6 +360,7 @@ int main(int argc, char **argv)
 	exit(1);
     }
     signal(SIGCHLD, SIG_IGN);
+    signal(SIGPIPE, sighandler);
     while(1) {
 	if((fd = recvreq(0, &req)) < 0) {
 	    if(errno != 0)

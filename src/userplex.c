@@ -230,6 +230,10 @@ out:
     free(usrnm);
 }
 
+static void sighandler(int sig)
+{
+}
+
 static void usage(FILE *out)
 {
     fprintf(out, "usage: userplex [-hI] [-g GROUP] [-m MIN-UID] [-d PUB-DIR] [PROGRAM ARGS...]\n");
@@ -279,6 +283,7 @@ int main(int argc, char **argv)
 	childspec = csbuf.b;
     }
     signal(SIGCHLD, SIG_IGN);
+    signal(SIGPIPE, sighandler);
     while(1) {
 	if((fd = recvreq(0, &req)) < 0) {
 	    if(errno != 0)
