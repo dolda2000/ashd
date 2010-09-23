@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <signal.h>
+#include <sys/poll.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -32,24 +33,42 @@
 
 static char **environ;
 
-static void passdata(FILE *in, FILE *out)
+static int passdata(FILE *in, FILE *out)
 {
     int ret;
-    char *buf;
+    char buf[65536];
+    struct pollfd pfds[2];
     
-    buf = smalloc(65536);
     while(!feof(in)) {
-	ret = fread(buf, 1, 65536, in);
-	if(ferror(in)) {
-	    flog(LOG_ERR, "sendfile: could not read input: %s", strerror(errno));
-	    break;
+	memset(pfds, 0, sizeof(struct pollfd) * 2);
+	pfds[0].fd = fileno(in);
+	pfds[0].events = POLLIN;
+	pfds[1].fd = fileno(out);
+	pfds[1].events = POLLHUP;
+	ret = poll(pfds, 2, -1);
+	if(ret < 0) {
+	    if(errno != EINTR) {
+		flog(LOG_ERR, "callcgi: error in poll: %s", strerror(errno));
+		return(1);
+	    }
 	}
-	if(fwrite(buf, 1, ret, out) != ret) {
-	    flog(LOG_ERR, "sendfile: could not write output: %s", strerror(errno));
-	    break;
+	if(ret > 0) {
+	    if(pfds[0].revents & POLLIN) {
+		ret = fread(buf, 1, 65536, in);
+		if(ferror(in)) {
+		    flog(LOG_ERR, "callcgi: could not read input: %s", strerror(errno));
+		    return(1);
+		}
+		if(fwrite(buf, 1, ret, out) != ret) {
+		    flog(LOG_ERR, "callcgi: could not write output: %s", strerror(errno));
+		    return(1);
+		}
+	    }
+	    if(pfds[1].revents & POLLHUP)
+		return(1);
 	}
     }
-    free(buf);
+    return(0);
 }
 
 static char *absolutify(char *file)
@@ -63,7 +82,7 @@ static char *absolutify(char *file)
     return(sstrdup(file));
 }
 
-static void forkchild(int inpath, char *prog, char *file, char *method, char *url, char *rest, int *infd, int *outfd)
+static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *url, char *rest, int *infd, int *outfd)
 {
     int i;
     char *qp, **env, *name;
@@ -131,6 +150,7 @@ static void forkchild(int inpath, char *prog, char *file, char *method, char *ur
     close(outp[1]);
     *infd = inp[1];
     *outfd = outp[0];
+    return(pid);
 }
 
 static void trim(struct charbuf *buf)
@@ -296,6 +316,7 @@ int main(int argc, char **argv, char **envp)
     int infd, outfd;
     FILE *in, *out;
     char **headers;
+    pid_t child;
     
     environ = envp;
     signal(SIGPIPE, SIG_IGN);
@@ -343,9 +364,9 @@ int main(int argc, char **argv, char **envp)
     
     if(prog == NULL)
 	prog = file;
-    forkchild(inpath, prog, file, argv[optind], argv[optind + 1], argv[optind + 2], &infd, &outfd);
+    child = forkchild(inpath, prog, file, argv[optind], argv[optind + 1], argv[optind + 2], &infd, &outfd);
     in = fdopen(infd, "w");
-    passdata(stdin, in);
+    passdata(stdin, in);	/* Ignore errors, perhaps? */
     fclose(in);
     out = fdopen(outfd, "r");
     if((headers = parseheaders(out)) == NULL) {
@@ -355,6 +376,7 @@ int main(int argc, char **argv, char **envp)
     sendstatus(headers, stdout);
     sendheaders(headers, stdout);
     printf("\n");
-    passdata(out, stdout);
+    if(passdata(out, stdout))
+	kill(child, SIGINT);
     return(0);
 }
