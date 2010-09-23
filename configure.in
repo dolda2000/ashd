@@ -12,6 +12,13 @@ dnl AM_PROG_LIBTOOL
 
 AC_HEADER_STDC
 
+HAS_MAGIC=yes
+AC_CHECK_LIB(magic, magic_open, [:], [HAS_MAGIC=no])
+AC_CHECK_HEADER(magic.h, [], [HAS_MAGIC=no])
+if test "$HAS_MAGIC" = no; then
+	AC_MSG_ERROR([*** cannot find libmagic on this system])
+fi
+
 AH_TEMPLATE(HAVE_XATTR, [define to compile support for filesystem extended attributes])
 AC_ARG_WITH(xattr, [  --with-xattr            Enable XATTR support])
 HAS_XATTR=""
