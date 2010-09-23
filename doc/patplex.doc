@@ -156,7 +156,7 @@ them.
 
 --------
 child root
-  exec sudo -u www-data dirplex /srv/www/htdocs
+  exec sudo -u www-data dirplex /srv/www
 child userdir
   exec userplex -g users
 match
@@ -184,7 +184,7 @@ match
 # Use the last level of the domain name to enter a subdirectory.
 match
   header host ^([^.]*)\\.multi\\.org$ is
-  restpat $1$_
+  restpat $1/$_
   handler site-multi
 --------
 
