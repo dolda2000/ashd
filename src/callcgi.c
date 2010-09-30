@@ -53,7 +53,7 @@ static int passdata(FILE *in, FILE *out)
 	    }
 	}
 	if(ret > 0) {
-	    if(pfds[0].revents & POLLIN) {
+	    if(pfds[0].revents & (POLLIN | POLLERR | POLLHUP)) {
 		ret = fread(buf, 1, 65536, in);
 		if(ferror(in)) {
 		    flog(LOG_ERR, "callcgi: could not read input: %s", strerror(errno));
