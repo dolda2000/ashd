@@ -171,7 +171,7 @@ static void serve(struct hthead *req, int fd)
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: accesslog [-hFa] [-f FORMAT] [-o OUTFILE] CHILD [ARGS...]\n");
+    fprintf(out, "usage: accesslog [-hFa] [-f FORMAT] OUTFILE CHILD [ARGS...]\n");
 }
 
 int main(int argc, char **argv)
@@ -180,17 +180,13 @@ int main(int argc, char **argv)
     struct hthead *req;
     int fd;
     struct pollfd pfd[2];
-    char *outfile;
     
     optarg = NULL;
-    while((c = getopt(argc, argv, "+hFaf:o:")) >= 0) {
+    while((c = getopt(argc, argv, "+hFaf:")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage(stdout);
 	    exit(0);
-	case 'o':
-	    outfile = optarg;
-	    break;
 	case 'F':
 	    flush = 0;
 	    break;
@@ -205,21 +201,21 @@ int main(int argc, char **argv)
 	    exit(1);
 	}
     }
-    if(optind >= argc) {
+    if(argc - optind < 2) {
 	usage(stderr);
 	exit(1);
     }
     if(format == NULL)
 	format = DEFFORMAT;
-    if(outfile != NULL) {
-	if((out = fopen(outfile, "a")) == NULL) {
-	    flog(LOG_ERR, "accesslog: could not open %s for logging: %s", outfile, strerror(errno));
+    if(!strcmp(argv[optind], "-")) {
+	out = stdout;
+    } else {
+	if((out = fopen(argv[optind], "a")) == NULL) {
+	    flog(LOG_ERR, "accesslog: could not open %s for logging: %s", argv[optind], strerror(errno));
 	    exit(1);
 	}
-    } else {
-	out = stdout;
     }
-    if((ch = stdmkchild(argv + optind, NULL, NULL)) < 0) {
+    if((ch = stdmkchild(argv + optind + 1, NULL, NULL)) < 0) {
 	flog(LOG_ERR, "accesslog: could fork child: %s", strerror(errno));
 	exit(1);
     }
