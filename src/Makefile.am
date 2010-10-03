@@ -1,6 +1,6 @@
 SUBDIRS = dirplex
 
-bin_PROGRAMS = htparser sendfile callcgi patplex userplex htls callscgi
+bin_PROGRAMS = htparser sendfile callcgi patplex userplex htls callscgi accesslog
 noinst_PROGRAMS = debugsink
 
 htparser_SOURCES = htparser.c htparser.h plaintcp.c ssl-gnutls.c
