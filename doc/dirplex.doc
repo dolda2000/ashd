@@ -153,7 +153,7 @@ The follow configuration directives are recognized:
 
 	Declares a named, transient request handler (see *ashd*(7) for
 	a more detailed description of persistent handlers). It must
-	contains exactly one follow-up line, *exec* 'PROGRAM'
+	contain exactly one follow-up line, *exec* 'PROGRAM'
 	['ARGS'...], specifying the program to execute and the
 	arguments to pass it. In addition to the specified arguments,
 	the HTTP method, raw URL and the rest string will be appended
