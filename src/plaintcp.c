@@ -95,27 +95,48 @@ int listensock6(int port)
     return(fd);
 }
 
+char *formathaddress(struct sockaddr *name, socklen_t namelen)
+{
+    static char buf[128];
+    struct sockaddr_in *v4;
+    struct sockaddr_in6 *v6;
+
+    switch(name->sa_family) {
+    case AF_INET:
+	v4 = (struct sockaddr_in *)name;
+	if(!inet_ntop(AF_INET, &v4->sin_addr, buf, sizeof(buf)))
+	    return(NULL);
+	return(buf);
+    case AF_INET6:
+	v6 = (struct sockaddr_in6 *)name;
+	if(IN6_IS_ADDR_V4MAPPED(&v6->sin6_addr)) {
+	    if(!inet_ntop(AF_INET, ((char *)&v6->sin6_addr) + 12, buf, sizeof(buf)))
+		return(NULL);
+	} else {
+	    if(!inet_ntop(AF_INET6, &v6->sin6_addr, buf, sizeof(buf)))
+		return(NULL);
+	}
+	return(buf);
+    default:
+	errno = EPFNOSUPPORT;
+	return(NULL);
+    }
+}
+
 static int initreq(struct conn *conn, struct hthead *req)
 {
     struct tcpconn *tcp = conn->pdata;
     struct sockaddr_storage sa;
     socklen_t salen;
-    char nmbuf[256];
     
-    if(tcp->name.ss_family == AF_INET) {
-	headappheader(req, "X-Ash-Address", inet_ntop(AF_INET, &((struct sockaddr_in *)&tcp->name)->sin_addr, nmbuf, sizeof(nmbuf)));
+    headappheader(req, "X-Ash-Address", formathaddress((struct sockaddr *)&tcp->name, sizeof(sa)));
+    if(tcp->name.ss_family == AF_INET)
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in *)&tcp->name)->sin_port)));
-    } else if(tcp->name.ss_family == AF_INET6) {
-	headappheader(req, "X-Ash-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&tcp->name)->sin6_addr, nmbuf, sizeof(nmbuf)));
+    else if(tcp->name.ss_family == AF_INET6)
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&tcp->name)->sin6_port)));
-    }
     salen = sizeof(sa);
-    if(!getsockname(tcp->fd, (struct sockaddr *)&sa, &salen)) {
-	if(sa.ss_family == AF_INET)
-	    headappheader(req, "X-Ash-Server-Address", inet_ntop(AF_INET, &((struct sockaddr_in *)&sa)->sin_addr, nmbuf, sizeof(nmbuf)));
-	else if(sa.ss_family == AF_INET6)
-	    headappheader(req, "X-Ash-Server-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&sa)->sin6_addr, nmbuf, sizeof(nmbuf)));
-    }
+    if(!getsockname(tcp->fd, (struct sockaddr *)&sa, &salen))
+	headappheader(req, "X-Ash-Server-Address", formathaddress((struct sockaddr *)&sa, sizeof(sa)));
     headappheader(req, "X-Ash-Server-Port", sprintf3("%i", tcp->port->sport));
     headappheader(req, "X-Ash-Protocol", "http");
     return(0);

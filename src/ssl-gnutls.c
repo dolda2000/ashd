@@ -141,6 +141,7 @@ static int initreq(struct conn *conn, struct hthead *req)
     socklen_t salen;
     char nmbuf[256];
     
+    headappheader(req, "X-Ash-Address", formathaddress((struct sockaddr *)&ssl->name, sizeof(sa)));
     if(ssl->name.ss_family == AF_INET) {
 	headappheader(req, "X-Ash-Address", inet_ntop(AF_INET, &((struct sockaddr_in *)&ssl->name)->sin_addr, nmbuf, sizeof(nmbuf)));
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in *)&ssl->name)->sin_port)));
@@ -149,12 +150,8 @@ static int initreq(struct conn *conn, struct hthead *req)
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&ssl->name)->sin6_port)));
     }
     salen = sizeof(sa);
-    if(!getsockname(ssl->fd, (struct sockaddr *)&sa, &salen)) {
-	if(sa.ss_family == AF_INET)
-	    headappheader(req, "X-Ash-Server-Address", inet_ntop(AF_INET, &((struct sockaddr_in *)&sa)->sin_addr, nmbuf, sizeof(nmbuf)));
-	else if(sa.ss_family == AF_INET6)
-	    headappheader(req, "X-Ash-Server-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&sa)->sin6_addr, nmbuf, sizeof(nmbuf)));
-    }
+    if(!getsockname(ssl->fd, (struct sockaddr *)&sa, &salen))
+	headappheader(req, "X-Ash-Server-Address", formathaddress((struct sockaddr *)&sa, sizeof(sa)));
     headappheader(req, "X-Ash-Server-Port", sprintf3("%i", ssl->port->sport));
     headappheader(req, "X-Ash-Protocol", "https");
     return(0);
