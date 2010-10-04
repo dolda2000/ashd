@@ -41,7 +41,7 @@ static char *outname = NULL;
 static FILE *out;
 static int flush = 1;
 static char *format;
-static time_t now;
+static struct timeval now;
 static volatile int reopen = 0;
 
 static void qputs(char *s, FILE *o)
@@ -67,7 +67,6 @@ static void logitem(struct hthead *req, char o, char *d)
 {
     char *h, *p;
     char buf[1024];
-    struct timeval tv;
     
     switch(o) {
     case '%':
@@ -101,18 +100,17 @@ static void logitem(struct hthead *req, char o, char *d)
     case 't':
 	if(!*d)
 	    d = "%a, %d %b %Y %H:%M:%S %z";
-	strftime(buf, sizeof(buf), d, localtime(&now));
+	strftime(buf, sizeof(buf), d, localtime(&now.tv_sec));
 	qputs(buf, out);
 	break;
     case 'T':
 	if(!*d)
 	    d = "%a, %d %b %Y %H:%M:%S %z";
-	strftime(buf, sizeof(buf), d, gmtime(&now));
+	strftime(buf, sizeof(buf), d, gmtime(&now.tv_sec));
 	qputs(buf, out);
 	break;
     case 's':
-	gettimeofday(&tv, NULL);
-	fprintf(out, "%06i", (int)tv.tv_usec);
+	fprintf(out, "%06i", (int)now.tv_usec);
 	break;
     case 'A':
 	logitem(req, 'h', "X-Ash-Address");
@@ -164,7 +162,7 @@ static void logreq(struct hthead *req)
 
 static void serve(struct hthead *req, int fd)
 {
-    now = time(NULL);
+    gettimeofday(&now, NULL);
     if(sendreq(ch, req, fd)) {
 	flog(LOG_ERR, "accesslog: could not pass request to child: %s", strerror(errno));
 	exit(1);
