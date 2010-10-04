@@ -1,3 +1,9 @@
+Version 0.2:
+
+	* Added an access logger program.
+	* Improved the sendfile program, particularly to support
+	  transmission of partial files.
+	
 Version 0.1:
 
 	* Initial release
