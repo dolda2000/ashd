@@ -24,6 +24,7 @@
 #include <sys/poll.h>
 #include <time.h>
 #include <sys/time.h>
+#include <signal.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -36,10 +37,12 @@
 #define DEFFORMAT "%{%Y-%m-%d %H:%M:%S}t %m %u %A \"%G\""
 
 static int ch;
+static char *outname = NULL;
 static FILE *out;
 static int flush = 1;
 static char *format;
 static time_t now;
+static volatile int reopen = 0;
 
 static void qputs(char *s, FILE *o)
 {
@@ -169,6 +172,28 @@ static void serve(struct hthead *req, int fd)
     logreq(req);
 }
 
+static void sighandler(int sig)
+{
+    if(sig == SIGHUP)
+	reopen = 1;
+}
+
+static void reopenlog(void)
+{
+    FILE *new;
+    
+    if(outname == NULL) {
+	flog(LOG_WARNING, "accesslog: received SIGHUP but logging to stdout, so ignoring");
+	return;
+    }
+    if((new = fopen(outname, "a")) == NULL) {
+	flog(LOG_WARNING, "accesslog: could not reopen log file `%s' on SIGHUP: %s", outname, strerror(errno));
+	return;
+    }
+    fclose(out);
+    out = new;
+}
+
 static void usage(FILE *out)
 {
     fprintf(out, "usage: accesslog [-hFa] [-f FORMAT] OUTFILE CHILD [ARGS...]\n");
@@ -207,7 +232,11 @@ int main(int argc, char **argv)
     }
     if(format == NULL)
 	format = DEFFORMAT;
-    if(!strcmp(argv[optind], "-")) {
+    if(!strcmp(argv[optind], "-"))
+	outname = NULL;
+    else
+	outname = argv[optind];
+    if(outname == NULL) {
 	out = stdout;
     } else {
 	if((out = fopen(argv[optind], "a")) == NULL) {
@@ -219,7 +248,12 @@ int main(int argc, char **argv)
 	flog(LOG_ERR, "accesslog: could fork child: %s", strerror(errno));
 	exit(1);
     }
+    signal(SIGHUP, sighandler);
     while(1) {
+	if(reopen) {
+	    reopenlog();
+	    reopen = 0;
+	}
 	memset(pfd, 0, sizeof(pfd));
 	pfd[0].fd = 0;
 	pfd[0].events = POLLIN;
