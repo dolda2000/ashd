@@ -272,6 +272,9 @@ void serve(FILE *in, struct conn *conn)
 	if((resp = parseresp(out)) == NULL)
 	    break;
 	replstr(&resp->ver, req->ver);
+	
+	if(!getheader(resp, "server"))
+	    headappheader(resp, "Server", sprintf3("ashd/%s", VERSION));
 
 	if(!strcmp(req->ver, "HTTP/1.0")) {
 	    writeresp(in, resp);
