@@ -1,0 +1,160 @@
+accesslog(1)
+============
+
+NAME
+----
+accesslog - Access logger for ashd(7)
+
+SYNOPSIS
+--------
+*accesslog* [*-hFa*] [*-f* 'FORMAT'] 'OUTFILE' 'CHILD' ['ARGS'...]
+
+DESCRIPTION
+-----------
+
+The *accesslog* handler starts a single child handler which it passes
+all requests it receives, but also logs information about every such
+request to 'OUTFILE'. As for the format of the log records, see the
+FORMAT section, below.
+
+*accesslog* is a persistent handler, as defined in *ashd*(7), and the
+specified child handler must also be a persistent handler.
+
+If 'OUTFILE' is `-`, log records will be written on standard
+output. Otherwise, the specified filename is opened in append mode and
+kept open for as long as *accesslog* runs. SIGHUP can be sent to
+*accesslog* in order to get it to reopen the log file, which can be
+useful e.g. for log rotation.
+
+If the child handler exits, *accesslog* exits as well.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-F*::
+
+	Do not flush the log file buffers for each log record. (This
+	refers to the internal buffers, not the filesystem buffers.)
+
+*-f* 'FORMAT'::
+
+	Use the specified 'FORMAT' string instead of the default log
+	record format. See the FORMAT section, below, for a
+	description of the 'FORMAT' string.
+
+*-a*::
+
+	Try to emulate the Apache "combined" log format as closely as
+	possible. Currently, the remote user, identd user, status code
+	and number of sent bytes in Apache's combined format are
+	replaced with dashes. Effectively, the following format string
+	is used:
+
+--------
+%A - - [%{%d/%b/%Y:%H:%M:%S %z}t] "%m %u %v" - - "%R" "%G"
+--------
+
+FORMAT
+------
+
+The log record format is specified with the *-f* option described
+above. The format string is used as a template and certain fields are
+expanded. Characters in the format string not matching such fields are
+output as they are. A field is specified as a percent sign, followed
+by an optional argument enclosed in braces, followed by a single
+character specifying the item to log.
+
+By default, the following format string is used:
+
+--------
+%{%Y-%m-%d %H:%M:%S}t %m %u %A "%G"
+--------
+
+The following log items are currently specified:
+
+*%{*'HEADER'*}h*::
+
+	Expands into the HTTP header named by 'HEADER'. If the
+	specified header does not exist in the request, *%h* expands
+	into a dash.
+
+*%u*::
+
+	Expands into the entire raw URL part of the request.
+
+*%U*::
+
+	Expands into the raw URL part of the request, with any query
+	string removed if present.
+
+*%m*::
+
+	Expands into the HTTP method.
+
+*%v*::
+
+	Expands into the HTTP version string.
+
+*%r*::
+
+	Expands into the current rest string.
+
+*%t*::
+
+	Expands into the current time, in RFC822 format, unless there
+	is an argument present, in which case the argument is used as
+	a format string to *strftime*(3). The time is expressed in the
+	local timezone.
+
+*%T*::
+
+	As for *%t*, but UTC time is used instead.
+
+*%s*::
+
+	Expands into the non-integral fraction of the second of the
+	current time, expressed in microseconds and padded with zeroes
+	to 6 digits. For example, *%{%H:%M:%S}t.%s* can be used to log
+	fractional time.
+
+*%A*::
+
+	Expands into the `X-Ash-Address` header.
+
+*%H*::
+
+	Expands into the `Host` header.
+
+*%R*::
+
+	Expands into the `Referer` header.
+
+*%G*::
+
+	Expands into the `User-Agent` header.
+
+In any expanded field, any "unsafe" characters are escaped. Currently,
+this means that double-quotes and backslashes are prepended with a
+backslash, newlines and tabs are expressed as, respectively, `\n` and
+`\t`, and any other byte less than 32 or greater than 127 is expressed
+as `\xAA`, where `AA` is the hexadecimal representation of the byte.
+
+SIGNALS
+-------
+
+SIGHUP::
+
+	Reopen the log file by name. If the log file name cannot be
+	re-opened, the old log file stream continues in use.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*ashd*(7)
