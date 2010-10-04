@@ -283,8 +283,8 @@ void serve(FILE *in, struct conn *conn)
 		if(!hasheader(req, "connection", "keep-alive"))
 		    break;
 	    } else if((hd = getheader(resp, "content-length")) != NULL) {
-		dlen = passdata(out, in, -1);
-		if(dlen != atoo(hd))
+		dlen = atoo(hd);
+		if(passdata(out, in, dlen) != dlen)
 		    break;
 		if(!hasheader(req, "connection", "keep-alive"))
 		    break;
@@ -301,8 +301,8 @@ void serve(FILE *in, struct conn *conn)
 	    } else if((hd = getheader(resp, "content-length")) != NULL) {
 		writeresp(in, resp);
 		fprintf(in, "\r\n");
-		dlen = passdata(out, in, -1);
-		if(dlen != atoo(hd))
+		dlen = atoo(hd);
+		if(passdata(out, in, dlen) != dlen)
 		    break;
 	    } else if(!getheader(resp, "transfer-encoding")) {
 		headappheader(resp, "Transfer-Encoding", "chunked");
