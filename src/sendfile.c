@@ -42,14 +42,17 @@
 
 static magic_t cookie = NULL;
 
-static void passdata(int in, int out)
+static void passdata(int in, int out, off_t maxlen)
 {
     int ret, len, off;
     char *buf;
     
     buf = smalloc(65536);
     while(1) {
-	len = read(in, buf, 65536);
+	len = 65536;
+	if((maxlen > 0) && (len > maxlen))
+	    len = maxlen;
+	len = read(in, buf, len);
 	if(len < 0) {
 	    flog(LOG_ERR, "sendfile: could not read input: %s", strerror(errno));
 	    break;
@@ -62,6 +65,10 @@ static void passdata(int in, int out)
 		flog(LOG_ERR, "sendfile: could not write output: %s", strerror(errno));
 		break;
 	    }
+	}
+	if(maxlen > 0) {
+	    if((maxlen -= len) <= 0)
+		break;
 	}
     }
     free(buf);
@@ -139,12 +146,93 @@ static void usage(void)
     flog(LOG_ERR, "usage: sendfile [-c CONTENT-TYPE] METHOD URL REST");
 }
 
+static void sendwhole(int fd, struct stat *sb, const char *contype, int head)
+{
+    printf("HTTP/1.1 200 OK\n");
+    printf("Content-Type: %s\n", contype);
+    printf("Content-Length: %ji\n", (intmax_t)sb->st_size);
+    printf("Last-Modified: %s\n", fmthttpdate(sb->st_mtime));
+    printf("Date: %s\n", fmthttpdate(time(NULL)));
+    printf("\n");
+    fflush(stdout);
+    if(!head)
+	passdata(fd, 1, -1);
+}
+
+static void sendrange(int fd, struct stat *sb, const char *contype, char *spec, int head)
+{
+    char buf[strlen(spec) + 1];
+    char *p, *e;
+    off_t start, end;
+    
+    if(strncmp(spec, "bytes=", 6))
+	goto error;
+    strcpy(buf, spec + 6);
+    if((p = strchr(buf, '-')) == NULL)
+	goto error;
+    if(p == buf) {
+	if(!p[1])
+	    goto error;
+	end = sb->st_size;
+	start = end - strtoll(p + 1, &e, 10);
+	if(*e)
+	    goto error;
+	if(start < 0)
+	    start = 0;
+    } else {
+	*(p++) = 0;
+	start = strtoll(buf, &e, 10);
+	if(*e)
+	    goto error;
+	if(*p) {
+	    end = strtoll(p, &e, 10) + 1;
+	    if(*e)
+		goto error;
+	} else {
+	    end = sb->st_size;
+	}
+    }
+    if(start >= sb->st_size) {
+	printf("HTTP/1.1 416 Not satisfiable\n");
+	printf("Content-Range: */%ji\n", (intmax_t)sb->st_size);
+	printf("Content-Length: 0\n");
+	printf("Last-Modified: %s\n", fmthttpdate(sb->st_mtime));
+	printf("Date: %s\n", fmthttpdate(time(NULL)));
+	printf("\n");
+	return;
+    }
+    if((start < 0) || (start >= end))
+	goto error;
+    if(end > sb->st_size)
+	end = sb->st_size;
+    errno = 0;
+    if(lseek(fd, start, SEEK_SET) != start) {
+	simpleerror(1, 500, "Internal Error", "Could not seek properly to beginning of requested byte range.");
+	flog(LOG_ERR, "sendfile: could not seek properly when serving partial content: %s", strerror(errno));
+	exit(1);
+    }
+    printf("HTTP/1.1 206 Partial content\n");
+    printf("Content-Range: bytes %ji-%ji/%ji\n", (intmax_t)start, (intmax_t)(end - 1), (intmax_t)sb->st_size);
+    printf("Content-Length: %ji\n", (intmax_t)(end - start));
+    printf("Content-Type: %s\n", contype);
+    printf("Last-Modified: %s\n", fmthttpdate(sb->st_mtime));
+    printf("Date: %s\n", fmthttpdate(time(NULL)));
+    printf("\n");
+    fflush(stdout);
+    if(!head)
+	passdata(fd, 1, end - start);
+    return;
+    
+error:
+    sendwhole(fd, sb, contype, head);
+}
+
 int main(int argc, char **argv)
 {
     int c;
-    char *file;
+    char *file, *hdr;
     struct stat sb;
-    int fd;
+    int fd, ishead;
     const char *contype;
     
     setlocale(LC_ALL, "");
@@ -183,14 +271,10 @@ int main(int argc, char **argv)
     
     checkcache(file, &sb);
     
-    printf("HTTP/1.1 200 OK\n");
-    printf("Content-Type: %s\n", contype);
-    printf("Content-Length: %ji\n", (intmax_t)sb.st_size);
-    printf("Last-Modified: %s\n", fmthttpdate(sb.st_mtime));
-    printf("Date: %s\n", fmthttpdate(time(NULL)));
-    printf("\n");
-    fflush(stdout);
-    if(strcasecmp(argv[optind], "head"))
-	passdata(fd, 1);
+    ishead = !strcasecmp(argv[optind], "head");
+    if((hdr = getenv("REQ_RANGE")) != NULL)
+	sendrange(fd, &sb, contype, hdr, ishead);
+    else
+	sendwhole(fd, &sb, contype, ishead);
     return(0);
 }

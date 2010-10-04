@@ -29,8 +29,11 @@ your system has support for such attributes), the attributes
 present on the file in question, its value will be used instead of
 using *libmagic*.
 
-*sendfile* also handles HTTP caching by supporting the `Last-Modified`
-and related headers.
+*sendfile* supports the following HTTP features:
+
+ * Caching, using the `Last-Modified` and related headers.
+
+ * Partial content, using the `Range` and related headers.
 
 OPTIONS
 -------
