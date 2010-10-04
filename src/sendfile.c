@@ -141,11 +141,6 @@ static void checkcache(char *file, struct stat *sb)
     }
 }
 
-static void usage(void)
-{
-    flog(LOG_ERR, "usage: sendfile [-c CONTENT-TYPE] METHOD URL REST");
-}
-
 static void sendwhole(int fd, struct stat *sb, const char *contype, int head)
 {
     printf("HTTP/1.1 200 OK\n");
@@ -227,20 +222,31 @@ error:
     sendwhole(fd, sb, contype, head);
 }
 
+static void usage(void)
+{
+    flog(LOG_ERR, "usage: sendfile [-c CONTENT-TYPE] [-f FILE] METHOD URL REST");
+}
+
 int main(int argc, char **argv)
 {
     int c;
     char *file, *hdr;
     struct stat sb;
-    int fd, ishead;
+    int fd, ishead, ignrest;
     const char *contype;
     
     setlocale(LC_ALL, "");
     contype = NULL;
-    while((c = getopt(argc, argv, "c:")) >= 0) {
+    file = NULL;
+    ignrest = 0;
+    while((c = getopt(argc, argv, "c:f:")) >= 0) {
 	switch(c) {
 	case 'c':
 	    contype = optarg;
+	    break;
+	case 'f':
+	    file = optarg;
+	    ignrest = 1;
 	    break;
 	default:
 	    usage();
@@ -252,11 +258,11 @@ int main(int argc, char **argv)
 	usage();
 	exit(1);
     }
-    if((file = getenv("REQ_X_ASH_FILE")) == NULL) {
-	flog(LOG_ERR, "sendfile: needs to be called with the X-Ash-File header");
+    if((file == NULL) && ((file = getenv("REQ_X_ASH_FILE")) == NULL)) {
+	flog(LOG_ERR, "sendfile: needs to be called with either the X-Ash-File header or the -f option");
 	exit(1);
     }
-    if(*argv[optind + 2]) {
+    if(!ignrest && *argv[optind + 2]) {
 	simpleerror(1, 404, "Not Found", "The requested URL has no corresponding resource.");
 	exit(0);
     }

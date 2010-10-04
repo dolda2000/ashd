@@ -7,18 +7,24 @@ sendfile - Static file handler for ashd(7)
 
 SYNOPSIS
 --------
-*sendfile* [*-c* 'CONTENT-TYPE'] 'METHOD' 'URL' 'REST'
+*sendfile* [*-c* 'CONTENT-TYPE'] [*-f* 'FILE'] 'METHOD' 'URL' 'REST'
 
 DESCRIPTION
 -----------
 
 *sendfile* serves static files by sending them exactly as they are to
 clients. It needs to be called with the `X-Ash-File` header added to
-the request, as *dirplex*(1) does.
+the request, as *dirplex*(1) does, unless the *-f* option is given.
 
 *sendfile* is a transient handler, as defined in *ashd*(7), and the
 'METHOD', 'URL' and 'REST' arguments will normally be added by the
 parent handler.
+
+Normally, *sendfile* will serve the file named by the `X-Ash-File`
+header, and fail with a 404 error in case the rest string is not
+empty. However, if the *-f* argument is given, the given 'FILE' will
+always be served instead, and the `X-Ash-File` header and any rest
+string is ignored.
 
 If a MIME-type is not explicitly specified, *sendfile* uses
 *libmagic*(3) to determine the MIME-type automatically. If *sendfile*
@@ -42,6 +48,11 @@ OPTIONS
 
 	Sends 'CONTENT-TYPE' as the file's MIME-type instead of trying
 	to auto-detect the file type.
+
+*-f* 'FILE'::
+
+	Ignore the `X-Ash-File` header and force 'FILE' to be served
+	instead. Any remaining rest string is also ignored.
 
 AUTHOR
 ------
