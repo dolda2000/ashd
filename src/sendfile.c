@@ -92,7 +92,7 @@ static char *attrmimetype(char *file)
     return(NULL);
 found:
     for(i = 0; i < sz; i++) {
-	if((buf[sz] < 32) || (buf[sz] >= 128))
+	if((buf[i] < 32) || (buf[i] >= 128))
 	    return(NULL);
     }
     buf[sz] = 0;
