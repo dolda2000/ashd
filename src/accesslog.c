@@ -242,7 +242,7 @@ int main(int argc, char **argv)
 	}
     }
     if((ch = stdmkchild(argv + optind + 1, NULL, NULL)) < 0) {
-	flog(LOG_ERR, "accesslog: could fork child: %s", strerror(errno));
+	flog(LOG_ERR, "accesslog: could not fork child: %s", strerror(errno));
 	exit(1);
     }
     signal(SIGHUP, sighandler);
