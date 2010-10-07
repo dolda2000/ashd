@@ -147,11 +147,11 @@ static void serve(struct hthead *req, int fd)
     size_t declen;
     
     now = time(NULL);
+    dec = NULL;
     if(reqssl && (((raw = getheader(req, "X-Ash-Protocol")) == NULL) || strcmp(raw, "https"))) {
 	simpleerror(fd, 403, "Forbidden", "The requested resource must be requested over HTTPS.");
 	goto out;
     }
-    dec = NULL;
     if(((raw = getheader(req, "Authorization")) == NULL) || strncasecmp(raw, "basic ", 6)) {
 	reqauth(req, fd);
 	goto out;
