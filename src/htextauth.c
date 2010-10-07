@@ -162,6 +162,12 @@ static void serve(struct hthead *req, int fd)
     }
     memset(raw, 0, strlen(raw));
     headrmheader(req, "Authorization");
+    for(p = dec; *p; p++) {
+	if(*p < 32) {
+	    simpleerror(fd, 400, "Invalid request", "The authentication data is invalid.");
+	    goto out;
+	}
+    }
     if((p = strchr(dec, ':')) == NULL) {
 	simpleerror(fd, 400, "Invalid request", "The authentication data is invalid.");
 	goto out;
@@ -198,10 +204,6 @@ static int auth(struct hthead *req, int fd, char *user, char *pass)
     FILE *out;
     
     rv = 0;
-    if(strchr(user, '\n') || strchr(pass, '\n')) {
-	simpleerror(fd, 401, "Invalid authentication", "The supplied credentials are invalid.");
-	return(0);
-    }
     msg = "The supplied credentials are invalid.";
     pipe(pfd);
     pipe(efd);
