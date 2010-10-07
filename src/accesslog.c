@@ -204,7 +204,6 @@ int main(int argc, char **argv)
     int fd;
     struct pollfd pfd[2];
     
-    optarg = NULL;
     while((c = getopt(argc, argv, "+hFaf:")) >= 0) {
 	switch(c) {
 	case 'h':
