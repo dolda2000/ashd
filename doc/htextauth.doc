@@ -1,0 +1,82 @@
+htextauth(1)
+============
+
+NAME
+----
+htextauth - HTTP Basic authenticator for ashd(7)
+
+SYNOPSIS
+--------
+*htextauth* [*-hCs*] [*-r* 'REALM'] 'AUTHCMD' ['ARGS'...] `--` 'CHILD' ['ARGS'...]
+
+DESCRIPTION
+-----------
+
+The *htextauth* handler starts a single child handler which it passes
+all requests it receives, assuming they pass an authentication
+test. *htextauth* will request HTTP Basic credentials from the client,
+and pass such credentials to an external program in order to verify
+them. The authentication program will be called every time a new user
+needs to be authenticated. See the AUTHENTICATION section, below, for
+the calling convention used for the authentication program.
+
+*htextauth* is a persistent handler, as defined in *ashd*(7), and the
+specified child handler must also be a persistent handler.
+
+By default, *htextauth* will cache successfully verified credentials,
+so that the authentication program does not have to be called for each
+and every request. Cached credentials are cleared from the cache when
+they have not been used for over 30 minutes.
+
+If the child handler exits, *htextauth* exits as well.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-C*::
+
+	Do not cache credentials.
+
+*-s*::
+
+	Require that all requests are made over HTTPS.
+
+*-r* 'REALM'::
+
+	Specify 'REALM' as the authentication realm when requesting
+	credentials from the client.
+
+AUTHENTICATION
+--------------
+
+When a previously unseen user needs to be authenticated, *htextauth*
+will fork and execute the 'AUTHCMD' program, with any arguments that
+follow. *htextauth* will pass two lines of text to the authentication
+program's standard input: the given user name on the first line, and
+the password on the second. The credentials are checked in advance so
+that they do not contain any control characters (below ASCII 32).
+
+If the authentication program successfully verifies the credentials
+and wishes to grant access to the client, it needs to exit
+successfully; that is, with exit status 0. Any other exit (including
+being killed by a signal) is taken by *htextauth* as a failure.
+
+The authentication program can specify a reason for any failure by
+writing such on standard output. If the program exits unsuccessfully,
+*htextauth* will include any such message in the error page sent to
+the client.
+
+Note that *htextauth* will wait for the authentication program to exit
+and not process any other requests until then.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*ashd*(7)
