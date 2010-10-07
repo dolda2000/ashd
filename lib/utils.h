@@ -72,5 +72,7 @@ int calen(char **a);
 void bvprintf(struct charbuf *buf, char *format, va_list al);
 void bprintf(struct charbuf *buf, char *format, ...);
 void replstr(char **p, char *n);
+char *base64encode(char *data, size_t datalen);
+char *base64decode(char *data, size_t *datalen);
 
 #endif

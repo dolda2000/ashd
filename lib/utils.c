@@ -26,6 +26,26 @@
 #endif
 #include <utils.h>
 
+static char *base64set = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static int base64rev[] = {
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
+    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
+    -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+    15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
+    -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+};
+
 void _sizebuf(struct buffer *buf, size_t wanted, size_t el)
 {
     size_t n;
@@ -215,4 +235,74 @@ void replstr(char **p, char *n)
 	*p = NULL;
     if(tmp)
 	free(tmp);
+}
+
+char *base64encode(char *data, size_t datalen)
+{
+    struct charbuf buf;
+    
+    if(datalen == 0)
+	return(sstrdup(""));
+    bufinit(buf);
+    while(datalen >= 3)
+    {
+	bufadd(buf, base64set[(data[0] & 0xfc) >> 2]);
+	bufadd(buf, base64set[((data[0] & 0x03) << 4) | ((data[1] & 0xf0) >> 4)]);
+	bufadd(buf, base64set[((data[1] & 0x0f) << 2) | ((data[2] & 0xc0) >> 6)]);
+	bufadd(buf, base64set[data[2] & 0x3f]);
+	datalen -= 3;
+	data += 3;
+    }
+    if(datalen == 1)
+    {
+	bufadd(buf, base64set[(data[0] & 0xfc) >> 2]);
+	bufadd(buf, base64set[(data[0] & 0x03) << 4]);
+	bufcat(buf, "==", 2);
+    }
+    if(datalen == 2)
+    {
+	bufadd(buf, base64set[(data[0] & 0xfc) >> 2]);
+	bufadd(buf, base64set[((data[0] & 0x03) << 4) | ((data[1] & 0xf0) >> 4)]);
+	bufadd(buf, base64set[(data[1] & 0x0f) << 2]);
+	bufadd(buf, '=');
+    }
+    bufadd(buf, 0);
+    return(buf.b);
+}
+
+char *base64decode(char *data, size_t *datalen)
+{
+    int b, c;
+    char cur;
+    struct charbuf buf;
+    
+    bufinit(buf);
+    cur = 0;
+    b = 8;
+    for(; *data > 0; data++)
+    {
+	c = (int)(unsigned char)*data;
+	if(c == '=')
+	    break;
+	if(c == '\n')
+	    continue;
+	if(base64rev[c] == -1)
+	{
+	    buffree(buf);
+	    return(NULL);
+	}
+	b -= 6;
+	if(b <= 0)
+	{
+	    cur |= base64rev[c] >> -b;
+	    bufadd(buf, cur);
+	    b += 8;
+	    cur = 0;
+	}
+	cur |= base64rev[c] << b;
+    }
+    if(datalen != NULL)
+	*datalen = buf.d;
+    bufadd(buf, 0);
+    return(buf.b);
 }
