@@ -7,7 +7,7 @@ userplex - User directory multiplexer for ashd(7)
 
 SYNOPSIS
 --------
-*userplex* [*-hI*] [*-g* 'GROUP'] [*-m* 'MIN-UID'] [*-d* 'PUBDIR'] ['PROGRAM' ['ARGS'...]]
+*userplex* [*-hIs*] [*-g* 'GROUP'] [*-m* 'MIN-UID'] [*-d* 'PUBDIR'] ['PROGRAM' ['ARGS'...]]
 
 DESCRIPTION
 -----------
@@ -62,6 +62,15 @@ OPTIONS
 
 	If given, ignore any `~/.ashd/handler` file in a user's home
 	directory and use only the default handler.
+
+*-s*::
+
+	If given, set the ASHD_USESYSLOG environment variable in all
+	started children. If not given, *userplex* will actively clear
+	the variable from its children instead. The presence of the
+	variable indicates to the standard ashd programs to log
+	messages to *syslog*(3) instead of printing them on standard
+	error.
 
 *-g* 'GROUP'::
 

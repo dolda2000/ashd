@@ -46,6 +46,7 @@ static char *mgroup = NULL;
 static char *dirname = NULL;
 static char **childspec;
 static uid_t minuid = 0;
+static int usesyslog = 0;
 static struct user *users = NULL;
 
 static void login(struct passwd *pwd)
@@ -73,6 +74,10 @@ static void login(struct passwd *pwd)
 	flog(LOG_ERR, "could not change to home directory for %s: %s", pwd->pw_name, strerror(errno));
 	exit(1);
     }
+    if(usesyslog)
+	putenv("ASHD_USESYSLOG=1");
+    else
+	unsetenv("ASHD_USESYSLOG");
     putenv(sprintf2("HOME=%s", pwd->pw_dir));
     putenv(sprintf2("SHELL=%s", pwd->pw_shell));
     putenv(sprintf2("USER=%s", pwd->pw_name));
@@ -236,7 +241,7 @@ static void sighandler(int sig)
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: userplex [-hI] [-g GROUP] [-m MIN-UID] [-d PUB-DIR] [PROGRAM ARGS...]\n");
+    fprintf(out, "usage: userplex [-hIs] [-g GROUP] [-m MIN-UID] [-d PUB-DIR] [PROGRAM ARGS...]\n");
 }
 
 int main(int argc, char **argv)
@@ -246,10 +251,13 @@ int main(int argc, char **argv)
     int fd;
     struct charvbuf csbuf;
     
-    while((c = getopt(argc, argv, "+hIg:m:d:")) >= 0) {
+    while((c = getopt(argc, argv, "+hIsg:m:d:")) >= 0) {
 	switch(c) {
 	case 'I':
 	    ignore = 1;
+	    break;
+	case 's':
+	    usesyslog = 1;
 	    break;
 	case 'm':
 	    if((minuid = atoi(optarg)) < 1) {

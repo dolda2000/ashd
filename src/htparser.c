@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <pwd.h>
@@ -39,6 +40,7 @@
 
 static int plex;
 static char *pidfile = NULL;
+static int daemonize, usesyslog;
 
 static void trimx(struct hthead *req)
 {
@@ -360,6 +362,26 @@ static void plexwatch(struct muth *muth, va_list args)
     }
 }
 
+static void initroot(void *uu)
+{
+    int fd;
+    
+    if(daemonize) {
+	setsid();
+	chdir("/");
+	if((fd = open("/dev/null", O_RDWR)) >= 0) {
+	    dup2(fd, 0);
+	    dup2(fd, 1);
+	    dup2(fd, 2);
+	    close(fd);
+	}
+    }
+    if(usesyslog)
+	putenv("ASHD_USESYSLOG=1");
+    else
+	unsetenv("ASHD_USESYSLOG");
+}
+
 static void usage(FILE *out)
 {
     fprintf(out, "usage: htparser [-hSf] [-u USER] [-r ROOT] [-p PIDFILE] PORTSPEC... -- ROOT [ARGS...]\n");
@@ -416,12 +438,11 @@ int main(int argc, char **argv)
 {
     int c;
     int i, s1;
-    int daemonize, logsys;
     char *root;
     FILE *pidout;
     struct passwd *pwent;
     
-    daemonize = logsys = 0;
+    daemonize = usesyslog = 0;
     root = NULL;
     pwent = NULL;
     while((c = getopt(argc, argv, "+hSfu:r:p:")) >= 0) {
@@ -433,7 +454,7 @@ int main(int argc, char **argv)
 	    daemonize = 1;
 	    break;
 	case 'S':
-	    logsys = 1;
+	    usesyslog = 1;
 	    break;
 	case 'u':
 	    if((pwent = getpwnam(optarg)) == NULL) {
@@ -463,7 +484,7 @@ int main(int argc, char **argv)
 	usage(stderr);
 	exit(1);
     }
-    if((plex = stdmkchild(argv + ++i, NULL, NULL)) < 0) {
+    if((plex = stdmkchild(argv + ++i, initroot, NULL)) < 0) {
 	flog(LOG_ERR, "could not spawn root multiplexer: %s", strerror(errno));
 	return(1);
     }
@@ -475,7 +496,7 @@ int main(int argc, char **argv)
 	    return(1);
 	}
     }
-    if(logsys)
+    if(usesyslog)
 	opensyslog();
     if(root) {
 	if(chroot(root)) {

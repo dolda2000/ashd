@@ -53,7 +53,10 @@ OPTIONS
 
 *-S*::
 
-	Log messages to *syslog*(3) instead of standard error.
+	Log messages to *syslog*(3) instead of standard error. Also
+	sets the environment ASHD_USESYSLOG environment variable in
+	the root handler process, which indicates to the standard ashd
+	programs to do the same thing.
 
 *-f*::
 
