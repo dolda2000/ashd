@@ -168,11 +168,29 @@ static void servessl(struct muth *muth, va_list args)
     int ret;
     FILE *in;
     
+    int setcreds(gnutls_session_t sess)
+    {
+	int i;
+	unsigned int ntype;
+	char nambuf[256];
+	size_t namlen;
+	
+	for(i = 0; 1; i++) {
+	    namlen = sizeof(nambuf);
+	    if(gnutls_server_name_get(sess, nambuf, &namlen, &ntype, i) != 0)
+		break;
+	    if(ntype != GNUTLS_NAME_DNS)
+		continue;
+	}
+	gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->creds);
+	gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
+	return(0);
+    }
+
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
     gnutls_init(&sess, GNUTLS_SERVER);
     gnutls_set_default_priority(sess);
-    gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->creds);
-    gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
+    gnutls_handshake_set_post_client_hello_function(sess, setcreds);
     gnutls_transport_set_ptr(sess, (gnutls_transport_ptr_t)(intptr_t)fd);
     while((ret = gnutls_handshake(sess)) != 0) {
 	if((ret != GNUTLS_E_INTERRUPTED) && (ret != GNUTLS_E_AGAIN))
