@@ -25,7 +25,10 @@
 #endif
 #include <utils.h>
 #include <mt.h>
+
+#ifdef HAVE_VALGRIND
 #include <valgrind/memcheck.h>
+#endif
 
 struct muth *current = NULL;
 static ucontext_t mainctxt;
