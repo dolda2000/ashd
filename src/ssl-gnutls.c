@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -349,6 +350,28 @@ static struct namedcreds *readncreds(char *file)
     return(nc);
 }
 
+static void readncdir(struct ncredbuf *buf, char *dir)
+{
+    DIR *d;
+    struct dirent *e;
+    size_t es;
+    
+    if((d = opendir(dir)) == NULL) {
+	flog(LOG_ERR, "ssl: could not read certificate directory %s: %s", dir, strerror(errno));
+	exit(1);
+    }
+    while((e = readdir(d)) != NULL) {
+	if(e->d_name[0] == '.')
+	    continue;
+	if((es = strlen(e->d_name)) <= 4)
+	    continue;
+	if(strcmp(e->d_name + es - 4, ".crt"))
+	    continue;
+	bufadd(*buf, readncreds(sprintf3("%s/%s", dir, e->d_name)));
+    }
+    closedir(d);
+}
+
 void handlegnussl(int argc, char **argp, char **argv)
 {
     int i, ret, port, fd;
@@ -411,6 +434,8 @@ void handlegnussl(int argc, char **argp, char **argv)
 	    port = atoi(argv[i]);
 	} else if(!strcmp(argp[i], "ncert")) {
 	    bufadd(ncreds, readncreds(argv[i]));
+	} else if(!strcmp(argp[i], "ncertdir")) {
+	    readncdir(&ncreds, argv[i]);
 	} else {
 	    flog(LOG_ERR, "unknown parameter `%s' to ssl handler", argp[i]);
 	    exit(1);
