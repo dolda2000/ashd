@@ -398,11 +398,24 @@ void handlegnussl(int argc, char **argp, char **argv)
 	    printf("\tcrl=CRL-FILE    [no default]\n");
 	    printf("\t\tThe name of a file to read revocation lists from.\n");
 	    printf("\t\tMay be given multiple times.\n");
+	    printf("\tncert=CERT-FILE [no default]\n");
+	    printf("\t\tThe name of a file to read a named certificate from,\n");
+	    printf("\t\tfor use with SNI-enabled clients.\n");
+	    printf("\t\tMay be given multiple times.\n");
+	    printf("\tncertdir=DIR    [no default]\n");
+	    printf("\t\tRead all *.crt files in the given directory as if they\n");
+	    printf("\t\twere given with `ncert' options.\n");
+	    printf("\t\tMay be given multiple times.\n");
 	    printf("\tport=PORT       [443]\n");
 	    printf("\t\tThe TCP port to listen on.\n");
 	    printf("\n");
 	    printf("\tAll X.509 data files must be PEM-encoded.\n");
-	    printf("\tSee the manpage for information on specifying multiple\n\tcertificates to support SNI operation.\n");
+	    printf("\tIf any certificates were given with `ncert' options, they will be\n");
+	    printf("\tused if a client explicitly names one of them with a\n");
+	    printf("\tserver-name indication. If a client indicates no server name,\n");
+	    printf("\tor if a server-name indication does not match any given\n");
+	    printf("\tcertificate, the certificate given with the `cert' option will\n");
+	    printf("\tbe used instead.\n");
 	    exit(0);
 	} else if(!strcmp(argp[i], "cert")) {
 	    crtfile = argv[i];
