@@ -39,11 +39,23 @@
 #ifdef HAVE_GNUTLS
 
 #include <gnutls/gnutls.h>
+#include <gnutls/x509.h>
+
+struct namedcreds {
+    char **names;
+    gnutls_certificate_credentials_t creds;
+};
+
+struct ncredbuf {
+    struct namedcreds **b;
+    size_t s, d;
+};
 
 struct sslport {
     int fd;
     int sport;
     gnutls_certificate_credentials_t creds;
+    struct namedcreds **ncreds;
 };
 
 struct sslconn {
@@ -170,7 +182,7 @@ static void servessl(struct muth *muth, va_list args)
     
     int setcreds(gnutls_session_t sess)
     {
-	int i;
+	int i, o, u;
 	unsigned int ntype;
 	char nambuf[256];
 	size_t namlen;
@@ -181,6 +193,15 @@ static void servessl(struct muth *muth, va_list args)
 		break;
 	    if(ntype != GNUTLS_NAME_DNS)
 		continue;
+	    for(o = 0; pd->ncreds[o] != NULL; o++) {
+		for(u = 0; pd->ncreds[o]->names[u] != NULL; u++) {
+		    if(!strcmp(pd->ncreds[o]->names[u], nambuf)) {
+			gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->ncreds[o]->creds);
+			gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
+			return(0);
+		    }
+		}
+	    }
 	}
 	gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->creds);
 	gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
@@ -257,15 +278,88 @@ static void init(void)
     }
 }
 
+static struct namedcreds *readncreds(char *file)
+{
+    int i, fd, ret;
+    struct namedcreds *nc;
+    gnutls_x509_crt_t crt;
+    gnutls_x509_privkey_t key;
+    char cn[1024];
+    size_t cnl;
+    gnutls_datum_t d;
+    struct charbuf keybuf;
+    struct charvbuf names;
+    unsigned int type;
+    
+    bufinit(keybuf);
+    bufinit(names);
+    if((fd = open(file, O_RDONLY)) < 0) {
+	flog(LOG_ERR, "ssl: %s: %s", file, strerror(errno));
+	exit(1);
+    }
+    while(1) {
+	sizebuf(keybuf, keybuf.d + 1024);
+	ret = read(fd, keybuf.b + keybuf.d, keybuf.s - keybuf.d);
+	if(ret < 0) {
+	    flog(LOG_ERR, "ssl: reading from %s: %s", file, strerror(errno));
+	    exit(1);
+	} else if(ret == 0) {
+	    break;
+	}
+	keybuf.d += ret;
+    }
+    close(fd);
+    d.data = (unsigned char *)keybuf.b;
+    d.size = keybuf.d;
+    gnutls_x509_crt_init(&crt);
+    if((ret = gnutls_x509_crt_import(crt, &d, GNUTLS_X509_FMT_PEM)) != 0) {
+	flog(LOG_ERR, "ssl: could not load certificate from %s: %s", file, gnutls_strerror(ret));
+	exit(1);
+    }
+    cnl = sizeof(cn) - 1;
+    if((ret = gnutls_x509_crt_get_dn_by_oid(crt, GNUTLS_OID_X520_COMMON_NAME, 0, 0, cn, &cnl)) != 0) {
+	flog(LOG_ERR, "ssl: could not read common name from %s: %s", file, gnutls_strerror(ret));
+	exit(1);
+    }
+    cn[cnl] = 0;
+    bufadd(names, sstrdup(cn));
+    for(i = 0; 1; i++) {
+	cnl = sizeof(cn) - 1;
+	if(gnutls_x509_crt_get_subject_alt_name2(crt, i, cn, &cnl, &type, NULL) < 0)
+	    break;
+	cn[cnl] = 0;
+	if(type == GNUTLS_SAN_DNSNAME)
+	    bufadd(names, sstrdup(cn));
+    }
+    gnutls_x509_privkey_init(&key);
+    if((ret = gnutls_x509_privkey_import(key, &d, GNUTLS_X509_FMT_PEM)) != 0) {
+	flog(LOG_ERR, "ssl: could not load key from %s: %s", file, gnutls_strerror(ret));
+	exit(1);
+    }
+    buffree(keybuf);
+    bufadd(names, NULL);
+    omalloc(nc);
+    nc->names = names.b;
+    gnutls_certificate_allocate_credentials(&nc->creds);
+    if((ret = gnutls_certificate_set_x509_key(nc->creds, &crt, 1, key)) != 0) {
+	flog(LOG_ERR, "ssl: could not use certificate from %s: %s", file, gnutls_strerror(ret));
+	exit(1);
+    }
+    gnutls_certificate_set_dh_params(nc->creds, dhparams);
+    return(nc);
+}
+
 void handlegnussl(int argc, char **argp, char **argv)
 {
     int i, ret, port, fd;
     gnutls_certificate_credentials_t creds;
+    struct ncredbuf ncreds;
     struct sslport *pd;
     char *crtfile, *keyfile;
     
     init();
     port = 443;
+    bufinit(ncreds);
     gnutls_certificate_allocate_credentials(&creds);
     keyfile = crtfile = NULL;
     for(i = 0; i < argc; i++) {
@@ -285,6 +379,7 @@ void handlegnussl(int argc, char **argp, char **argv)
 	    printf("\t\tThe TCP port to listen on.\n");
 	    printf("\n");
 	    printf("\tAll X.509 data files must be PEM-encoded.\n");
+	    printf("\tSee the manpage for information on specifying multiple\n\tcertificates to support SNI operation.\n");
 	    exit(0);
 	} else if(!strcmp(argp[i], "cert")) {
 	    crtfile = argv[i];
@@ -295,13 +390,27 @@ void handlegnussl(int argc, char **argp, char **argv)
 		flog(LOG_ERR, "ssl: could not load trust file `%s': %s", argv[i], gnutls_strerror(ret));
 		exit(1);
 	    }
+	    for(i = 0; i < ncreds.d; i++) {
+		if((ret = gnutls_certificate_set_x509_trust_file(ncreds.b[i]->creds, argv[i], GNUTLS_X509_FMT_PEM)) != 0) {
+		    flog(LOG_ERR, "ssl: could not load trust file `%s': %s", argv[i], gnutls_strerror(ret));
+		    exit(1);
+		}
+	    }
 	} else if(!strcmp(argp[i], "crl")) {
 	    if((ret = gnutls_certificate_set_x509_crl_file(creds, argv[i], GNUTLS_X509_FMT_PEM)) != 0) {
 		flog(LOG_ERR, "ssl: could not load CRL file `%s': %s", argv[i], gnutls_strerror(ret));
 		exit(1);
 	    }
+	    for(i = 0; i < ncreds.d; i++) {
+		if((ret = gnutls_certificate_set_x509_crl_file(ncreds.b[i]->creds, argv[i], GNUTLS_X509_FMT_PEM)) != 0) {
+		    flog(LOG_ERR, "ssl: could not load CRL file `%s': %s", argv[i], gnutls_strerror(ret));
+		    exit(1);
+		}
+	    }
 	} else if(!strcmp(argp[i], "port")) {
 	    port = atoi(argv[i]);
+	} else if(!strcmp(argp[i], "ncert")) {
+	    bufadd(ncreds, readncreds(argv[i]));
 	} else {
 	    flog(LOG_ERR, "unknown parameter `%s' to ssl handler", argp[i]);
 	    exit(1);
@@ -322,10 +431,12 @@ void handlegnussl(int argc, char **argp, char **argv)
 	flog(LOG_ERR, "could not listen on IPv6 port (port %i): %s", port, strerror(errno));
 	exit(1);
     }
+    bufadd(ncreds, NULL);
     omalloc(pd);
     pd->fd = fd;
     pd->sport = port;
     pd->creds = creds;
+    pd->ncreds = ncreds.b;
     mustart(listenloop, pd);
     if((fd = listensock6(port)) < 0) {
 	if(errno != EADDRINUSE) {
