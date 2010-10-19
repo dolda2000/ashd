@@ -1,3 +1,10 @@
+Version 0.3:
+
+	* Added SNI support.
+	* Added a filter program for BASIC authentication.
+	* Improved log message handling.
+	* Improved HTTP protocol compliance.
+	
 Version 0.2:
 
 	* Added an access logger program.
