@@ -32,7 +32,10 @@ static PyObject *p_recvfd(PyObject *self, PyObject *args)
     fd = 0;
     if(!PyArg_ParseTuple(args, "|i", &fd))
 	return(NULL);
-    if((ret = recvfd(fd, &data, &dlen)) < 0) {
+    Py_BEGIN_ALLOW_THREADS;
+    ret = recvfd(fd, &data, &dlen);
+    Py_END_ALLOW_THREADS;
+    if(ret < 0) {
 	if(errno == 0)
 	    return(Py_BuildValue("OO", Py_None, Py_None));
 	PyErr_SetFromErrno(PyExc_OSError);
@@ -45,7 +48,7 @@ static PyObject *p_recvfd(PyObject *self, PyObject *args)
 
 static PyObject *p_sendfd(PyObject *self, PyObject *args)
 {
-    int sock, fd;
+    int sock, fd, ret;
     PyObject *data;
     
     if(!PyArg_ParseTuple(args, "iiO", &sock, &fd, &data))
@@ -54,7 +57,10 @@ static PyObject *p_sendfd(PyObject *self, PyObject *args)
 	PyErr_SetString(PyExc_TypeError, "datagram must be a string");
 	return(NULL);
     }
-    if(sendfd(sock, fd, PyString_AsString(data), PyString_Size(data)) < 0) {
+    Py_BEGIN_ALLOW_THREADS;
+    ret = sendfd(sock, fd, PyString_AsString(data), PyString_Size(data));
+    Py_END_ALLOW_THREADS;
+    if(ret < 0) {
 	PyErr_SetFromErrno(PyExc_OSError);
 	return(NULL);
     }
