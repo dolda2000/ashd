@@ -1,0 +1,128 @@
+#!/usr/bin/python
+
+import sys, os, getopt, threading
+import ashd.proto
+
+def usage(out):
+    out.write("usage: ashd-wsgi [-hA] [-p MODPATH] HANDLER-MODULE [ARGS...]\n")
+
+modwsgi_compat = False
+opts, args = getopt.getopt(sys.argv[1:], "+hAp:")
+for o, a in opts:
+    if o == "-h":
+        usage(sys.stdout)
+        sys.exit(0)
+    elif o == "-p":
+        sys.path.insert(0, a)
+    elif o == "-A":
+        modwsgi_compat = True
+if len(args) < 1:
+    usage(sys.stderr)
+    sys.exit(1)
+
+try:
+    handlermod = __import__(args[0], fromlist = ["dummy"])
+except ImportError, exc:
+    sys.stderr.write("ashd-wsgi: handler %s not found: %s\n" % (args[0], exc.message))
+    sys.exit(1)
+if not modwsgi_compat:
+    if not hasattr(handlermod, "wmain"):
+        sys.stderr.write("ashd-wsgi: handler %s has no `wmain' function\n" % args[0])
+        sys.exit(1)
+    handler = handlermod.wmain(args[1:])
+else:
+    if not hasattr(handlermod, "application"):
+        sys.stderr.write("ashd-wsgi: handler %s has no `application' object\n" % args[0])
+        sys.exit(1)
+    handler = handlermod.application
+
+def dowsgi(req):
+    env = {}
+    env["wsgi.version"] = 1, 0
+    for key, val in req.headers:
+        env["HTTP_" + key.upper().replace("-", "_")] = val
+    env["SERVER_SOFTWARE"] = "ashd-wsgi/1"
+    env["GATEWAY_INTERFACE"] = "CGI/1.1"
+    env["SERVER_PROTOCOL"] = req.ver
+    env["REQUEST_METHOD"] = req.method
+    env["REQUEST_URI"] = req.url
+    env["PATH_INFO"] = req.rest
+    name = req.url
+    p = name.find('?')
+    if p >= 0:
+        name = name[:p]
+        env["QUERY_STRING"] = name[p + 1:]
+    else:
+        env["QUERY_STRING"] = ""
+    if name[-len(req.rest):] == req.rest:
+        name = name[:-len(req.rest)]
+    env["SCRIPT_NAME"] = name
+    if "Host" in req: env["SERVER_NAME"] = req["Host"]
+    if "X-Ash-Server-Port" in req: env["SERVER_PORT"] = req["X-Ash-Server-Port"]
+    if "X-Ash-Protocol" in req and req["X-Ash-Protocol"] == "https": env["HTTPS"] = "on"
+    if "X-Ash-Address" in req: env["REMOTE_ADDR"] = req["X-Ash-Address"]
+    if "Content-Type" in req: env["CONTENT_TYPE"] = req["Content-Type"]
+    if "Content-Length" in req: env["CONTENT_LENGTH"] = req["Content-Length"]
+    if "X-Ash-File" in req: env["SCRIPT_FILENAME"] = req["X-Ash-File"]
+    if "X-Ash-Protocol" in req: env["wsgi.url_scheme"] = req["X-Ash-Protocol"]
+    env["wsgi.input"] = req.sk
+    env["wsgi.errors"] = sys.stderr
+    env["wsgi.multithread"] = True
+    env["wsgi.multiprocess"] = False
+    env["wsgi.run_once"] = False
+
+    resp = []
+    respsent = []
+
+    def write(data):
+        if not data:
+            return
+        if not respsent:
+            if not resp:
+                raise Exception, "Trying to write data before starting response."
+            status, headers = resp
+            respsent[:] = [True]
+            req.sk.write("HTTP/1.1 %s\n" % status)
+            for nm, val in headers:
+                req.sk.write("%s: %s\n" % (nm, val))
+            req.sk.write("\n")
+        req.sk.write(data)
+        req.sk.flush()
+
+    def startreq(status, headers, exc_info = None):
+        if resp:
+            if exc_info:                # Interesting, this...
+                try:
+                    if respsent:
+                        raise exc_info[0], exc_info[1], exc_info[2]
+                finally:
+                    exc_info = None     # CPython GC bug?
+            else:
+                raise Exception, "Can only start responding once."
+        resp[:] = status, headers
+        return write
+
+    respiter = handler(env, startreq)
+    try:
+        for data in respiter:
+            write(data)
+        write("")
+    finally:
+        if hasattr(respiter, "close"):
+            respiter.close()
+
+class reqthread(threading.Thread):
+    def __init__(self, req):
+        super(reqthread, self).__init__(name = "Request handler")
+        self.req = req.dup()
+    
+    def run(self):
+        try:
+            dowsgi(self.req)
+        finally:
+            self.req.close()
+    
+def handle(req):
+    reqthread(req).start()
+
+ashd.proto.serveloop(handle)
