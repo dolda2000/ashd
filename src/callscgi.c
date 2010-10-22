@@ -312,7 +312,7 @@ retry:
 	isanon = 0;
 	return(fd);
     } else {
-	flog(LOG_ERR, "servescgi: cannot use an anonymous socket without a program to start");
+	flog(LOG_ERR, "callscgi: cannot use an anonymous socket without a program to start");
 	exit(1);
     }
 }
@@ -589,7 +589,7 @@ static void sigexit(int sig)
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: servescgi [-h] [-N RETRIES] [-i ID] [-u UNIX-PATH] [-t [HOST:]TCP-PORT] [PROGRAM [ARGS...]]\n");
+    fprintf(out, "usage: callscgi [-h] [-N RETRIES] [-i ID] [-u UNIX-PATH] [-t [HOST:]TCP-PORT] [PROGRAM [ARGS...]]\n");
 }
 
 int main(int argc, char **argv)
@@ -620,7 +620,7 @@ int main(int argc, char **argv)
     }
     progspec = argv + optind;
     if(((sockid != NULL) + (unspec != NULL) + (inspec != NULL)) > 1) {
-	flog(LOG_ERR, "servescgi: at most one of -i, -u or -t may be given");
+	flog(LOG_ERR, "callscgi: at most one of -i, -u or -t may be given");
 	exit(1);
     }
     signal(SIGCHLD, SIG_IGN);
