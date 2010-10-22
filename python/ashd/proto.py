@@ -55,7 +55,6 @@ def recvreq(sock = 0):
     if fd is None:
         return None
     try:
-        print repr(data)
         parts = data.split('\0')[:-1]
         if len(parts) < 5:
             raise protoerr("Truncated request")
