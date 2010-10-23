@@ -332,7 +332,7 @@ int childhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(voi
 	if(ch->fd < 0)
 	    ch->fd = stdmkchild(ch->argv, chinit, idata);
 	if(sendreq(ch->fd, req, fd)) {
-	    if(errno == EPIPE) {
+	    if((errno == EPIPE) || (errno == ECONNRESET)) {
 		/* Assume that the child has crashed and restart it. */
 		close(ch->fd);
 		ch->fd = stdmkchild(ch->argv, chinit, idata);

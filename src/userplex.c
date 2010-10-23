@@ -145,7 +145,7 @@ static void serve2(struct user *usr, struct hthead *req, int fd)
     if(usr->fd < 0)
 	usr->fd = forkchild(usr->name);
     if(sendreq(usr->fd, req, fd)) {
-	if(errno == EPIPE) {
+	if((errno == EPIPE) || (errno == ECONNRESET)) {
 	    /* Assume that the child has crashed and restart it. */
 	    close(usr->fd);
 	    usr->fd = forkchild(usr->name);
