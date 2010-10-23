@@ -54,7 +54,7 @@ def chain(path, env, startreq):
                 entry = mod.entry
             else:
                 if hasattr(mod.mod, "wmain"):
-                    entry = mod.mod.wmain([])
+                    entry = mod.mod.wmain()
                 elif hasattr(mod.mod, "application"):
                     entry = mod.mod.application
                 mod.entry = entry
@@ -78,5 +78,5 @@ def application(env, startreq):
         return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
     return(exts[ext](path, env, startreq))
 
-def wmain(argv):
+def wmain(*argv):
     return application

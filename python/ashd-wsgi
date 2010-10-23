@@ -29,7 +29,7 @@ if not modwsgi_compat:
     if not hasattr(handlermod, "wmain"):
         sys.stderr.write("ashd-wsgi: handler %s has no `wmain' function\n" % args[0])
         sys.exit(1)
-    handler = handlermod.wmain(args[1:])
+    handler = handlermod.wmain(*args[1:])
 else:
     if not hasattr(handlermod, "application"):
         sys.stderr.write("ashd-wsgi: handler %s has no `application' object\n" % args[0])
