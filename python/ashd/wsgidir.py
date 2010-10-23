@@ -65,6 +65,13 @@ def chain(path, env, startreq):
     return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "Invalid WSGI handler.")
 exts["wsgi"] = chain
 
+def addext(ext, handler):
+    p = handler.rindex('.')
+    mname = handler[:p]
+    hname = handler[p + 1:]
+    mod = __import__(mname, fromlist = ["dummy"])
+    exts[ext] = getattr(mod, hname)
+
 def application(env, startreq):
     if not "SCRIPT_FILENAME" in env:
         return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
@@ -79,4 +86,8 @@ def application(env, startreq):
     return(exts[ext](path, env, startreq))
 
 def wmain(*argv):
+    for arg in argv:
+        if arg[0] == '.':
+            p = arg.index('=')
+            addext(arg[1:p], arg[p + 1:])
     return application
