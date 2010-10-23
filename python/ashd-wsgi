@@ -50,8 +50,8 @@ def dowsgi(req):
     name = req.url
     p = name.find('?')
     if p >= 0:
-        name = name[:p]
         env["QUERY_STRING"] = name[p + 1:]
+        name = name[:p]
     else:
         env["QUERY_STRING"] = ""
     if name[-len(req.rest):] == req.rest:
