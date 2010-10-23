@@ -36,6 +36,12 @@ else:
         sys.exit(1)
     handler = handlermod.application
 
+cwd = os.getcwd()
+def absolutify(path):
+    if path[0] != '/':
+        return os.path.join(cwd, path)
+    return path
+
 def dowsgi(req):
     env = {}
     env["wsgi.version"] = 1, 0
@@ -63,7 +69,7 @@ def dowsgi(req):
     if "X-Ash-Address" in req: env["REMOTE_ADDR"] = req["X-Ash-Address"]
     if "Content-Type" in req: env["CONTENT_TYPE"] = req["Content-Type"]
     if "Content-Length" in req: env["CONTENT_LENGTH"] = req["Content-Length"]
-    if "X-Ash-File" in req: env["SCRIPT_FILENAME"] = req["X-Ash-File"]
+    if "X-Ash-File" in req: env["SCRIPT_FILENAME"] = absolutify(req["X-Ash-File"])
     if "X-Ash-Protocol" in req: env["wsgi.url_scheme"] = req["X-Ash-Protocol"]
     env["wsgi.input"] = req.sk
     env["wsgi.errors"] = sys.stderr
