@@ -74,9 +74,7 @@ def dowsgi(req):
     resp = []
     respsent = []
 
-    def write(data):
-        if not data:
-            return
+    def flushreq():
         if not respsent:
             if not resp:
                 raise Exception, "Trying to write data before starting response."
@@ -86,6 +84,11 @@ def dowsgi(req):
             for nm, val in headers:
                 req.sk.write("%s: %s\n" % (nm, val))
             req.sk.write("\n")
+
+    def write(data):
+        if not data:
+            return
+        flushreq()
         req.sk.write(data)
         req.sk.flush()
 
@@ -106,7 +109,8 @@ def dowsgi(req):
     try:
         for data in respiter:
             write(data)
-        write("")
+        if resp:
+            flushreq()
     finally:
         if hasattr(respiter, "close"):
             respiter.close()

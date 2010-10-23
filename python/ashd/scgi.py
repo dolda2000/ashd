@@ -74,9 +74,7 @@ def wrapwsgi(handler):
         resp = []
         respsent = []
 
-        def write(data):
-            if not data:
-                return
+        def flushreq():
             if not respsent:
                 if not resp:
                     raise Exception, "Trying to write data before starting response."
@@ -86,6 +84,11 @@ def wrapwsgi(handler):
                 for nm, val in headers:
                     sk.write("%s: %s\n" % (nm, val))
                 sk.write("\n")
+
+        def write(data):
+            if not data:
+                return
+            flushreq()
             sk.write(data)
             sk.flush()
 
@@ -106,7 +109,8 @@ def wrapwsgi(handler):
         try:
             for data in respiter:
                 write(data)
-            write("")
+            if resp:
+                flushresp()
         finally:
             if hasattr(respiter, "close"):
                 respiter.close()
