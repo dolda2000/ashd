@@ -82,13 +82,3 @@ def sendreq(sock, req):
         data += val + '\0'
     data += '\0'
     htlib.sendfd(sock, req.sk.fileno(), data)
-
-def serveloop(handler, sock = 0):
-    while True:
-        req = recvreq(sock)
-        if req is None:
-            break
-        try:
-            handler(req)
-        finally:
-            req.close()

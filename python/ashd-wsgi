@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import sys, os, getopt, threading
-import ashd.proto
+import ashd.proto, ashd.util
 
 def usage(out):
     out.write("usage: ashd-wsgi [-hA] [-p MODPATH] HANDLER-MODULE [ARGS...]\n")
@@ -135,4 +135,4 @@ class reqthread(threading.Thread):
 def handle(req):
     reqthread(req).start()
 
-ashd.proto.serveloop(handle)
+ashd.util.serveloop(handle)
