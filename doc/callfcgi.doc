@@ -1,0 +1,32 @@
+callscgi(1)
+===========
+
+NAME
+----
+callfcgi - FastCGI request handler for ashd(7)
+
+SYNOPSIS
+--------
+*callfcgi* [*-h*] [*-N* 'RETRIES'] [*-i* 'ID'] [*-u* 'UNIXPATH'] [*-t* \[HOST:]'TCPPORT'] ['PROGRAM' ['ARGS'...]]
+
+DESCRIPTION
+-----------
+
+The *callfcgi* handler uses FastCGI to call an external handler for
+requests. *callfcgi* is a persistent handler, as defined in *ashd*(7).
+
+*callfcgi* works identically to the *callscgi*(1) program in all
+respects except using the FastCGI protocol rather then the SCGI
+protocol, so see the manpage for *callscgi* for all the details.
+
+In relation to the FastCGI protocol, it should be noted that
+*callfcgi* does not multiplex several requests over one opened FastCGI
+connection, but rather opens one connection for each request.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*callscgi*(1), *ashd*(7)
