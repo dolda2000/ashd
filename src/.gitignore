@@ -9,3 +9,4 @@
 /accesslog
 /htextauth
 /callfcgi
+/multifscgi
