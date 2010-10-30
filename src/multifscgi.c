@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <time.h>
+#include <errno.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -37,6 +38,7 @@ static volatile int done, chdone;
 static void runchild(void)
 {
     execvp(chspec[0], chspec);
+    fprintf(stderr, "%s: %s", chspec[0], strerror(errno));
     exit(127);
 }
 
@@ -133,7 +135,7 @@ static void term(int sig)
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: multifscgi NUM PROGRAM [ARGS...]\n");
+    fprintf(out, "usage: multifscgi [-h] NUM PROGRAM [ARGS...]\n");
 }
 
 int main(int argc, char **argv)
