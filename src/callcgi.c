@@ -127,6 +127,8 @@ static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *u
 	    putenv("HTTPS=on");
 	if(getenv("REQ_X_ASH_ADDRESS"))
 	    putenv(sprintf2("REMOTE_ADDR=%s", getenv("REQ_X_ASH_ADDRESS")));
+	if(getenv("REQ_X_ASH_REMOTE_USER"))
+	    putenv(sprintf2("REMOTE_USER=%s", getenv("REQ_X_ASH_REMOTE_USER")));
 	if(getenv("REQ_CONTENT_TYPE"))
 	    putenv(sprintf2("CONTENT_TYPE=%s", getenv("REQ_CONTENT_TYPE")));
 	if(getenv("REQ_CONTENT_LENGTH"))
