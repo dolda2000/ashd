@@ -611,12 +611,12 @@ static int recvrec(FILE *in, int *type, int *rid, char **data, size_t *dlen)
 	return(-1);
     *data = smalloc(max(*dlen, 1));
     if(fread(*data, 1, *dlen, in) != *dlen) {
-	free(data);
+	free(*data);
 	return(-1);
     }
     for(; pl > 0; pl--) {
 	if(fgetc(in) == EOF) {
-	    free(data);
+	    free(*data);
 	    return(-1);
 	}
     }
