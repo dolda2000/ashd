@@ -21,7 +21,9 @@ protocol, so see the manpage for *callscgi* for all the details.
 
 In relation to the FastCGI protocol, it should be noted that
 *callfcgi* does not multiplex several requests over one opened FastCGI
-connection, but rather opens one connection for each request.
+connection, but rather opens one connection for each request. For
+running multiple instances of the FastCGI server program, please see
+the *multifscgi*(1) program.
 
 AUTHOR
 ------
@@ -29,4 +31,4 @@ Fredrik Tolf <fredrik@dolda2000.com>
 
 SEE ALSO
 --------
-*callscgi*(1), *ashd*(7)
+*callscgi*(1), *multifscgi*(1), *ashd*(7)

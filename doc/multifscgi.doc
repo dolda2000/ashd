@@ -1,0 +1,52 @@
+multifscgi(1)
+=============
+
+NAME
+----
+multifscgi - Manage multiple instances of a FastCGI or SCGI server
+
+SYNOPSIS
+--------
+*multifscgi* [*-h*] 'NUM' 'PROGRAM' ['ARGS'...]
+
+DESCRIPTION
+-----------
+
+*multifscgi* is a simple program intended to manage multiple running
+instances of a FastCGI or SCGI server. It is distributed as part of
+*ashd*(7).
+
+The utility of multifscgi lies in the fact some FastCGI or SCGI server
+programs, such as PHP, process at most one request at a time. As such,
+multiple such server processes must run simultaneously in order to
+process requests concurrently.
+
+The *multifscgi* program works simply by forking 'NUM' instances of
+whatever program it is given on its command line. As long as the SCGI
+or FastCGI listen socket is passed on standard input, it will be
+naturally inherited by those child processes, and whichever one of
+them is currently idle will be able to accept a request. If any of the
+children terminate, a new one will be started in its place.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+SIGNALS
+-------
+
+SIGTERM, SIGINT::
+
+	Terminate cleanly be killing off any remaining child
+	processes.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*callscgi*(1), *callfcgi*(1), *ashd*(7)
