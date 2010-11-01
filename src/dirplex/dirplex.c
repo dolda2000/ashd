@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <time.h>
+#include <sys/wait.h>
 #include <sys/signal.h>
 
 #ifdef HAVE_CONFIG_H
@@ -296,6 +297,15 @@ static void serve(struct hthead *req, int fd)
 	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 }
 
+static void chldhandler(int sig)
+{
+    pid_t pid;
+    
+    do {
+	pid = waitpid(-1, NULL, WNOHANG);
+    } while(pid > 0);
+}
+
 static void sighandler(int sig)
 {
 }
@@ -359,7 +369,7 @@ int main(int argc, char **argv)
 	flog(LOG_ERR, "could not change directory to %s: %s", argv[optind], strerror(errno));
 	exit(1);
     }
-    signal(SIGCHLD, SIG_IGN);
+    signal(SIGCHLD, chldhandler);
     signal(SIGPIPE, sighandler);
     while(1) {
 	if((fd = recvreq(0, &req)) < 0) {

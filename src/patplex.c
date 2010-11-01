@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <regex.h>
+#include <sys/wait.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -464,6 +465,15 @@ static void reloadconf(char *nm)
     lconfig = cf;
 }
 
+static void chldhandler(int sig)
+{
+    pid_t pid;
+    
+    do {
+	pid = waitpid(-1, NULL, WNOHANG);
+    } while(pid > 0);
+}
+
 static void sighandler(int sig)
 {
     if(sig == SIGHUP)
@@ -511,7 +521,7 @@ int main(int argc, char **argv)
 	flog(LOG_ERR, "could not read `%s'", argv[optind]);
 	exit(1);
     }
-    signal(SIGCHLD, SIG_IGN);
+    signal(SIGCHLD, chldhandler);
     signal(SIGHUP, sighandler);
     signal(SIGPIPE, sighandler);
     while(1) {
