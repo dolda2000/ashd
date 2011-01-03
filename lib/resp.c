@@ -116,6 +116,7 @@ void simpleerror(int fd, int code, char *msg, char *fmt, ...)
     fwrite(buf.b, 1, buf.d, out);
     fclose(out);
     buffree(buf);
+    free(tmp);
 }
 
 void stdredir(struct hthead *req, int fd, int code, char *dst)
