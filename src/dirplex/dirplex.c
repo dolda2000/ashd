@@ -280,7 +280,8 @@ static int checkpath(struct hthead *req, int fd, char *path, char *rest)
     if(!*el) {
 	replrest(req, rest);
 	handledir(req, fd, path);
-	return(1);
+	rv = 1;
+	goto out;
     }
     rv = checkentry(req, fd, path, rest, el);
     
