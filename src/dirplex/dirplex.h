@@ -5,6 +5,7 @@
 #define PAT_PATHNAME 1
 #define PAT_ALL 2
 #define PAT_DEFAULT 3
+#define PAT_LOCAL 4
 
 #define PT_FILE 0
 #define PT_DIR 1

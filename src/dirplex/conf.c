@@ -164,6 +164,8 @@ static struct pattern *parsepattern(struct cfstate *s)
 	    newrule(pat)->type = PAT_ALL;
 	} else if(!strcmp(s->argv[0], "default")) {
 	    newrule(pat)->type = PAT_DEFAULT;
+	} else if(!strcmp(s->argv[0], "local")) {
+	    newrule(pat)->type = PAT_LOCAL;
 	} else if(!strcmp(s->argv[0], "handler")) {
 	    if(s->argc < 2) {
 		flog(LOG_WARNING, "%s:%i: missing child name for `handler' directive", s->file, s->lno);
@@ -363,6 +365,7 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
     struct config **cfs;
     struct pattern *pat;
     struct rule *rule;
+    size_t pl;
     
     if((bn = strrchr(file, '/')) != NULL)
 	bn++;
@@ -393,6 +396,12 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
 		} else if(rule->type == PAT_ALL) {
 		} else if(rule->type == PAT_DEFAULT) {
 		    if(!trydefault)
+			break;
+		} else if(rule->type == PAT_LOCAL) {
+		    if(cfs[c]->path == NULL)
+			break;
+		    pl = strlen(cfs[c]->path);
+		    if(!((strlen(file) > pl) && !strncmp(file, cfs[c]->path, pl) && (file[pl] == '/') && !strchr(file + pl + 1, '/')))
 			break;
 		}
 	    }
