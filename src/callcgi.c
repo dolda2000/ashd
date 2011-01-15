@@ -30,6 +30,7 @@
 #endif
 #include <utils.h>
 #include <log.h>
+#include <req.h>
 
 static char **environ;
 
@@ -88,6 +89,7 @@ static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *u
     char *qp, **env, *name;
     int inp[2], outp[2];
     pid_t pid;
+    char *unqr;
 
     pipe(inp);
     pipe(outp);
@@ -109,7 +111,8 @@ static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *u
 	if(getenv("HTTP_VERSION"))
 	    putenv(sprintf2("SERVER_PROTOCOL=%s", getenv("HTTP_VERSION")));
 	putenv(sprintf2("REQUEST_METHOD=%s", method));
-	putenv(sprintf2("PATH_INFO=%s", rest));
+	unqr = unquoteurl(rest);
+	putenv(sprintf2("PATH_INFO=%s", unqr?unqr:rest));
 	name = url;
 	/* XXX: This is an ugly hack (I think), but though I can think
 	 * of several alternatives, none seem to be better. */
@@ -164,7 +167,7 @@ static void trim(struct charbuf *buf)
     for(p = buf->b + buf->d - 1; (p > buf->b) && isspace(*p); p--, buf->d--);
 }
 
-static char **parseheaders(FILE *s)
+static char **parsecgiheaders(FILE *s)
 {
     int c, state;
     struct charvbuf hbuf;
@@ -371,7 +374,7 @@ int main(int argc, char **argv, char **envp)
     passdata(stdin, in);	/* Ignore errors, perhaps? */
     fclose(in);
     out = fdopen(outfd, "r");
-    if((headers = parseheaders(out)) == NULL) {
+    if((headers = parsecgiheaders(out)) == NULL) {
 	flog(LOG_WARNING, "CGI handler returned invalid headers");
 	exit(1);
     }

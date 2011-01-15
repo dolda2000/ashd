@@ -42,6 +42,39 @@ def absolutify(path):
         return os.path.join(cwd, path)
     return path
 
+def unquoteurl(url):
+    buf = ""
+    i = 0
+    while i < len(url):
+        c = url[i]
+        i += 1
+        if c == '%':
+            if len(url) > i + 2:
+                c = 0
+                if '0' <= url[i] <= '9':
+                    c |= (ord(url[i]) - ord('0')) << 4
+                elif 'a' <= url[i] <= 'f':
+                    c |= (ord(url[i]) - ord('a')) << 4
+                elif 'A' <= url[i] <= 'F':
+                    c |= (ord(url[i]) - ord('A')) << 4
+                else:
+                    raise ValueError("Illegal URL escape character")
+                if '0' <= url[i + 1] <= '9':
+                    c |= ord(url[i + 1]) - ord('0')
+                elif 'a' <= url[i + 1] <= 'f':
+                    c |= ord(url[i + 1]) - ord('a')
+                elif 'A' <= url[i + 1] <= 'F':
+                    c |= ord(url[i + 1]) - ord('A')
+                else:
+                    raise ValueError("Illegal URL escape character")
+                buf += chr(c)
+                i += 2
+            else:
+                raise ValueError("Incomplete URL escape character")
+        else:
+            buf += c
+    return buf
+
 def dowsgi(req):
     env = {}
     env["wsgi.version"] = 1, 0
@@ -52,7 +85,10 @@ def dowsgi(req):
     env["SERVER_PROTOCOL"] = req.ver
     env["REQUEST_METHOD"] = req.method
     env["REQUEST_URI"] = req.url
-    env["PATH_INFO"] = req.rest
+    try:
+        env["PATH_INFO"] = unquoteurl(req.rest)
+    except:
+        env["PATH_INFO"] = req.rest
     name = req.url
     p = name.find('?')
     if p >= 0:

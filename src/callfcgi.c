@@ -441,14 +441,19 @@ static char *absolutify(char *file)
 static void mkcgienv(struct hthead *req, struct charbuf *dst)
 {
     int i;
-    char *url, *qp, *h, *p;
+    char *url, *unq, *qp, *h, *p;
     
     bufaddenv(dst, "SERVER_SOFTWARE", "ashd/%s", VERSION);
     bufaddenv(dst, "GATEWAY_INTERFACE", "CGI/1.1");
     bufaddenv(dst, "SERVER_PROTOCOL", "%s", req->ver);
     bufaddenv(dst, "REQUEST_METHOD", "%s", req->method);
     bufaddenv(dst, "REQUEST_URI", "%s", req->url);
-    bufaddenv(dst, "PATH_INFO", req->rest);
+    if((unq = unquoteurl(req->rest)) != NULL) {
+	bufaddenv(dst, "PATH_INFO", unq);
+	free(unq);
+    } else {
+	bufaddenv(dst, "PATH_INFO", req->rest);
+    }
     url = sstrdup(req->url);
     if((qp = strchr(url, '?')) != NULL)
 	*(qp++) = 0;
