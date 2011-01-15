@@ -221,9 +221,9 @@ The following rules are recognized:
 
 *local*::
 
-	Valid only in `.htrc` files, *local* matches if an only if the
-	file under consideration resides in the same directory as the
-	containing `.htrc` file.
+	Valid only in `.htrc` files, *local* matches if and only if
+	the file under consideration resides in the same directory as
+	the containing `.htrc` file.
 
 In addition to the rules, a *match* stanza must contain exactly one
 follow-up line specifying the action to take if it matches. The
