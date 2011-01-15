@@ -1,0 +1,59 @@
+#!/usr/bin/python
+
+import sys, os, getopt
+
+def destructurl(url):
+    if "://" in url:
+        p = url.index("://")
+        scheme, url = url[:p], url[p + 3]
+        if "/" in url:
+            p = url.index("/")
+            host, url = url[:p], url[p + 1:]
+        else:
+            host, url = url, ""
+    else:
+        scheme = None
+        host = None
+    return scheme, host, url
+
+def usage(out):
+    out.write("usage: htredir [-hp] TARGET METHOD URL REST\n")
+
+status = "302 Found"
+opts, args = getopt.getopt(sys.argv[1:], "hp")
+for o, a in opts:
+    if o == "-h":
+        usage(sys.stdout)
+        sys.exit(0)
+    elif o == "-p":
+        status = "301 Moved Permanently"
+if len(args) != 4:
+    usage(sys.stderr)
+    sys.exit(1)
+target, method, url, rest = args
+scheme = os.getenv("HTTP_X_ASH_PROTOCOL")
+host = os.getenv("HTTP_HOST")
+me = url
+if me[-len(rest):] == rest:
+    me = me[:-len(rest)]
+tscheme, thost, target = destructurl(target)
+if tscheme: scheme = tscheme
+if thost: host = thost
+if len(target) > 0 and target[0] == "/":
+    pass
+else:
+    if "/" in me:
+        p = me.rindex("/")
+        target = me[:p + 1] + target
+if len(target) > 0 and target[0] == "/":
+    target = target[1:]
+if scheme and host:
+    target = "%s://%s/%s" % (scheme, host, target)
+else:
+    # Illegal, but the only option (the premises are illegal anyway)
+    pass
+
+sys.stdout.write("HTTP/1.1 %s\n" % status)
+sys.stdout.write("Location: %s\n" % target)
+sys.stdout.write("Content-Length: 0\n")
+sys.stdout.write("\n")
