@@ -31,8 +31,8 @@ if len(args) != 4:
     usage(sys.stderr)
     sys.exit(1)
 target, method, url, rest = args
-scheme = os.getenv("HTTP_X_ASH_PROTOCOL")
-host = os.getenv("HTTP_HOST")
+scheme = os.getenv("REQ_X_ASH_PROTOCOL")
+host = os.getenv("REQ_HOST")
 me = url
 if me[-len(rest):] == rest:
     me = me[:-len(rest)]
