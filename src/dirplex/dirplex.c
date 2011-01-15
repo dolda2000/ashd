@@ -185,7 +185,7 @@ static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *
     char *newpath;
     int rv;
     
-    if(!el == '.') {
+    if(*el == '.') {
 	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
 	return(1);
     }
