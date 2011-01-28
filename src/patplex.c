@@ -446,21 +446,12 @@ static void serve(struct hthead *req, int fd)
 static void reloadconf(char *nm)
 {
     struct config *cf;
-    struct child *ch1, *ch2;
     
     if((cf = readconfig(nm)) == NULL) {
 	flog(LOG_WARNING, "could not reload configuration file `%s'", nm);
 	return;
     }
-    for(ch1 = cf->children; ch1 != NULL; ch1 = ch1->next) {
-	for(ch2 = lconfig->children; ch2 != NULL; ch2 = ch2->next) {
-	    if(!strcmp(ch1->name, ch2->name)) {
-		ch1->fd = ch2->fd;
-		ch2->fd = -1;
-		break;
-	    }
-	}
-    }
+    mergechildren(cf->children, lconfig->children);
     freeconfig(lconfig);
     lconfig = cf;
 }

@@ -37,7 +37,16 @@
 #define CH_SOCKET 0
 #define CH_FORK 1
 
+struct stdchild {
+    int type;
+    char **argv;
+    int fd;
+};
+
 static int parsefile(struct cfstate *s, FILE *in);
+static void stdmerge(struct child *old, struct child *new);
+static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata);
+static void stddestroy(struct child *ch);
 
 static int doinclude(struct cfstate *s, char *spec)
 {
@@ -242,26 +251,38 @@ char *findstdconf(char *name)
     return(NULL);
 }
 
-static struct child *newchild(char *name, int type)
+struct child *newchild(char *name, struct chandler *iface, void *pdata)
 {
     struct child *ch;
     
     omalloc(ch);
     ch->name = sstrdup(name);
-    ch->type = type;
-    ch->fd = -1;
+    ch->iface = iface;
+    ch->pdata = pdata;
     return(ch);
 }
 
 void freechild(struct child *ch)
 {
-    if(ch->fd != -1)
-	close(ch->fd);
+    if(ch->iface->destroy != NULL)
+	ch->iface->destroy(ch);
     if(ch->name != NULL)
 	free(ch->name);
-    if(ch->argv != NULL)
-	freeca(ch->argv);
     free(ch);
+}
+
+void mergechildren(struct child *dst, struct child *src)
+{
+    struct child *ch1, *ch2;
+    
+    for(ch1 = dst; ch1 != NULL; ch1 = ch1->next) {
+	for(ch2 = src; ch2 != NULL; ch2 = ch2->next) {
+	    if(ch1->iface->merge && !strcmp(ch1->name, ch2->name)) {
+		ch1->iface->merge(ch1, ch2);
+		break;
+	    }
+	}
+    }
 }
 
 void skipcfblock(struct cfstate *s)
@@ -275,9 +296,66 @@ void skipcfblock(struct cfstate *s)
     }
 }
 
+static struct chandler stdhandler = {
+    .handle = stdhandle,
+    .merge = stdmerge,
+    .destroy = stddestroy,
+};
+
+static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
+{
+    struct stdchild *i = ch->pdata;
+    
+    if(i->type == CH_SOCKET) {
+	if(i->fd < 0)
+	    i->fd = stdmkchild(i->argv, chinit, idata);
+	if(sendreq(i->fd, req, fd)) {
+	    if((errno == EPIPE) || (errno == ECONNRESET)) {
+		/* Assume that the child has crashed and restart it. */
+		close(i->fd);
+		i->fd = stdmkchild(i->argv, chinit, idata);
+		if(!sendreq(i->fd, req, fd))
+		    return(0);
+	    }
+	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
+	    close(i->fd);
+	    i->fd = -1;
+	    return(-1);
+	}
+    } else if(i->type == CH_FORK) {
+	if(stdforkserve(i->argv, req, fd, chinit, idata) < 0)
+	    return(-1);
+    }
+    return(0);
+}
+
+static void stdmerge(struct child *dst, struct child *src)
+{
+    struct stdchild *od, *nd;
+    
+    if(src->iface == &stdhandler) {
+	nd = dst->pdata;
+	od = src->pdata;
+	nd->fd = od->fd;
+	od->fd = -1;
+    }
+}
+
+static void stddestroy(struct child *ch)
+{
+    struct stdchild *d = ch->pdata;
+    
+    if(d->fd >= 0)
+	close(d->fd);
+    if(d->argv)
+	freeca(d->argv);
+    free(d);
+}
+
 struct child *parsechild(struct cfstate *s)
 {
     struct child *ch;
+    struct stdchild *d;
     int i;
     int sl;
     
@@ -289,7 +367,8 @@ struct child *parsechild(struct cfstate *s)
 	    skipcfblock(s);
 	    return(NULL);
 	}
-	ch = newchild(s->argv[1], CH_SOCKET);
+	ch = newchild(s->argv[1], &stdhandler, omalloc(d));
+	d->type = CH_SOCKET;
     } else if(!strcmp(s->argv[0], "fchild")) {
 	s->expstart = 1;
 	if(s->argc < 2) {
@@ -297,10 +376,12 @@ struct child *parsechild(struct cfstate *s)
 	    skipcfblock(s);
 	    return(NULL);
 	}
-	ch = newchild(s->argv[1], CH_FORK);
+	ch = newchild(s->argv[1], &stdhandler, omalloc(d));
+	d->type = CH_FORK;
     } else {
 	return(NULL);
     }
+    d->fd = -1;
     
     while(1) {
 	getcfline(s);
@@ -309,16 +390,16 @@ struct child *parsechild(struct cfstate *s)
 		flog(LOG_WARNING, "%s:%i: too few parameters to `exec'", s->file, s->lno);
 		continue;
 	    }
-	    ch->argv = szmalloc(sizeof(*ch->argv) * s->argc);
+	    d->argv = szmalloc(sizeof(*d->argv) * s->argc);
 	    for(i = 0; i < s->argc - 1; i++)
-		ch->argv[i] = sstrdup(s->argv[i + 1]);
+		d->argv[i] = sstrdup(s->argv[i + 1]);
 	} else if(!strcmp(s->argv[0], "end") || !strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
 	    flog(LOG_WARNING, "%s:%i: unknown directive `%s' in child declaration", s->file, s->lno, s->argv[0]);
 	}
     }
-    if(ch->argv == NULL) {
+    if(d->argv == NULL) {
 	flog(LOG_WARNING, "%s:%i: missing `exec' in child declaration %s", s->file, sl, ch->name);
 	freechild(ch);
 	return(NULL);
@@ -328,25 +409,5 @@ struct child *parsechild(struct cfstate *s)
 
 int childhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
 {
-    if(ch->type == CH_SOCKET) {
-	if(ch->fd < 0)
-	    ch->fd = stdmkchild(ch->argv, chinit, idata);
-	if(sendreq(ch->fd, req, fd)) {
-	    if((errno == EPIPE) || (errno == ECONNRESET)) {
-		/* Assume that the child has crashed and restart it. */
-		close(ch->fd);
-		ch->fd = stdmkchild(ch->argv, chinit, idata);
-		if(!sendreq(ch->fd, req, fd))
-		    return(0);
-	    }
-	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
-	    close(ch->fd);
-	    ch->fd = -1;
-	    return(-1);
-	}
-    } else if(ch->type == CH_FORK) {
-	if(stdforkserve(ch->argv, req, fd, chinit, idata) < 0)
-	    return(-1);
-    }
-    return(0);
+    return(ch->iface->handle(ch, req, fd, chinit, idata));
 }

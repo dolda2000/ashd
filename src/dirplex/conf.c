@@ -252,21 +252,6 @@ struct config *readconfig(char *file)
     return(cf);
 }
 
-static void mergechildren(struct config *dst, struct config *src)
-{
-    struct child *ch1, *ch2;
-    
-    for(ch1 = dst->children; ch1 != NULL; ch1 = ch1->next) {
-	for(ch2 = src->children; ch2 != NULL; ch2 = ch2->next) {
-	    if(!strcmp(ch1->name, ch2->name)) {
-		ch1->fd = ch2->fd;
-		ch2->fd = -1;
-		break;
-	    }
-	}
-    }
-}
-
 struct config *getconfig(char *path)
 {
     struct config *cf, *ocf;
@@ -295,7 +280,7 @@ struct config *getconfig(char *path)
 	mtime = sb.st_mtime;
     }
     if(ocf != NULL) {
-	mergechildren(cf, ocf);
+	mergechildren(cf->children, ocf->children);
 	freeconfig(ocf);
     }
     cf->path = sstrdup(path);
