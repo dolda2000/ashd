@@ -34,6 +34,197 @@
 #include <mt.h>
 #include <mtio.h>
 
+static struct blocker *blockers;
+
+#ifdef HAVE_EPOLL
+
+/* 
+ * Support for epoll. Optimally, different I/O loops should be split
+ * into different files for greater clarity, but I'll save that fun
+ * for another day. 
+ *
+ * Scroll down to #else for the normal select loop.
+ */
+
+#include <sys/epoll.h>
+
+struct blocker {
+    struct blocker *n, *p, *n2, *p2;
+    int fd, reg;
+    int ev;
+    time_t to;
+    struct muth *th;
+};
+
+static int epfd = -1, fdln = 0;
+static struct blocker **fdlist;
+
+static int regfd(struct blocker *bl)
+{
+    struct blocker *o;
+    struct epoll_event evd;
+
+    evd.events = 0;
+    if(bl->ev & EV_READ)
+	evd.events |= EPOLLIN;
+    if(bl->ev & EV_WRITE)
+	evd.events |= EPOLLOUT;
+    evd.data.fd = bl->fd;
+    if(bl->fd >= fdln) {
+	if(fdlist) {
+	    fdlist = srealloc(fdlist, sizeof(*fdlist) * (bl->fd + 1));
+	    memset(fdlist + fdln, 0, sizeof(*fdlist) * (bl->fd + 1 - fdln));
+	    fdln = bl->fd + 1;
+	} else {
+	    fdlist = szmalloc(sizeof(*fdlist) * (fdln = (bl->fd + 1)));
+	}
+    }
+    if(fdlist[bl->fd] == NULL) {
+	if(epoll_ctl(epfd, EPOLL_CTL_ADD, bl->fd, &evd)) {
+	    /* XXX?! Whatever to do, really? */
+	    flog(LOG_ERR, "epoll_add on fd %i: %s", bl->fd, strerror(errno));
+	    return(-1);
+	}
+    } else {
+	for(o = fdlist[bl->fd]; o; o = o->n2) {
+	    if(o->ev & EV_READ)
+		evd.events |= EPOLLIN;
+	    if(o->ev & EV_WRITE)
+		evd.events |= EPOLLOUT;
+	}
+	if(epoll_ctl(epfd, EPOLL_CTL_MOD, bl->fd, &evd)) {
+	    /* XXX?! Whatever to do, really? */
+	    flog(LOG_ERR, "epoll_mod on fd %i: %s", bl->fd, strerror(errno));
+	    return(-1);
+	}
+    }
+    bl->n2 = fdlist[bl->fd];
+    bl->p2 = NULL;
+    if(fdlist[bl->fd] != NULL)
+	fdlist[bl->fd]->p2 = bl;
+    fdlist[bl->fd] = bl;
+    bl->reg = 1;
+    return(0);
+}
+
+static void remfd(struct blocker *bl)
+{
+    struct blocker *o;
+    struct epoll_event evd;
+    
+    if(!bl->reg)
+	return;
+    if(bl->n2)
+	bl->n2->p2 = bl->p2;
+    if(bl->p2)
+	bl->p2->n2 = bl->n2;
+    if(bl == fdlist[bl->fd])
+	fdlist[bl->fd] = bl->n2;
+    if(fdlist[bl->fd] == NULL) {
+	if(epoll_ctl(epfd, EPOLL_CTL_DEL, bl->fd, NULL))
+	    flog(LOG_ERR, "epoll_del on fd %i: %s", bl->fd, strerror(errno));
+    } else {
+	evd.events = 0;
+	evd.data.fd = bl->fd;
+	for(o = fdlist[bl->fd]; o; o = o->n2) {
+	    if(o->ev & EV_READ)
+		evd.events |= EPOLLIN;
+	    if(o->ev & EV_WRITE)
+		evd.events |= EPOLLOUT;
+	}
+	if(epoll_ctl(epfd, EPOLL_CTL_MOD, bl->fd, &evd)) {
+	    /* XXX?! Whatever to do, really? */
+	    flog(LOG_ERR, "epoll_mod on fd %i: %s", bl->fd, strerror(errno));
+	}
+    }
+}
+
+int block(int fd, int ev, time_t to)
+{
+    struct blocker *bl;
+    int rv;
+    
+    omalloc(bl);
+    bl->fd = fd;
+    bl->ev = ev;
+    if(to > 0)
+	bl->to = time(NULL) + to;
+    bl->th = current;
+    if((epfd >= 0) && regfd(bl)) {
+	free(bl);
+	return(-1);
+    }
+    bl->n = blockers;
+    if(blockers)
+	blockers->p = bl;
+    blockers = bl;
+    rv = yield();
+    if(bl->n)
+	bl->n->p = bl->p;
+    if(bl->p)
+	bl->p->n = bl->n;
+    if(bl == blockers)
+	blockers = bl->n;
+    remfd(bl);
+    free(bl);
+    return(rv);
+}
+
+void ioloop(void)
+{
+    struct blocker *bl, *nbl;
+    struct epoll_event evr[16];
+    int i, fd, nev, ev;
+    time_t now, timeout;
+    
+    epfd = epoll_create(128);
+    for(bl = blockers; bl; bl = nbl) {
+	nbl = bl->n;
+	if(regfd(bl))
+	    resume(bl->th, -1);
+    }
+    while(blockers != NULL) {
+	timeout = 0;
+	for(bl = blockers; bl; bl = bl->n) {
+	    if((bl->to != 0) && ((timeout == 0) || (timeout > bl->to)))
+		timeout = bl->to;
+	}
+	now = time(NULL);
+	nev = epoll_wait(epfd, evr, sizeof(evr) / sizeof(*evr), timeout?((timeout - now) * 1000):-1);
+	if(nev < 0) {
+	    if(errno != EINTR) {
+		flog(LOG_CRIT, "ioloop: select errored out: %s", strerror(errno));
+		/* To avoid CPU hogging in case it's bad, which it
+		 * probably is. */
+		sleep(1);
+	    }
+	    continue;
+	}
+	now = time(NULL);
+	for(i = 0; i < nev; i++) {
+	    fd = evr[i].data.fd;
+	    ev = 0;
+	    if(evr[i].events & EPOLLIN)
+		ev |= EV_READ;
+	    if(evr[i].events & EPOLLOUT)
+		ev |= EV_WRITE;
+	    if(evr[i].events & ~(EPOLLIN | EPOLLOUT))
+		ev = -1;
+	    for(bl = fdlist[fd]; bl; bl = nbl) {
+		nbl = bl->n2;
+		if((ev < 0) || (ev & bl->ev))
+		    resume(bl->th, ev);
+		else if((bl->to != 0) && (bl->to <= now))
+		    resume(bl->th, 0);
+	    }
+	}
+    }
+    close(epfd);
+    epfd = -1;
+}
+
+#else
+
 struct blocker {
     struct blocker *n, *p;
     int fd;
@@ -41,8 +232,6 @@ struct blocker {
     time_t to;
     struct muth *th;
 };
-
-static struct blocker *blockers;
 
 int block(int fd, int ev, time_t to)
 {
@@ -126,6 +315,8 @@ void ioloop(void)
 	}
     }
 }
+
+#endif
 
 struct stdiofd {
     int fd;

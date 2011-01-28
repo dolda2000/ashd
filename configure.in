@@ -22,6 +22,24 @@ fi
 AH_TEMPLATE(HAVE_VALGRIND, [define to include debugging support for Valgrind])
 AC_CHECK_HEADER(valgrind/memcheck.h, [AC_DEFINE(HAVE_VALGRIND)], [])
 
+AH_TEMPLATE(HAVE_EPOLL, [define to enable epoll support])
+AC_ARG_WITH(epoll, [  --with-epoll            Enable epoll(2) support])
+HAS_EPOLL=""
+if test "$with_epoll" = no; then HAS_EPOLL=no; fi
+if test -z "$HAS_EPOLL"; then
+	AC_CHECK_LIB(c, epoll_ctl, [:], [HAS_EPOLL=no])
+fi
+if test -z "$HAS_EPOLL"; then
+	AC_CHECK_HEADER(sys/epoll.h, [], [HAS_EPOLL=no])
+fi
+if test "$HAS_EPOLL" != no; then HAS_EPOLL=yes; fi
+if test "$with_epoll" = yes -a "$HAS_EPOLL" = no; then
+	AC_MSG_ERROR([*** cannot find epoll support on this system])
+fi
+if test "$HAS_EPOLL" = yes; then
+	AC_DEFINE(HAVE_EPOLL)
+fi
+
 AH_TEMPLATE(HAVE_XATTR, [define to compile support for filesystem extended attributes])
 AC_ARG_WITH(xattr, [  --with-xattr            Enable XATTR support])
 HAS_XATTR=""
