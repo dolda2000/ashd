@@ -63,7 +63,8 @@ static int regfd(struct blocker *bl)
 {
     struct blocker *o;
     struct epoll_event evd;
-
+    
+    memset(&evd, 0, sizeof(evd));
     evd.events = 0;
     if(bl->ev & EV_READ)
 	evd.events |= EPOLLIN;
@@ -124,6 +125,7 @@ static void remfd(struct blocker *bl)
 	if(epoll_ctl(epfd, EPOLL_CTL_DEL, bl->fd, NULL))
 	    flog(LOG_ERR, "epoll_del on fd %i: %s", bl->fd, strerror(errno));
     } else {
+	memset(&evd, 0, sizeof(evd));
 	evd.events = 0;
 	evd.data.fd = bl->fd;
 	for(o = fdlist[bl->fd]; o; o = o->n2) {
