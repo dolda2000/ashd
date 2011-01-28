@@ -55,11 +55,10 @@ being examined is considered the result of the mapping. Otherwise, any
 escape sequences in the path element under consideration are unescaped
 before examining it.
 
-Any path element that begins with a dot is considered invalid and
-results in a 404 response to the client. If the path element names a
-directory in the current directory, the procedure continues in that
-directory. If it names a file, that file is considered the result of
-the mapping (even if the rest string has not been exhausted yet).
+If the path element names a directory in the current directory, the
+procedure continues in that directory. If it names a file, that file
+is considered the result of the mapping (even if the rest string has
+not been exhausted yet).
 
 If the path element does not name anything in the directory under
 consideration, but contains no dots, then the directory is searched
@@ -74,6 +73,8 @@ considered the final result instead of the directory itself. If the
 index file name contains no dots and there is no exact match, then,
 again, the directory is searched for a file whose name before the
 first dot matches the index file name.
+
+See also 404 RESPONSES below.
 
 CONFIGURATION
 -------------
@@ -245,8 +246,29 @@ following actions are recognized:
 	by a *fchild* stanza. This action exists mostly for
 	convenience.
 
-If no *match* stanza matches, a 404 response is returned to the
-client.
+404 RESPONSES
+-------------
+
+Any of the following cases will result in a 404 response being sent to
+the client.
+
+ * Failure of the mapping procedure to find a matching physical file.
+ * Presence of a path element during mapping that begins with a dot.
+ * A path element which, after URL unescaping, contains slashes.
+ * The mapping procedure finding a file which is neither a directory
+   nor a regular file.
+ * Presence of a non-final but empty path element during mapping.
+ * A physical file having been found which is not being matched by any
+   *match* stanza.
+
+*dirplex* will send a built-in 404 response by default, but any
+`.htrc` file or global configuration may define a request handler
+named `.notfound` to customize the behavior. Note that, unlike
+successful requests, such a handler will not be passed the
+`X-Ash-File` header.
+
+The built-in `.notfound` handler can also be used in *match* or
+*capture* stanzas.
 
 EXAMPLES
 --------

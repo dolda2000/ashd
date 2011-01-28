@@ -70,8 +70,7 @@ static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
 	    simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", pat->childnm);
 	    return;
 	}
-	twd = NULL;
-	if((twd = ccf->path) != NULL) {
+	if((twd = ccf?ccf->path:NULL) != NULL) {
 	    if(!strcmp(twd, ".")) {
 		twd = NULL;
 	    } else if(strncmp(path, twd, strlen(twd)) || (path[strlen(twd)] != '/')) {
@@ -89,12 +88,25 @@ static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
     }
 }
 
+static void handle404(struct hthead *req, int fd, char *path)
+{
+    struct child *ch;
+    struct config *ccf;
+    char *tmp;
+    
+    tmp = sstrdup(path);
+    ch = findchild(tmp, ".notfound", &ccf);
+    if(childhandle(ch, req, fd, chinit, ccf?ccf->path:NULL))
+	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+    free(tmp);
+}
+
 static void handlefile(struct hthead *req, int fd, char *path)
 {
     struct pattern *pat;
 
     if((pat = findmatch(path, 0, 0)) == NULL) {
-	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+	handle404(req, fd, path);
 	return;
     }
     handle(req, fd, path, pat);
@@ -186,7 +198,7 @@ static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *
     int rv;
     
     if(*el == '.') {
-	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+	handle404(req, fd, sprintf3("%s/", path));
 	return(1);
     }
     if(!stat(sprintf3("%s/%s", path, el), &sb)) {
@@ -206,7 +218,7 @@ static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *
 	    free(newpath);
 	    return(1);
 	}
-	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+	handle404(req, fd, sprintf3("%s/", path));
 	return(1);
     }
     if(!strchr(el, '.') && ((newpath = findfile(path, el, NULL)) != NULL)) {
@@ -237,7 +249,7 @@ static int checkdir(struct hthead *req, int fd, char *path, char *rest)
 	if(*rest == '/')
 	    rest++;
 	replrest(req, rest);
-	if(childhandle(ch, req, fd, chinit, ccf->path))
+	if(childhandle(ch, req, fd, chinit, ccf?ccf->path:NULL))
 	    simpleerror(fd, 500, "Server Error", "The request handler crashed.");
 	return(1);
     }
@@ -273,7 +285,7 @@ static int checkpath(struct hthead *req, int fd, char *path, char *rest)
 	goto out;
     }
     if(strchr(el, '/') || (!*el && *rest)) {
-	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+	handle404(req, fd, sprintf3("%s/", path));
 	rv = 1;
 	goto out;
     }
@@ -295,7 +307,7 @@ static void serve(struct hthead *req, int fd)
 {
     now = time(NULL);
     if(!checkpath(req, fd, ".", req->rest))
-	simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+	handle404(req, fd, ".");
 }
 
 static void chldhandler(int sig)

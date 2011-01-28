@@ -41,6 +41,7 @@ struct child *findchild(char *file, char *name, struct config **cf);
 struct pattern *findmatch(char *file, int trydefault, int dir);
 
 extern time_t now;
+extern struct child *notfound;
 extern struct config *gconfig, *lconfig;
 
 #endif

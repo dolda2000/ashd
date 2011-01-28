@@ -30,6 +30,7 @@
 #include <utils.h>
 #include <log.h>
 #include <cf.h>
+#include <resp.h>
 
 #include "dirplex.h"
 
@@ -332,6 +333,8 @@ struct child *findchild(char *file, char *name, struct config **cf)
     struct config **cfs;
     struct child *ch;
     
+    if(cf != NULL)
+	*cf = NULL;
     cfs = getconfigs(file);
     for(i = 0; cfs[i] != NULL; i++) {
 	if((ch = getchild(cfs[i], name)) != NULL) {
@@ -340,6 +343,8 @@ struct child *findchild(char *file, char *name, struct config **cf)
 	    return(ch);
 	}
     }
+    if(!strcmp(name, ".notfound"))
+	return(notfound);
     return(NULL);
 }
 
@@ -398,3 +403,19 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
 	return(findmatch(file, 1, dir));
     return(NULL);
 }
+
+static int donotfound(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
+{
+    simpleerror(fd, 404, "Not Found", "The requested URL has no corresponding resource.");
+    return(0);
+}
+
+static struct chandler i_notfound = {
+    .handle = donotfound,
+};
+
+static struct child s_notfound = {
+    .name = ".notfound",
+    .iface = &i_notfound,
+};
+struct child *notfound = &s_notfound;
