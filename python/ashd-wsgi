@@ -49,22 +49,22 @@ def unquoteurl(url):
         c = url[i]
         i += 1
         if c == '%':
-            if len(url) > i + 2:
+            if len(url) >= i + 2:
                 c = 0
                 if '0' <= url[i] <= '9':
                     c |= (ord(url[i]) - ord('0')) << 4
                 elif 'a' <= url[i] <= 'f':
-                    c |= (ord(url[i]) - ord('a')) << 4
+                    c |= (ord(url[i]) - ord('a') + 10) << 4
                 elif 'A' <= url[i] <= 'F':
-                    c |= (ord(url[i]) - ord('A')) << 4
+                    c |= (ord(url[i]) - ord('A') + 10) << 4
                 else:
                     raise ValueError("Illegal URL escape character")
                 if '0' <= url[i + 1] <= '9':
                     c |= ord(url[i + 1]) - ord('0')
                 elif 'a' <= url[i + 1] <= 'f':
-                    c |= ord(url[i + 1]) - ord('a')
+                    c |= ord(url[i + 1]) - ord('a') + 10
                 elif 'A' <= url[i + 1] <= 'F':
-                    c |= ord(url[i + 1]) - ord('A')
+                    c |= ord(url[i + 1]) - ord('A') + 10
                 else:
                     raise ValueError("Illegal URL escape character")
                 buf += chr(c)
@@ -74,7 +74,6 @@ def unquoteurl(url):
         else:
             buf += c
     return buf
-
 def dowsgi(req):
     env = {}
     env["wsgi.version"] = 1, 0
