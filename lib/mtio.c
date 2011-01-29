@@ -176,7 +176,7 @@ void ioloop(void)
 {
     struct blocker *bl, *nbl;
     struct epoll_event evr[16];
-    int i, fd, nev, ev;
+    int i, fd, nev, ev, toval;
     time_t now, timeout;
     
     epfd = epoll_create(128);
@@ -192,7 +192,13 @@ void ioloop(void)
 		timeout = bl->to;
 	}
 	now = time(NULL);
-	nev = epoll_wait(epfd, evr, sizeof(evr) / sizeof(*evr), timeout?((timeout - now) * 1000):-1);
+	if(timeout == 0)
+	    toval = -1;
+	else if(timeout > now)
+	    toval = (timeout - now) * 1000;
+	else
+	    toval = 1000;
+	nev = epoll_wait(epfd, evr, sizeof(evr) / sizeof(*evr), toval);
 	if(nev < 0) {
 	    if(errno != EINTR) {
 		flog(LOG_CRIT, "ioloop: select errored out: %s", strerror(errno));
@@ -202,7 +208,6 @@ void ioloop(void)
 	    }
 	    continue;
 	}
-	now = time(NULL);
 	for(i = 0; i < nev; i++) {
 	    fd = evr[i].data.fd;
 	    ev = 0;
@@ -216,9 +221,13 @@ void ioloop(void)
 		nbl = bl->n2;
 		if((ev < 0) || (ev & bl->ev))
 		    resume(bl->th, ev);
-		else if((bl->to != 0) && (bl->to <= now))
-		    resume(bl->th, 0);
 	    }
+	}
+	now = time(NULL);
+	for(bl = blockers; bl; bl = nbl) {
+	    nbl = bl->n;
+	    if((bl->to != 0) && (bl->to <= now))
+		resume(bl->th, 0);
 	}
     }
     close(epfd);
