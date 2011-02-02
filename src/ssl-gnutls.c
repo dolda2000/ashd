@@ -67,8 +67,6 @@ struct sslconn {
     struct charbuf in;
 };
 
-static gnutls_dh_params_t dhparams;
-
 static int tlsblock(int fd, gnutls_session_t sess, time_t to)
 {
     if(gnutls_record_get_direction(sess))
@@ -260,6 +258,23 @@ out:
     free(pd);
 }
 
+static gnutls_dh_params_t dhparams(void)
+{
+    static int inited = 0;
+    static gnutls_dh_params_t pars;
+    int ret;
+    
+    if(!inited) {
+	if(((ret = gnutls_dh_params_init(&pars)) != 0) ||
+	   ((ret = gnutls_dh_params_generate2(pars, 2048)) != 0)) {
+	    flog(LOG_ERR, "GnuTLS could not generate Diffie-Hellman parameters: %s", gnutls_strerror(ret));
+	    exit(1);
+	}
+	inited = 1;
+    }
+    return(pars);
+}
+
 static void init(void)
 {
     static int inited = 0;
@@ -270,11 +285,6 @@ static void init(void)
     inited = 1;
     if((ret = gnutls_global_init()) != 0) {
 	flog(LOG_ERR, "could not initialize GnuTLS: %s", gnutls_strerror(ret));
-	exit(1);
-    }
-    if(((ret = gnutls_dh_params_init(&dhparams)) != 0) ||
-       ((ret = gnutls_dh_params_generate2(dhparams, 2048)) != 0)) {
-	flog(LOG_ERR, "GnuTLS could not generate Diffie-Hellman parameters: %s", gnutls_strerror(ret));
 	exit(1);
     }
 }
@@ -346,7 +356,7 @@ static struct namedcreds *readncreds(char *file)
 	flog(LOG_ERR, "ssl: could not use certificate from %s: %s", file, gnutls_strerror(ret));
 	exit(1);
     }
-    gnutls_certificate_set_dh_params(nc->creds, dhparams);
+    gnutls_certificate_set_dh_params(nc->creds, dhparams());
     return(nc);
 }
 
@@ -458,17 +468,17 @@ void handlegnussl(int argc, char **argp, char **argv)
 	flog(LOG_ERR, "ssl: needs certificate file at the very least");
 	exit(1);
     }
+    if((fd = listensock6(port)) < 0) {
+	flog(LOG_ERR, "could not listen on IPv6 port (port %i): %s", port, strerror(errno));
+	exit(1);
+    }
     if(keyfile == NULL)
 	keyfile = crtfile;
     if((ret = gnutls_certificate_set_x509_key_file(creds, crtfile, keyfile, GNUTLS_X509_FMT_PEM)) != 0) {
 	flog(LOG_ERR, "ssl: could not load certificate or key: %s", gnutls_strerror(ret));
 	exit(1);
     }
-    gnutls_certificate_set_dh_params(creds, dhparams);
-    if((fd = listensock6(port)) < 0) {
-	flog(LOG_ERR, "could not listen on IPv6 port (port %i): %s", port, strerror(errno));
-	exit(1);
-    }
+    gnutls_certificate_set_dh_params(creds, dhparams());
     bufadd(ncreds, NULL);
     omalloc(pd);
     pd->fd = fd;
