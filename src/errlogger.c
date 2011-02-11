@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
 
 static int prio;
 
@@ -141,6 +142,7 @@ int main(int argc, char **argv)
 	exit(127);
     }
     close(pfd[1]);
+    signal(SIGCHLD, SIG_IGN);
     logloop(pfd[0]);
     return(0);
 }
