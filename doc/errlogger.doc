@@ -1,0 +1,59 @@
+errlogger(1)
+============
+
+NAME
+----
+errlogger - Redirect standard error of a program to the system log
+
+SYNOPSIS
+--------
+*errlogger* [*-h*] [*-n* 'NAME'] [*-f* 'FACILITY'] [*-p* 'PRIORITY'] 'PROGRAM' ['ARGS'...]
+
+DESCRIPTION
+-----------
+
+*errlogger* starts the given 'PROGRAM' with its standard error
+connected to a (write-only) pipe, the other end of which *errlogger*
+will read lines from. Every line so read will be logged to the system
+log.
+
+The utility of *errlogger* is in the ability to log error messages
+from programs connected to no other saved output, such as programs
+started by *ashd*(7) in daemon mode.
+
+*errlogger* will exit as soon as it reads end-of-file on its end of
+the pipe; that is, when the write-end of the pipe is closed, which
+will usually happen when the program exits.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-n* 'NAME'::
+
+	Use 'NAME' as the log identification. If not given, 'PROGRAM'
+	will be used by default.
+
+*-f* 'FACILITY'::
+
+	Log to the given log facility, which may be any of *auth*,
+	*authpriv*, *cron*, *daemon*, *ftp*, *kern*, *lpr*, *mail*,
+	*news*, *user*, *uucp* or *local0* through *local7*. By
+	default, *daemon* is used.
+
+*-p* 'PRIORITY'::
+
+	Log at the given log priority, which may be any of *emerg*,
+	*alert*, *crit*, *err*, *warning*, *notice*, *info* or
+	*debug*. By default, *warning* is used.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*syslog*(3), *ashd*(7)
