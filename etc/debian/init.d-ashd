@@ -16,7 +16,7 @@ PATH=/usr/local/bin:/usr/local/sbin:$PATH
 HTPARSER="$(which htparser || true)"
 PIDFILE=/var/run/ashd.pid
 PORTSPEC="plain"
-ROOTSPEC="patplex /usr/local/etc/ashd/rootpat"
+ROOTSPEC="dirplex /srv/www"
 [ -r /etc/default/locale ] && . /etc/default/locale
 [ -r /etc/default/ashd ] && . /etc/default/ashd
 [ -x "$HTPARSER" ] || exit 0
