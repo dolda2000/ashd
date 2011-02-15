@@ -1,0 +1,14 @@
+#!/bin/sh
+
+LOGDIR=/var/log/http
+CYCLE=7
+
+cd "$LOGDIR"
+
+for log in *.log; do
+    if [ -e "$log" ]; then
+	pid="$(accesslog -P "$log" 2>/dev/null)"
+	savelog -qpt -c "$CYCLE" "$log"
+	if [ -n "$pid" ] && [ "$pid" -ne 0 ]; then kill -HUP "$pid"; fi
+    fi
+done
