@@ -26,6 +26,7 @@
 #include <sys/time.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -40,7 +41,7 @@
 static int ch;
 static char *outname = NULL;
 static FILE *out;
-static int flush = 1;
+static int flush = 1, locklog = 1;
 static char *format;
 static struct timeval now;
 static volatile int reopen = 0;
@@ -177,17 +178,93 @@ static void sighandler(int sig)
 	reopen = 1;
 }
 
+static int lockfile(FILE *file)
+{
+    struct flock ld;
+    
+    memset(&ld, 0, sizeof(ld));
+    ld.l_type = F_WRLCK;
+    ld.l_whence = SEEK_SET;
+    ld.l_start = 0;
+    ld.l_len = 0;
+    return(fcntl(fileno(file), F_SETLK, &ld));
+}
+
+static void fetchpid(char *filename)
+{
+    int fd, ret;
+    struct flock ld;
+    
+    if((fd = open(filename, O_WRONLY)) < 0) {
+	fprintf(stderr, "accesslog: %s: %s\n", filename, strerror(errno));
+	exit(1);
+    }
+    memset(&ld, 0, sizeof(ld));
+    ld.l_type = F_WRLCK;
+    ld.l_whence = SEEK_SET;
+    ld.l_start = 0;
+    ld.l_len = 0;
+    ret = fcntl(fd, F_GETLK, &ld);
+    close(fd);
+    if(ret) {
+	fprintf(stderr, "accesslog: %s: %s\n", filename, strerror(errno));
+	exit(1);
+    }
+    if(ld.l_type == F_UNLCK) {
+	fprintf(stderr, "accesslog: %s: not locked\n", filename);
+	exit(1);
+    }
+    printf("%i\n", (int)ld.l_pid);
+}
+
 static void reopenlog(void)
 {
     FILE *new;
+    struct stat olds, news;
     
     if(outname == NULL) {
 	flog(LOG_WARNING, "accesslog: received SIGHUP but logging to stdout, so ignoring");
 	return;
     }
+    if(locklog) {
+	if(fstat(fileno(out), &olds)) {
+	    flog(LOG_ERR, "accesslog: could not stat current logfile(?!): %s", strerror(errno));
+	    return;
+	}
+	if(!stat(outname, &news)) {
+	    if((olds.st_dev == news.st_dev) && (olds.st_ino == news.st_ino)) {
+		/*
+		 * This needs to be ignored, because if the same logfile
+		 * is opened and then closed, the lock is lost. To quote
+		 * the Linux fcntl(2) manpage: "This is bad." No kidding.
+		 *
+		 * Technically, there is a race condition here when the
+		 * file has been stat'ed but not yet opened, where the old
+		 * log file, having been previously renamed, changes name
+		 * back to the name accesslog knows and is thus reopened
+		 * regardlessly, but I think that might fit under the
+		 * idiom "pathological case". It should, at least, not be
+		 * a security problem.
+		 */
+		flog(LOG_INFO, "accesslog: received SIGHUP, but logfile has not changed, so ignoring");
+		return;
+	    }
+	}
+    }
     if((new = fopen(outname, "a")) == NULL) {
 	flog(LOG_WARNING, "accesslog: could not reopen log file `%s' on SIGHUP: %s", outname, strerror(errno));
 	return;
+    }
+    if(locklog) {
+	if(lockfile(new)) {
+	    if((errno == EAGAIN) || (errno == EACCES)) {
+		flog(LOG_ERR, "accesslog: logfile is already locked; reverting to current log", strerror(errno));
+		fclose(new);
+		return;
+	    } else {
+		flog(LOG_WARNING, "accesslog: could not lock logfile, so no lock will be held: %s", strerror(errno));
+	    }
+	}
     }
     fclose(out);
     out = new;
@@ -195,7 +272,7 @@ static void reopenlog(void)
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: accesslog [-hFa] [-f FORMAT] [-p PIDFILE] OUTFILE CHILD [ARGS...]\n");
+    fprintf(out, "usage: accesslog [-hFaL] [-f FORMAT] [-p PIDFILE] OUTFILE CHILD [ARGS...]\n");
 }
 
 int main(int argc, char **argv)
@@ -208,7 +285,7 @@ int main(int argc, char **argv)
     FILE *pidout;
     
     pidfile = NULL;
-    while((c = getopt(argc, argv, "+hFaf:p:")) >= 0) {
+    while((c = getopt(argc, argv, "+hFaLf:p:P:")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage(stdout);
@@ -216,9 +293,15 @@ int main(int argc, char **argv)
 	case 'F':
 	    flush = 0;
 	    break;
+	case 'L':
+	    locklog = 0;
+	    break;
 	case 'f':
 	    format = optarg;
 	    break;
+	case 'P':
+	    fetchpid(optarg);
+	    exit(0);
 	case 'p':
 	    pidfile = optarg;
 	    break;
@@ -246,6 +329,16 @@ int main(int argc, char **argv)
 	if((out = fopen(argv[optind], "a")) == NULL) {
 	    flog(LOG_ERR, "accesslog: could not open %s for logging: %s", argv[optind], strerror(errno));
 	    exit(1);
+	}
+    }
+    if(locklog) {
+	if(lockfile(out)) {
+	    if((errno == EAGAIN) || (errno == EACCES)) {
+		flog(LOG_ERR, "accesslog: logfile is already locked", strerror(errno));
+		exit(1);
+	    } else {
+		flog(LOG_WARNING, "accesslog: could not lock logfile: %s", strerror(errno));
+	    }
 	}
     }
     if((ch = stdmkchild(argv + optind + 1, NULL, NULL)) < 0) {

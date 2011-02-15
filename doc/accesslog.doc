@@ -7,7 +7,8 @@ accesslog - Access logger for ashd(7)
 
 SYNOPSIS
 --------
-*accesslog* [*-hFa*] [*-f* 'FORMAT'] [*-p* 'PIDFILE'] 'OUTFILE' 'CHILD' ['ARGS'...]
+*accesslog* [*-hFaL*] [*-f* 'FORMAT'] [*-p* 'PIDFILE'] 'OUTFILE' 'CHILD' ['ARGS'...]
+*accesslog* *-P* 'LOGFILE'
 
 DESCRIPTION
 -----------
@@ -27,6 +28,11 @@ kept open for as long as *accesslog* runs. SIGHUP can be sent to
 useful e.g. for log rotation.
 
 If the child handler exits, *accesslog* exits as well.
+
+Normally, *accesslog* locks the logfile using *fcntl*(2) to ensure
+that only one process writes to a logfile at any time. The *-L* switch
+can be used to override that behavior to let several processes share a
+logfile, or to use logfiles that cannot be locked for some reason.
 
 OPTIONS
 -------
@@ -63,6 +69,20 @@ OPTIONS
 --------
 %A - - [%{%d/%b/%Y:%H:%M:%S %z}t] "%m %u %v" - - "%R" "%G"
 --------
+
+*-L*::
+
+	Do not attempt to lock the logfile. Note that this switch
+	conflicts with the use of the *-P* option.
+
+*-P* 'LOGFILE'::
+
+	Makes *accesslog* fetch the PID of the process currently
+	holding the lock on 'LOGFILE', write that to standard output,
+	and then exit. No further command-line arguments are
+	processed. This option is useful for sending SIGHUP to
+	accesslog when rotating logfiles without having to use a PID
+	file.
 
 FORMAT
 ------
