@@ -25,6 +25,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <signal.h>
+#include <fcntl.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -194,7 +195,7 @@ static void reopenlog(void)
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: accesslog [-hFa] [-f FORMAT] OUTFILE CHILD [ARGS...]\n");
+    fprintf(out, "usage: accesslog [-hFa] [-f FORMAT] [-p PIDFILE] OUTFILE CHILD [ARGS...]\n");
 }
 
 int main(int argc, char **argv)
@@ -203,8 +204,11 @@ int main(int argc, char **argv)
     struct hthead *req;
     int fd;
     struct pollfd pfd[2];
+    char *pidfile;
+    FILE *pidout;
     
-    while((c = getopt(argc, argv, "+hFaf:")) >= 0) {
+    pidfile = NULL;
+    while((c = getopt(argc, argv, "+hFaf:p:")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage(stdout);
@@ -214,6 +218,9 @@ int main(int argc, char **argv)
 	    break;
 	case 'f':
 	    format = optarg;
+	    break;
+	case 'p':
+	    pidfile = optarg;
 	    break;
 	case 'a':
 	    format = "%A - - [%{%d/%b/%Y:%H:%M:%S %z}t] \"%m %u %v\" - - \"%R\" \"%G\"";
@@ -246,6 +253,21 @@ int main(int argc, char **argv)
 	exit(1);
     }
     signal(SIGHUP, sighandler);
+    if(pidfile) {
+	if(!strcmp(pidfile, "-")) {
+	    if(!outname) {
+		flog(LOG_ERR, "accesslog: cannot derive PID file name without an output file");
+		exit(1);
+	    }
+	    pidfile = sprintf2("%s.pid", outname);
+	}
+	if((pidout = fopen(pidfile, "w")) == NULL) {
+	    flog(LOG_ERR, "accesslog: could not open PID file %s for writing: %s", pidfile);
+	    exit(1);
+	}
+	fprintf(pidout, "%i\n", (int)getpid());
+	fclose(pidout);
+    }
     while(1) {
 	if(reopen) {
 	    reopenlog();
@@ -276,5 +298,7 @@ int main(int argc, char **argv)
 	if(pfd[1].revents & POLLHUP)
 	    break;
     }
+    if(pidfile != NULL)
+	unlink(pidfile);
     return(0);
 }

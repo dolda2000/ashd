@@ -7,7 +7,7 @@ accesslog - Access logger for ashd(7)
 
 SYNOPSIS
 --------
-*accesslog* [*-hFa*] [*-f* 'FORMAT'] 'OUTFILE' 'CHILD' ['ARGS'...]
+*accesslog* [*-hFa*] [*-f* 'FORMAT'] [*-p* 'PIDFILE'] 'OUTFILE' 'CHILD' ['ARGS'...]
 
 DESCRIPTION
 -----------
@@ -45,6 +45,12 @@ OPTIONS
 	Use the specified 'FORMAT' string instead of the default log
 	record format. See the FORMAT section, below, for a
 	description of the 'FORMAT' string.
+
+*-p* 'PIDFILE'::
+
+	Write the PID of the *accesslog* to 'PIDFILE'. 'PIDFILE' may
+	be `-`, in which case the string "`.pid`" is appended to the
+	log file name and used instead.
 
 *-a*::
 
