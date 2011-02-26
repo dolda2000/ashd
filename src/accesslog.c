@@ -273,6 +273,7 @@ static void reopenlog(void)
 static void usage(FILE *out)
 {
     fprintf(out, "usage: accesslog [-hFaL] [-f FORMAT] [-p PIDFILE] OUTFILE CHILD [ARGS...]\n");
+    fprintf(out, "       accesslog -P LOGFILE\n");
 }
 
 int main(int argc, char **argv)
