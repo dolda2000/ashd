@@ -136,6 +136,9 @@ static ssize_t sslwrite(void *cookie, const char *buf, size_t len)
 
 static int sslclose(void *cookie)
 {
+    struct sslconn *ssl = cookie;
+    
+    buffree(ssl->in);
     return(0);
 }
 
