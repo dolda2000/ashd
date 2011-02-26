@@ -8,6 +8,7 @@ accesslog - Access logger for ashd(7)
 SYNOPSIS
 --------
 *accesslog* [*-hFaL*] [*-f* 'FORMAT'] [*-p* 'PIDFILE'] 'OUTFILE' 'CHILD' ['ARGS'...]
+
 *accesslog* *-P* 'LOGFILE'
 
 DESCRIPTION
