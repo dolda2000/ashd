@@ -428,6 +428,7 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
     } else {
 	bufaddenv(dst, "SCRIPT_NAME", "%s", url);
     }
+    free(url);
     bufaddenv(dst, "QUERY_STRING", "%s", qp?qp:"");
     if((h = getheader(req, "Host")) != NULL)
 	bufaddenv(dst, "SERVER_NAME", "%s", h);
@@ -445,8 +446,11 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
 	bufaddenv(dst, "CONTENT_LENGTH", "%s", h);
     else
 	bufaddenv(dst, "CONTENT_LENGTH", "0");
-    if((h = getheader(req, "X-Ash-File")) != NULL)
-	bufaddenv(dst, "SCRIPT_FILENAME", "%s", absolutify(h));
+    if((h = getheader(req, "X-Ash-File")) != NULL) {
+	h = absolutify(h);
+	bufaddenv(dst, "SCRIPT_FILENAME", "%s", h);
+	free(h);
+    }
     for(i = 0; i < req->noheaders; i++) {
 	h = sprintf2("HTTP_%s", req->headers[i][0]);
 	for(p = h; *p; p++) {
