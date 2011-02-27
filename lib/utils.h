@@ -60,6 +60,12 @@ struct charvbuf {
     size_t s, d;
 };
 
+struct btree {
+    struct btree *l, *r;
+    int h;
+    void *d;
+};
+
 void _sizebuf(struct buffer *buf, size_t wanted, size_t el);
 char *decstr(char **p, size_t *len);
 char *vsprintf2(char *format, va_list al);
@@ -74,5 +80,9 @@ void bprintf(struct charbuf *buf, char *format, ...);
 void replstr(char **p, char *n);
 char *base64encode(char *data, size_t datalen);
 char *base64decode(char *data, size_t *datalen);
+int bbtreedel(struct btree **tree, void *item, int (*cmp)(void *, void *));
+void freebtree(struct btree **tree, void (*ffunc)(void *));
+int bbtreeput(struct btree **tree, void *item, int (*cmp)(void *, void *));
+void *btreeget(struct btree *tree, void *key, int (*cmp)(void *, void *));
 
 #endif

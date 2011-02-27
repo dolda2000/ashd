@@ -306,3 +306,163 @@ char *base64decode(char *data, size_t *datalen)
     bufadd(buf, 0);
     return(buf.b);
 }
+
+static int btheight(struct btree *tree)
+{
+    if(tree == NULL)
+	return(0);
+    return(tree->h);
+}
+
+static void btsetheight(struct btree *tree)
+{
+    if(tree == NULL)
+	return;
+    tree->h = max(btheight(tree->l), btheight(tree->r)) + 1;
+}
+
+static void bbtrl(struct btree **tree);
+
+static void bbtrr(struct btree **tree)
+{
+    struct btree *m, *l, *r;
+    
+    if(btheight((*tree)->l->r) > btheight((*tree)->l->l))
+	bbtrl(&(*tree)->l);
+    r = (*tree);
+    l = r->l;
+    m = l->r;
+    r->l = m;
+    btsetheight(r);
+    l->r = r;
+    btsetheight(l);
+    *tree = l;
+}
+
+static void bbtrl(struct btree **tree)
+{
+    struct btree *m, *l, *r;
+    
+    if(btheight((*tree)->r->l) > btheight((*tree)->r->r))
+	bbtrr(&(*tree)->r);
+    l = (*tree);
+    r = l->r;
+    m = r->l;
+    l->r = m;
+    btsetheight(l);
+    r->l = l;
+    btsetheight(r);
+    *tree = r;
+}
+
+static int ptrcmp(void *a, void *b)
+{
+    if(a < b)
+	return(-1);
+    else if(a > b)
+	return(1);
+    return(0);
+}
+
+int bbtreedel(struct btree **tree, void *item, int (*cmp)(void *, void *))
+{
+    int c, r;
+    struct btree *s, **sp, *o;
+    
+    if(cmp == NULL)
+	cmp = ptrcmp;
+    if(*tree == NULL)
+	return(0);
+    if((c = cmp(item, (*tree)->d)) < 0) {
+	r = bbtreedel(&(*tree)->l, item, cmp);
+    } else if(c > 0) {
+	r = bbtreedel(&(*tree)->r, item, cmp);
+    } else {
+	r = 1;
+	o = *tree;
+	if(((*tree)->r != NULL) && ((*tree)->l != NULL)) {
+	    sp = &(*tree)->r;
+	    s = *sp;
+	    while(s->l != NULL) {
+		sp = &(s->l);
+		s = *sp;
+	    }
+	    *sp = (*sp)->r;
+	    s->l = (*tree)->l;
+	    s->r = (*tree)->r;
+	    *tree = s;
+	} else if((*tree)->l != NULL) {
+	    *tree = (*tree)->l;
+	} else if((*tree)->r != NULL) {
+	    *tree = (*tree)->r;
+	} else {
+	    *tree = NULL;
+	}
+	free(o);
+    }
+    if(*tree != NULL) {
+	btsetheight(*tree);
+	if(btheight((*tree)->l) > btheight((*tree)->r) + 1)
+	    bbtrr(tree);
+	if(btheight((*tree)->r) > btheight((*tree)->l) + 1)
+	    bbtrl(tree);
+    }
+    return(r);
+}
+
+void freebtree(struct btree **tree, void (*ffunc)(void *))
+{
+    if(*tree == NULL)
+	return;
+    freebtree(&(*tree)->l, ffunc);
+    freebtree(&(*tree)->r, ffunc);
+    if(ffunc != NULL)
+	ffunc((*tree)->d);
+    free(*tree);
+    *tree = NULL;
+}
+
+int bbtreeput(struct btree **tree, void *item, int (*cmp)(void *, void *))
+{
+    int c, r;
+    
+    if(cmp == NULL)
+	cmp = ptrcmp;
+    if(*tree == NULL) {
+	*tree = szmalloc(sizeof(**tree));
+	(*tree)->d = item;
+	(*tree)->h = 1;
+	return(1);
+    }
+    if((c = cmp(item, (*tree)->d)) < 0)
+	r = bbtreeput(&(*tree)->l, item, cmp);
+    else if(c > 0)
+	r = bbtreeput(&(*tree)->r, item, cmp);
+    else
+	return(0);
+    btsetheight(*tree);
+    if(btheight((*tree)->l) > btheight((*tree)->r) + 1)
+	bbtrr(tree);
+    if(btheight((*tree)->r) > btheight((*tree)->l) + 1)
+	bbtrl(tree);
+    return(r);
+}
+
+void *btreeget(struct btree *tree, void *key, int (*cmp)(void *, void *))
+{
+    int c;
+    
+    if(cmp == NULL)
+	cmp = ptrcmp;
+    while(1) {
+	if(tree == NULL)
+	    return(NULL);
+	c = cmp(key, tree->d);
+	if(c < 0)
+	    tree = tree->l;
+	else if(c > 0)
+	    tree = tree->r;
+	else
+	    return(tree->d);
+    }
+}
