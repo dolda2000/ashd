@@ -67,6 +67,118 @@ struct sslconn {
     struct charbuf in;
 };
 
+struct savedsess {
+    struct savedsess *next, *prev;
+    gnutls_datum_t key, value;
+};
+
+static int numconn = 0, numsess = 0;
+static struct btree *sessidx = NULL;
+static struct savedsess *sesslistf = NULL, *sesslistl = NULL;
+
+static int sesscmp(void *ap, void *bp)
+{
+    struct savedsess *a = ap, *b = bp;
+    
+    if(a->key.size != b->key.size)
+	return(a->key.size - b->key.size);
+    return(memcmp(a->key.data, b->key.data, a->key.size));
+}
+
+static gnutls_datum_t sessdbfetch(void *uudata, gnutls_datum_t key)
+{
+    struct savedsess *sess, lkey;
+    gnutls_datum_t ret;
+    
+    memset(&ret, 0, sizeof(ret));
+    lkey.key = key;
+    if((sess = btreeget(sessidx, &lkey, sesscmp)) == NULL)
+	return(ret);
+    ret.data = memcpy(gnutls_malloc(ret.size = sess->value.size), sess->value.data, sess->value.size);
+    return(ret);
+}
+
+static void freesess(struct savedsess *sess)
+{
+    bbtreedel(&sessidx, sess, sesscmp);
+    if(sess->next)
+	sess->next->prev = sess->prev;
+    if(sess->prev)
+	sess->prev->next = sess->next;
+    if(sess == sesslistf)
+	sesslistf = sess->next;
+    if(sess == sesslistl)
+	sesslistl = sess->prev;
+    free(sess->key.data);
+    free(sess->value.data);
+    free(sess);
+    numsess--;
+}
+
+static int sessdbdel(void *uudata, gnutls_datum_t key)
+{
+    struct savedsess *sess, lkey;
+    
+    lkey.key = key;
+    if((sess = btreeget(sessidx, &lkey, sesscmp)) == NULL)
+	return(-1);
+    freesess(sess);
+    return(0);
+}
+
+static void cleansess(void)
+{
+    while(numsess > (max(numconn, 1) * 100))
+	freesess(sesslistl);
+}
+
+static int sessdbstore(void *uudata, gnutls_datum_t key, gnutls_datum_t value)
+{
+    static int cc = 0;
+    struct savedsess *sess, lkey;
+    
+    if((value.data == NULL) || (value.size == 0)) {
+	sessdbdel(NULL, key);
+	return(0);
+    }
+    lkey.key = key;
+    if((sess = btreeget(sessidx, &lkey, sesscmp)) == NULL) {
+	omalloc(sess);
+	sess->key.data = memcpy(smalloc(sess->key.size = key.size), key.data, key.size);
+	sess->value.data = memcpy(smalloc(sess->value.size = value.size), value.data, value.size);
+	bbtreeput(&sessidx, sess, sesscmp);
+	sess->prev = NULL;
+	sess->next = sesslistf;
+	if(sesslistf)
+	    sesslistf->prev = sess;
+	sesslistf = sess;
+	if(sesslistl == NULL)
+	    sesslistl = sess;
+	numsess++;
+    } else {
+	free(sess->value.data);
+	sess->value.data = memcpy(smalloc(sess->value.size = value.size), value.data, value.size);
+	if(sess != sesslistf) {
+	    if(sess->next)
+		sess->next->prev = sess->prev;
+	    if(sess->prev)
+		sess->prev->next = sess->next;
+	    if(sess == sesslistl)
+		sesslistl = sess->prev;
+	    sess->prev = NULL;
+	    sess->next = sesslistf;
+	    if(sesslistf)
+		sesslistf->prev = sess;
+	    sesslistf = sess;
+	}
+    }
+    if(cc++ > 100) {
+	cleansess();
+	cc = 0;
+    }
+    return(0);
+}
+
 static int tlsblock(int fd, gnutls_session_t sess, time_t to)
 {
     if(gnutls_record_get_direction(sess))
@@ -210,9 +322,14 @@ static void servessl(struct muth *muth, va_list args)
 	return(0);
     }
 
+    numconn++;
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
     gnutls_init(&sess, GNUTLS_SERVER);
     gnutls_set_default_priority(sess);
+    gnutls_db_set_retrieve_function(sess, sessdbfetch);
+    gnutls_db_set_store_function(sess, sessdbstore);
+    gnutls_db_set_remove_function(sess, sessdbdel);
+    gnutls_db_set_ptr(sess, NULL);
     gnutls_handshake_set_post_client_hello_function(sess, setcreds);
     gnutls_transport_set_ptr(sess, (gnutls_transport_ptr_t)(intptr_t)fd);
     while((ret = gnutls_handshake(sess)) != 0) {
@@ -236,6 +353,7 @@ static void servessl(struct muth *muth, va_list args)
 out:
     gnutls_deinit(sess);
     close(fd);
+    numconn--;
 }
 
 static void listenloop(struct muth *muth, va_list args)
