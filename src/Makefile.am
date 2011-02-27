@@ -6,7 +6,7 @@ bin_PROGRAMS =	htparser sendfile callcgi patplex userplex htls \
 
 htparser_SOURCES = htparser.c htparser.h plaintcp.c ssl-gnutls.c
 
-LDADD = $(top_srcdir)/lib/libht.a
+LDADD = $(top_srcdir)/lib/libht.la
 AM_CPPFLAGS = -I$(top_srcdir)/lib
 
 htparser_CPPFLAGS = $(AM_CPPFLAGS) @GNUTLS_CPPFLAGS@

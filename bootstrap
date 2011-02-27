@@ -1,6 +1,6 @@
 #!/bin/sh
 
-dolibtool=no
+dolibtool=yes
 dogettext=no
 
 if [ "$dogettext" = yes ]; then
