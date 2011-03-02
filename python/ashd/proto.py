@@ -114,7 +114,8 @@ def recvreq(sock = 0):
 
     The returned value is an instance of the `req' class. As per its
     description, care should be taken to close() the request when
-    done, to avoid leaking response sockets.
+    done, to avoid leaking response sockets. If end-of-file is
+    received on the socket, None is returned.
 
     This function may either raise on OSError if an error occurs on
     the socket, or a ashd.proto.protoerr if the incoming request is
