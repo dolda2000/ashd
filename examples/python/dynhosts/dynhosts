@@ -1,0 +1,23 @@
+#!/usr/bin/python
+
+import os, sys, signal
+from ashd import util
+
+children = {}
+root = sys.argv[1]
+signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+
+def serve(req):
+    if "Host" in req:
+        # Strip port specification
+        dname = req["Host"].split(':')[0]
+        dname = dname.lower()
+        path = os.path.join(root, dname)
+        if os.path.isdir(path):
+            if dname not in children:
+                children[dname] = util.pchild(["dirplex", path], autorespawn = True)
+            children[dname].passreq(req)
+            return
+    util.respond(req, "No such host in configured.\n", status = "404 Not Found", ctype = "text/plain")
+
+util.serveloop(serve)
