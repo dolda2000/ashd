@@ -1,7 +1,7 @@
 #ifndef _LIB_HTRESP_H
 #define _LIB_HTRESP_H
 
-#include <req.h>
+#include "req.h"
 
 char *urlquote(char *text);
 char *htmlquote(char *text);

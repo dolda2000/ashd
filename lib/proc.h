@@ -1,7 +1,7 @@
 #ifndef _LIB_PROC_H
 #define _LIB_PROC_H
 
-#include <req.h>
+#include "req.h"
 
 int stdmkchild(char **argv, void (*chinit)(void *), void *idata);
 int sendfd(int sock, int fd, char *data, size_t datalen);
