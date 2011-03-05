@@ -58,7 +58,7 @@ int main(int argc, char **argv)
     name = NULL;
     prio = LOG_WARNING;
     fac = LOG_DAEMON;
-    while((c = getopt(argc, argv, "hn:p:f:")) >= 0) {
+    while((c = getopt(argc, argv, "+hn:p:f:")) >= 0) {
 	switch(c) {
 	case 'n':
 	    name = optarg;
