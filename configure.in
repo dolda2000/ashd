@@ -39,6 +39,7 @@ fi
 if test "$HAS_EPOLL" = yes; then
 	AC_DEFINE(HAVE_EPOLL)
 fi
+AM_CONDITIONAL(USE_EPOLL, [test "$HAS_EPOLL" = yes ])
 
 AH_TEMPLATE(HAVE_XATTR, [define to compile support for filesystem extended attributes])
 AC_ARG_WITH(xattr, [  --with-xattr            Enable XATTR support])
