@@ -180,6 +180,7 @@ void ioloop(void)
     time_t now, timeout;
     
     epfd = epoll_create(128);
+    fcntl(epfd, F_SETFD, FD_CLOEXEC);
     for(bl = blockers; bl; bl = nbl) {
 	nbl = bl->n;
 	if(regfd(bl))

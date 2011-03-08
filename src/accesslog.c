@@ -342,6 +342,7 @@ int main(int argc, char **argv)
 	    }
 	}
     }
+    fcntl(fileno(out), F_SETFD, FD_CLOEXEC);
     if((ch = stdmkchild(argv + optind + 1, NULL, NULL)) < 0) {
 	flog(LOG_ERR, "accesslog: could not fork child: %s", strerror(errno));
 	exit(1);

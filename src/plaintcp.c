@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 
@@ -68,6 +69,7 @@ int listensock4(int port)
 	close(fd);
 	return(-1);
     }
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
     return(fd);
 }
 
@@ -92,6 +94,7 @@ int listensock6(int port)
 	close(fd);
 	return(-1);
     }
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
     return(fd);
 }
 
