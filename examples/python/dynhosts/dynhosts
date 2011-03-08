@@ -5,6 +5,8 @@ from ashd import util
 
 children = {}
 root = sys.argv[1]
+
+# Automatically reap all children that die for any reason.
 signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 def serve(req):

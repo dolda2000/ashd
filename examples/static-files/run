@@ -1,6 +1,8 @@
 #!/bin/sh
 
+# Change to the directory containing this script
 set -e
 cd "$(dirname "$0")"
 
+# Simply invoke htparser running dirplex in this directory
 htparser plain:port=8080 -- dirplex .
