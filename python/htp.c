@@ -19,8 +19,8 @@
 #include <Python.h>
 #include <errno.h>
 
-#include <utils.h>
-#include <proc.h>
+#include <ashd/utils.h>
+#include <ashd/proc.h>
 
 static PyObject *p_recvfd(PyObject *self, PyObject *args)
 {

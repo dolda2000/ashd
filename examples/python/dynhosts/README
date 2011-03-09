@@ -1,0 +1,7 @@
+This example uses Python to dynamically dispatch requests for
+different vhosts. The Python program dynhosts will look in a directory
+for subdirectories named after the virtual host and start a dirplex
+instance for each such host that is requested.
+
+To try this example, run it on your local machine and request
+<http://localhost:8080/> or <http://127.0.0.1:8080/>.

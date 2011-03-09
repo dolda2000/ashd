@@ -1,0 +1,12 @@
+This directory contains some examples of more or less simple ashd
+configurations. Each sub-directory contains a self-contained example
+with a shell script called `run'. Simply run that script to start the
+example, and examine it to see how it was made. All of them will start
+an non-SSL HTTP server on port 8080.
+
+Note that ashd, including the default configuration files, must be
+installed on the system to be able to run the examples.
+
+The `python' sub-directory contains examples for using the Python
+module. To run them, the Python module has to be installed and
+accessible as well.

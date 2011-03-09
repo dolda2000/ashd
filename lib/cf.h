@@ -1,7 +1,7 @@
 #ifndef _ASHCONF_H
 #define _ASHCONF_H
 
-#include <req.h>
+#include "req.h"
 
 struct cfstate {
     struct muth *pf;

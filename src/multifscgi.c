@@ -142,7 +142,7 @@ int main(int argc, char **argv)
 {
     int c;
     
-    while((c = getopt(argc, argv, "h")) >= 0) {
+    while((c = getopt(argc, argv, "+h")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage(stdout);

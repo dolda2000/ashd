@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# Change to the directory containing this script
+set -e
+cd "$(dirname "$0")"
+
+# Start htparser running patplex; see the patterns.conf file for
+# further details.
+htparser plain:port=8080 -- patplex patterns.conf

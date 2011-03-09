@@ -4,6 +4,9 @@ match
 match
   filename *.css
   fork sendfile -c text/css
+match
+  filename *.txt
+  fork sendfile -c text/plain
 
 # Image types
 match

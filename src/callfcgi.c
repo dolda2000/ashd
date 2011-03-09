@@ -465,8 +465,8 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
     } else {
 	bufaddenv(dst, "SCRIPT_NAME", "%s", url);
     }
-    free(url);
     bufaddenv(dst, "QUERY_STRING", "%s", qp?qp:"");
+    free(url);
     if((h = getheader(req, "Host")) != NULL)
 	bufaddenv(dst, "SERVER_NAME", "%s", h);
     if((h = getheader(req, "X-Ash-Server-Port")) != NULL)

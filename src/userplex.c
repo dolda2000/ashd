@@ -112,7 +112,7 @@ static int forkchild(char *usrnm)
 {
     struct passwd *pwd;
     pid_t pid;
-    int i, fd[2];
+    int fd[2];
     
     /* XXX: There should be a way for the child to report errors (like
      * 404 when htpub doesn't exist), but for now I don't bother with
@@ -126,17 +126,15 @@ static int forkchild(char *usrnm)
     if((pid = fork()) < 0)
 	return(-1);
     if(pid == 0) {
-	for(i = 3; i < FD_SETSIZE; i++) {
-	    if(i != fd[0])
-		close(i);
-	}
 	dup2(fd[0], 0);
 	close(fd[0]);
+	close(fd[1]);
 	login(pwd);
 	execchild(pwd);
 	exit(127);
     }
     close(fd[0]);
+    fcntl(fd[1], F_SETFD, FD_CLOEXEC);
     return(fd[1]);
 }
 

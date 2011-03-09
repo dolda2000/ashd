@@ -3,9 +3,7 @@
 from distutils.core import setup, Extension
 
 htlib = Extension("ashd.htlib", ["htp.c"],
-                  libraries = ["ht"],
-                  library_dirs = ["../lib/"],
-                  include_dirs = ["../lib/"])
+                  libraries = ["ht"])
 
 setup(name = "ashd-py",
       version = "0.1",

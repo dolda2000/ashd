@@ -24,7 +24,6 @@ ROOTSPEC="dirplex /srv/www"
 start() {
     export LANG
     log_daemon_msg "Starting HTTP server" "ashd"
-    ulimit -c unlimited
     start-stop-daemon -S -p "$PIDFILE" -qx "$HTPARSER" -- -Sf -p "$PIDFILE" -u nobody -r /var/tmp $PORTSPEC -- $ROOTSPEC
     log_end_msg $?
 }

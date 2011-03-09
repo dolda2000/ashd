@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <fcntl.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -254,6 +255,7 @@ int recvreq(int sock, struct hthead **reqp)
     if((fd = recvfd(sock, &buf.b, &buf.d)) < 0) {
 	return(-1);
     }
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
     buf.s = buf.d;
     p = buf.b;
     l = buf.d;

@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <errno.h>
 #include <ctype.h>
+#include <fcntl.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -33,7 +34,6 @@
 
 int stdmkchild(char **argv, void (*chinit)(void *), void *idata)
 {
-    int i;
     pid_t pid;
     int fd[2];
     
@@ -44,17 +44,15 @@ int stdmkchild(char **argv, void (*chinit)(void *), void *idata)
     if(pid == 0) {
 	if(chinit != NULL)
 	    chinit(idata);
-	for(i = 3; i < FD_SETSIZE; i++) {
-	    if(i != fd[0])
-		close(i);
-	}
 	dup2(fd[0], 0);
 	close(fd[0]);
+	close(fd[1]);
 	execvp(argv[0], argv);
 	flog(LOG_WARNING, "could not exec child program %s: %s", argv[0], strerror(errno));
 	exit(127);
     }
     close(fd[0]);
+    fcntl(fd[1], F_SETFD, FD_CLOEXEC);
     return(fd[1]);
 }
 
@@ -141,8 +139,7 @@ pid_t stdforkserve(char **argv, struct hthead *req, int fd, void (*chinit)(void 
 	
 	dup2(fd, 0);
 	dup2(fd, 1);
-	for(i = 3; i < FD_SETSIZE; i++)
-	    close(i);
+	close(fd);
 	
 	bufinit(args);
 	for(i = 0; argv[i]; i++)
