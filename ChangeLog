@@ -1,3 +1,11 @@
+Version 0.7:
+
+	* Added some configuration examples.
+	* Made out-of-tree modules buildable; and thus
+	* Made the Python module properly buildable.
+	* Added SSL session resuming.
+	* Fixed htparser memory leak.
+	
 Version 0.6:
 
 	* Made dirplex' 404 handling more flexible.
