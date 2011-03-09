@@ -17,6 +17,8 @@
 */
 
 #include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
 #include <fcntl.h>
 #include <string.h>
 #include <sys/epoll.h>
