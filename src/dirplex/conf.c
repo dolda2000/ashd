@@ -264,10 +264,10 @@ struct config *getconfig(char *path)
     for(cf = cflist; cf != NULL; cf = cf->next) {
 	if(!strcmp(cf->path, path)) {
 	    if(now - cf->lastck > 5) {
+		cf->lastck = now;
 		if(stat(fn, &sb) || (sb.st_mtime != cf->mtime))
 		    break;
 	    }
-	    cf->lastck = now;
 	    return(cf);
 	}
     }
