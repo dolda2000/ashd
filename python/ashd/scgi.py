@@ -4,6 +4,10 @@ import threading
 class protoerr(Exception):
     pass
 
+class closed(IOError):
+    def __init__(self):
+        super(closed, self).__init__("The client has closed the connection.")
+
 def readns(sk):
     hln = 0
     while True:
@@ -88,9 +92,12 @@ def wrapwsgi(handler):
         def write(data):
             if not data:
                 return
-            flushreq()
-            sk.write(data)
-            sk.flush()
+            try:
+                flushreq()
+                sk.write(data)
+                sk.flush()
+            except IOError:
+                raise closed()
 
         def startreq(status, headers, exc_info = None):
             if resp:

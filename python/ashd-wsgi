@@ -36,6 +36,10 @@ else:
         sys.exit(1)
     handler = handlermod.application
 
+class closed(IOError):
+    def __init__(self):
+        super(closed, self).__init__("The client has closed the connection.")
+
 cwd = os.getcwd()
 def absolutify(path):
     if path[0] != '/':
@@ -74,6 +78,7 @@ def unquoteurl(url):
         else:
             buf += c
     return buf
+
 def dowsgi(req):
     env = {}
     env["wsgi.version"] = 1, 0
@@ -130,8 +135,11 @@ def dowsgi(req):
         if not data:
             return
         flushreq()
-        req.sk.write(data)
-        req.sk.flush()
+        try:
+            req.sk.write(data)
+            req.sk.flush()
+        except IOError:
+            raise closed()
 
     def startreq(status, headers, exc_info = None):
         if resp:
