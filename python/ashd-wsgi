@@ -134,8 +134,8 @@ def dowsgi(req):
     def write(data):
         if not data:
             return
-        flushreq()
         try:
+            flushreq()
             req.sk.write(data)
             req.sk.flush()
         except IOError:
