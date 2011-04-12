@@ -53,6 +53,7 @@ static void login(struct passwd *pwd)
 {
     int fd;
     
+    setsid();
     if(getuid() == 0) {
 	if(initgroups(pwd->pw_name, pwd->pw_gid)) {
 	    flog(LOG_ERR, "could not init group list for %s: %s", pwd->pw_name, strerror(errno));
