@@ -84,16 +84,19 @@ def wrapwsgi(handler):
                     raise Exception, "Trying to write data before starting response."
                 status, headers = resp
                 respsent[:] = [True]
-                sk.write("Status: %s\n" % status)
-                for nm, val in headers:
-                    sk.write("%s: %s\n" % (nm, val))
-                sk.write("\n")
+                try:
+                    sk.write("Status: %s\n" % status)
+                    for nm, val in headers:
+                        sk.write("%s: %s\n" % (nm, val))
+                    sk.write("\n")
+                except IOError:
+                    raise closed()
 
         def write(data):
             if not data:
                 return
+            flushreq()
             try:
-                flushreq()
                 sk.write(data)
                 sk.flush()
             except IOError:
@@ -114,10 +117,13 @@ def wrapwsgi(handler):
 
         respiter = handler(env, startreq)
         try:
-            for data in respiter:
-                write(data)
-            if resp:
-                flushreq()
+            try:
+                for data in respiter:
+                    write(data)
+                if resp:
+                    flushreq()
+            except closed:
+                pass
         finally:
             if hasattr(respiter, "close"):
                 respiter.close()

@@ -126,16 +126,19 @@ def dowsgi(req):
                 raise Exception, "Trying to write data before starting response."
             status, headers = resp
             respsent[:] = [True]
-            req.sk.write("HTTP/1.1 %s\n" % status)
-            for nm, val in headers:
-                req.sk.write("%s: %s\n" % (nm, val))
-            req.sk.write("\n")
+            try:
+                req.sk.write("HTTP/1.1 %s\n" % status)
+                for nm, val in headers:
+                    req.sk.write("%s: %s\n" % (nm, val))
+                req.sk.write("\n")
+            except IOError:
+                raise closed()
 
     def write(data):
         if not data:
             return
+        flushreq()
         try:
-            flushreq()
             req.sk.write(data)
             req.sk.flush()
         except IOError:
@@ -156,10 +159,13 @@ def dowsgi(req):
 
     respiter = handler(env, startreq)
     try:
-        for data in respiter:
-            write(data)
-        if resp:
-            flushreq()
+        try:
+            for data in respiter:
+                write(data)
+            if resp:
+                flushreq()
+        except closed:
+            pass
     finally:
         if hasattr(respiter, "close"):
             respiter.close()
