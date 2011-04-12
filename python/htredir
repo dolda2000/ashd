@@ -53,7 +53,10 @@ else:
     # Illegal, but the only option (the premises are illegal anyway)
     pass
 
-sys.stdout.write("HTTP/1.1 %s\n" % status)
-sys.stdout.write("Location: %s\n" % target)
-sys.stdout.write("Content-Length: 0\n")
-sys.stdout.write("\n")
+try:
+    sys.stdout.write("HTTP/1.1 %s\n" % status)
+    sys.stdout.write("Location: %s\n" % target)
+    sys.stdout.write("Content-Length: 0\n")
+    sys.stdout.write("\n")
+except IOError:
+    sys.exit(1)

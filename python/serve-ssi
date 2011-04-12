@@ -151,16 +151,22 @@ if rest != "":
     sys.exit(0)
 
 try:
-    f = ssifile(open(path), url, path)
-except Exception:
-    simpleerror(sys.stdout, 500, "Server Error", "The server could not access its data.")
+    try:
+        f = ssifile(open(path), url, path)
+    except Exception:
+        simpleerror(sys.stdout, 500, "Server Error", "The server could not access its data.")
+        sys.exit(1)
+    try:
+        sys.stdout.write("HTTP/1.1 200 OK\n")
+        sys.stdout.write("Content-Type: text/html\n")
+        sys.stdout.write("\n")
+        f.initvars(ssivars)
+        f.process()
+    finally:
+        f.close()
+except IOError:
+    # This is for catching EPIPE, when the client has closed the
+    # connection. This shouldn't *really* be necessary since the
+    # process should terminate with SIGPIPE, but apparently Python
+    # ignores that.
     sys.exit(1)
-try:
-    sys.stdout.write("HTTP/1.1 200 OK\n")
-    sys.stdout.write("Content-Type: text/html\n")
-    sys.stdout.write("\n")
-    f.initvars(ssivars)
-    f.process()
-finally:
-    f.close()
-
