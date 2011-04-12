@@ -117,7 +117,7 @@ def wrapwsgi(handler):
             for data in respiter:
                 write(data)
             if resp:
-                flushresp()
+                flushreq()
         finally:
             if hasattr(respiter, "close"):
                 respiter.close()
