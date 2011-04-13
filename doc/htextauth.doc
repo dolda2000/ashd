@@ -28,6 +28,11 @@ so that the authentication program does not have to be called for each
 and every request. Cached credentials are cleared from the cache when
 they have not been used for over 30 minutes.
 
+When authentication succeeds, *htextauth* removes the HTTP
+`Authorization` header from the request before passing the request on
+to the child handler, and adds the `X-Ash-Remote-User` header in its
+place, containing the name of the authenticated user.
+
 If the child handler exits, *htextauth* exits as well.
 
 OPTIONS
