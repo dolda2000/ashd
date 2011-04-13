@@ -82,6 +82,38 @@ static void reqauth(struct hthead *req, int fd)
     buffree(buf);
 }
 
+static void authinval(struct hthead *req, int fd, char *msg)
+{
+    struct charbuf buf;
+    FILE *out;
+    char *rn;
+    
+    rn = realm;
+    if(rn == NULL)
+	rn = "auth";
+    bufinit(buf);
+    bufcatstr(buf, "<?xml version=\"1.0\" encoding=\"US-ASCII\"?>\r\n");
+    bufcatstr(buf, "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\r\n");
+    bufcatstr(buf, "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"en-US\" xml:lang=\"en-US\">\r\n");
+    bufcatstr(buf, "<head>\r\n");
+    bprintf(&buf, "<title>Invalid authentication</title>\r\n");
+    bufcatstr(buf, "</head>\r\n");
+    bufcatstr(buf, "<body>\r\n");
+    bprintf(&buf, "<h1>Invalid authentication</h1>\r\n");
+    bprintf(&buf, "<p>%s</p>\r\n", htmlquote(msg));
+    bufcatstr(buf, "</body>\r\n");
+    bufcatstr(buf, "</html>\r\n");
+    out = fdopen(dup(fd), "w");
+    fprintf(out, "HTTP/1.1 401 Invalid authentication\n");
+    fprintf(out, "WWW-Authenticate: Basic realm=\"%s\"\n", rn);
+    fprintf(out, "Content-Type: text/html\n");
+    fprintf(out, "Content-Length: %zi\n", buf.d);
+    fprintf(out, "\n");
+    fwrite(buf.b, 1, buf.d, out);
+    fclose(out);
+    buffree(buf);
+}
+
 static void cleancache(int complete)
 {
     struct cache *c, *n;
@@ -256,7 +288,7 @@ static int auth(struct hthead *req, int fd, char *user, char *pass)
     if(WIFEXITED(status) && (WEXITSTATUS(status) == 0))
 	rv = 1;
     else
-	simpleerror(fd, 401, "Invalid authentication", msg);
+	authinval(req, fd, msg);
     buffree(ebuf);
     return(rv);
 }
