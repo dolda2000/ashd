@@ -10,6 +10,8 @@ ashd.util module provides an easier-to-use interface.
 import os, socket
 import htlib
 
+__all__ = ["req", "recvreq", "sendreq"]
+
 class protoerr(Exception):
     pass
 

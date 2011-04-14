@@ -7,6 +7,8 @@ handlers, wrapping the low-level ashd.proto module.
 import os, socket
 import proto
 
+__all__ = ["stdfork", "pchild", "respond", "serveloop"]
+
 def stdfork(argv, chinit = None):
     """Fork a persistent handler process using the `argv' argument
     list, as per the standard ashd(7) calling convention. For an
