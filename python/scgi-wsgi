@@ -20,7 +20,7 @@ for o, a in opts:
         sk = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         p = a.rfind(":")
         if p < 0:
-            bindhost = "hostname"
+            bindhost = "localhost"
             bindport = int(a)
         else:
             bindhost = a[:p]
