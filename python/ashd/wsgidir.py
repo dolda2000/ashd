@@ -1,7 +1,7 @@
 import os, threading, types
 import wsgiutil
 
-class cachedmod:
+class cachedmod(object):
     def __init__(self, mod, mtime):
         self.lock = threading.Lock()
         self.mod = mod
