@@ -271,13 +271,20 @@ int main(int argc, char **argv)
 	simpleerror(1, 500, "Internal Error", "The server could not access its own data.");
 	exit(1);
     }
+    if(!strcasecmp(argv[optind], "get")) {
+	ishead = 0;
+    } else if(!strcasecmp(argv[optind], "head")) {
+	ishead = 1;
+    } else {
+	simpleerror(1, 405, "Method not allowed", "The requested method is not defined for this resource.");
+	return(0);
+    }
     if(contype == NULL)
 	contype = getmimetype(file, &sb);
     contype = ckctype(contype);
     
     checkcache(file, &sb);
     
-    ishead = !strcasecmp(argv[optind], "head");
     if((hdr = getenv("REQ_RANGE")) != NULL)
 	sendrange(fd, &sb, contype, hdr, ishead);
     else
