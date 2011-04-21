@@ -7,7 +7,7 @@ ashd-wsgi - WSGI adapter for ashd(7)
 
 SYNOPSIS
 --------
-*ashd-wsgi* [*-hA*] [*-p* 'MODPATH'] 'HANDLER-MODULE' ['ARGS'...]
+*ashd-wsgi* [*-hA*] [*-p* 'MODPATH'] [*-l* 'LIMIT'] 'HANDLER-MODULE' ['ARGS'...]
 
 DESCRIPTION
 -----------
@@ -53,6 +53,14 @@ OPTIONS
 	times. Note that the working directory of *ashd-wsgi* is not
 	on Python's module path by default, so if you want to use a
 	module in that directory, you will need to specify "`-p .`".
+
+*-l* 'LIMIT'::
+
+	Allow at most 'LIMIT' requests to run concurrently. If a new
+	request is made when 'LIMIT' requests are executing, the new
+	request will wait up to ten seconds for one of them to
+	complete; if none does, the *ashd-wsgi* will assume that the
+	process is foobar and *abort*(3).
 
 PROTOCOL
 --------

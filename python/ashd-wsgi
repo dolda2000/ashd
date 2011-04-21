@@ -1,13 +1,14 @@
 #!/usr/bin/python
 
-import sys, os, getopt, threading
+import sys, os, getopt, threading, time
 import ashd.proto, ashd.util
 
 def usage(out):
-    out.write("usage: ashd-wsgi [-hA] [-p MODPATH] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: ashd-wsgi [-hA] [-p MODPATH] [-l REQLIMIT] HANDLER-MODULE [ARGS...]\n")
 
+reqlimit = 0
 modwsgi_compat = False
-opts, args = getopt.getopt(sys.argv[1:], "+hAp:")
+opts, args = getopt.getopt(sys.argv[1:], "+hAp:l:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
@@ -16,6 +17,8 @@ for o, a in opts:
         sys.path.insert(0, a)
     elif o == "-A":
         modwsgi_compat = True
+    elif o == "-l":
+        reqlimit = int(a)
 if len(args) < 1:
     usage(sys.stderr)
     sys.exit(1)
@@ -170,14 +173,37 @@ def dowsgi(req):
         if hasattr(respiter, "close"):
             respiter.close()
 
+flightlock = threading.Condition()
+inflight = 0
+
 class reqthread(threading.Thread):
     def __init__(self, req):
         super(reqthread, self).__init__(name = "Request handler")
         self.req = req.dup()
     
     def run(self):
+        global inflight
         try:
-            dowsgi(self.req)
+            flightlock.acquire()
+            try:
+                if reqlimit != 0:
+                    start = time.time()
+                    while inflight >= reqlimit:
+                        flightlock.wait(10)
+                        if time.time() - start > 10:
+                            os.abort()
+                inflight += 1
+            finally:
+                flightlock.release()
+            try:
+                dowsgi(self.req)
+            finally:
+                flightlock.acquire()
+                try:
+                    inflight -= 1
+                    flightlock.notify()
+                finally:
+                    flightlock.release()
         finally:
             self.req.close()
     
