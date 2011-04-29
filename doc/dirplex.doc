@@ -124,6 +124,16 @@ treated as comments and ignored.
 
 The follow configuration directives are recognized:
 
+*include* ['FILENAME'...]::
+
+	Read the the named files and act as if their contents stood in
+	place of the *include* stanza. A 'FILENAME' may be a glob
+	pattern, in which case all matching files are used, sorted by
+	their filenames. If a 'FILENAME' is a relative path, it is
+	treated relative to the directory containing the file from
+	which the *include* stanza was read, even if the inclusion has
+	been nested. Inclusions may be nested to any level.
+
 *index-file* ['FILENAME'...]::
 
 	The given 'FILENAMEs' are used for finding index files (see

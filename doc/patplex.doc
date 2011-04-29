@@ -46,9 +46,9 @@ Should the global and the given configuration files conflict, the
 directives from the given file take precedence.
 
 The configuration files follow the same general format as for
-*dirplex*(1), though the recognized stanzas differ. The *child* and
-*fchild* stanzas are also shared with *dirplex*(1), so see its manpage
-for a description thereof.
+*dirplex*(1), though the recognized stanzas differ. The *child*,
+*fchild* and *include* stanzas are also shared with *dirplex*(1), so
+see its manpage for a description thereof.
 
 *patplex* recognizes the *match* stanza, which takes no arguments, but
 must contain at least one follow-up line to specify match rules. All
