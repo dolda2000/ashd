@@ -82,11 +82,11 @@ CONFIGURATION
 Configuration in *dirplex* comes from several sources. When *dirplex*
 starts, unless the *-N* option is given, it tries to find a global
 configuration file named `dirplex.rc`. It looks in all directories
-named by the *PATH* environment variable, appended with `../etc`. For
-example, then, if *PATH* is `/usr/local/bin:/bin:/usr/bin`, the
-directories `/usr/local/etc`, `/etc` and `/usr/etc` are searched for
-`dirplex.rc`, in that order. Only the first file found is used, should
-there exist several.
+named by the *PATH* environment variable, appended with
+`../etc/ashd`. For example, then, if *PATH* is
+`/usr/local/bin:/bin:/usr/bin`, the directories `/usr/local/etc/ashd`,
+`/etc/ashd` and `/usr/etc/ashd` are searched for `dirplex.rc`, in that
+order. Only the first file found is used, should there exist several.
 
 If the *-c* option is given to *dirplex*, it too specifies a
 configuration file to load. If the name given contains any slashes, it
@@ -158,9 +158,9 @@ The follow configuration directives are recognized:
 	['ARGS'...], specifying the program to execute and the
 	arguments to pass it. In addition to the specified arguments,
 	the HTTP method, raw URL and the rest string will be appended
-	added as described in *ashd*(7). If given in a `.htrc` file,
-	the program will be started in the same directory as the
-	`.htrc` file itself.
+	as described in *ashd*(7). If given in a `.htrc` file, the
+	program will be started in the same directory as the `.htrc`
+	file itself.
 
 *match* [*directory*]::
 
