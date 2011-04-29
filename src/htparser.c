@@ -499,7 +499,7 @@ int main(int argc, char **argv)
     if(usesyslog)
 	opensyslog();
     if(root) {
-	if(chroot(root)) {
+	if(chdir(root) || chroot(root)) {
 	    flog(LOG_ERR, "could not chroot to %s: %s", root, strerror(errno));
 	    exit(1);
 	}
