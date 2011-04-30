@@ -106,12 +106,16 @@ int parseheaders(struct hthead *head, FILE *in)
 {
     int c, state;
     struct charbuf name, val;
+    size_t tsz;
     
     bufinit(name);
     bufinit(val);
     state = 0;
+    tsz = 0;
     while(1) {
 	c = fgetc(in);
+	if(++tsz >= 65536)
+	    goto fail;
     again:
 	if(state == 0) {
 	    if(c == '\r') {

@@ -77,6 +77,8 @@ static struct hthead *parsereq(FILE *in)
 	    goto fail;
 	} else {
 	    bufadd(method, c);
+	    if(method.d >= 128)
+		goto fail;
 	}
     }
     while(1) {
@@ -87,6 +89,8 @@ static struct hthead *parsereq(FILE *in)
 	    goto fail;
 	} else {
 	    bufadd(url, c);
+	    if(url.d >= 65536)
+		goto fail;
 	}
     }
     while(1) {
@@ -98,6 +102,8 @@ static struct hthead *parsereq(FILE *in)
 	    goto fail;
 	} else {
 	    bufadd(ver, c);
+	    if(ver.d >= 128)
+		goto fail;
 	}
     }
     bufadd(method, 0);
