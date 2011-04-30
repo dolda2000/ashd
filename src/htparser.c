@@ -146,6 +146,8 @@ static struct hthead *parseresp(FILE *in)
 	    goto fail;
 	} else {
 	    bufadd(ver, c);
+	    if(ver.d >= 128)
+		goto fail;
 	}
     }
     while(1) {
@@ -156,6 +158,8 @@ static struct hthead *parseresp(FILE *in)
 	    goto fail;
 	} else {
 	    code = (code * 10) + (c - '0');
+	    if(code >= 10000)
+		goto fail;
 	}
     }
     while(1) {
@@ -167,6 +171,8 @@ static struct hthead *parseresp(FILE *in)
 	    goto fail;
 	} else {
 	    bufadd(msg, c);
+	    if(msg.d >= 512)
+		goto fail;
 	}
     }
     bufadd(msg, 0);
