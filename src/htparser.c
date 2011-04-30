@@ -240,12 +240,50 @@ static int hasheader(struct hthead *head, char *name, char *val)
     return(!strcasecmp(hd, val));
 }
 
+static int canonreq(struct hthead *req)
+{
+    char *p, *p2, *r;
+    int n;
+
+    if(req->url[0] == '/') {
+	replrest(req, req->url + 1);
+	if((p = strchr(req->rest, '?')) != NULL)
+	    *p = 0;
+	return(1);
+    }
+    if((p = strstr(req->url, "://")) != NULL) {
+	n = p - req->url;
+	if(((n == 4) && !strncasecmp(req->url, "http", 4)) ||
+	   ((n == 5) && !strncasecmp(req->url, "https", 5))) {
+	    if(getheader(req, "host"))
+		return(0);
+	    p += 3;
+	    if((p2 = strchr(p, '/')) == NULL) {
+		headappheader(req, "Host", p);
+		free(req->url);
+		req->url = sstrdup("/");
+	    } else {
+		r = sstrdup(p2);
+		*(p2++) = 0;
+		headappheader(req, "Host", p);
+		free(req->url);
+		req->url = r;
+	    }
+	    replrest(req, req->url + 1);
+	    if((p = strchr(req->rest, '?')) != NULL)
+		*p = 0;
+	    return(1);
+	}
+    }
+    return(0);
+}
+
 void serve(FILE *in, struct conn *conn)
 {
     int pfds[2];
     FILE *out;
     struct hthead *req, *resp;
-    char *hd, *p;
+    char *hd;
     off_t dlen;
     
     out = NULL;
@@ -253,11 +291,8 @@ void serve(FILE *in, struct conn *conn)
     while(1) {
 	if((req = parsereq(in)) == NULL)
 	    break;
-	replrest(req, req->url);
-	if(req->rest[0] == '/')
-	    replrest(req, req->rest + 1);
-	if((p = strchr(req->rest, '?')) != NULL)
-	    *p = 0;
+	if(!canonreq(req))
+	    break;
 	
 	if((conn->initreq != NULL) && conn->initreq(conn, req))
 	    break;
