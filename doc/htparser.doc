@@ -37,7 +37,7 @@ PORT SPECIFICATION
 Currently, the available 'HANDLERs' are *plain* and *ssl*, for
 handling plain TCP connections and SSL/TLS-protected connections,
 respectively. For details regarding the arguments that each handler
-accept, simply run *htparser* with 'HANDLER':*help*. For example, the
+accept, simply run *htparser* with 'HANDLER'*:help*. For example, the
 command "`htparser ssl:help`" will display help for the *ssl* handler to
 standard output and then exit.
 
