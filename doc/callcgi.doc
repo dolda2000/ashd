@@ -47,4 +47,4 @@ Fredrik Tolf <fredrik@dolda2000.com>
 
 SEE ALSO
 --------
-*dirplex*(1), *ashd*(7), RFC 3875
+*dirplex*(1), *ashd*(7), *callscgi*(1), *callfcgi*(1), RFC 3875

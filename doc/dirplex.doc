@@ -126,7 +126,7 @@ The follow configuration directives are recognized:
 
 *include* ['FILENAME'...]::
 
-	Read the the named files and act as if their contents stood in
+	Read the named files and act as if their contents stood in
 	place of the *include* stanza. A 'FILENAME' may be a glob
 	pattern, in which case all matching files are used, sorted by
 	their filenames. If a 'FILENAME' is a relative path, it is
@@ -163,7 +163,7 @@ The follow configuration directives are recognized:
 *fchild* 'NAME'::
 
 	Declares a named, transient request handler (see *ashd*(7) for
-	a more detailed description of persistent handlers). It must
+	a more detailed description of transient handlers). It must
 	contain exactly one follow-up line, *exec* 'PROGRAM'
 	['ARGS'...], specifying the program to execute and the
 	arguments to pass it. In addition to the specified arguments,
@@ -187,7 +187,8 @@ The follow configuration directives are recognized:
 	remaining rest string, to the specified 'HANDLER', which must
 	by a named request handler specified either in the same
 	`.htrc` file or elsewhere. The *capture* directive accepts no
-	follow-up lines.
+	follow-up lines. Note that the `X-Ash-File` header is not
+	added to requests passed via *capture* directives.
 
 MATCHING
 --------
@@ -228,7 +229,7 @@ The following rules are recognized:
 *default*::
 
 	Matches if and only if no *match* stanza without a *default*
-	rule has matched.
+	rule matches (in any configuration file).
 
 *local*::
 
@@ -259,26 +260,26 @@ following actions are recognized:
 404 RESPONSES
 -------------
 
-Any of the following cases will result in a 404 response being sent to
-the client.
+A HTTP 404 response is sent to the client if
 
- * Failure of the mapping procedure to find a matching physical file.
- * Presence of a path element during mapping that begins with a dot.
- * A path element which, after URL unescaping, contains slashes.
- * The mapping procedure finding a file which is neither a directory
-   nor a regular file.
- * Presence of a non-final but empty path element during mapping.
- * A physical file having been found which is not being matched by any
+ * The mapping procedure fails to find a matching physical file;
+ * A path element is encountered during mapping which, after URL
+   unescaping, either begins with a dot or contains slashes;
+ * The mapping procedure finds a file which is neither a directory nor
+   a regular file;
+ * An empty, non-final path element is encountered during mapping; or
+ * The mapping procedure results in a file which is not matched by any
    *match* stanza.
 
-*dirplex* will send a built-in 404 response by default, but any
+By default, *dirplex* will send a built-in 404 response, but any
 `.htrc` file or global configuration may define a request handler
 named `.notfound` to customize the behavior. Note that, unlike
 successful requests, such a handler will not be passed the
 `X-Ash-File` header.
 
 The built-in `.notfound` handler can also be used in *match* or
-*capture* stanzas.
+*capture* stanzas (for example, to restrict access to certain files or
+directories).
 
 EXAMPLES
 --------
@@ -296,8 +297,16 @@ scripts can be used with the following configuration, using the
 *callcgi*(1) program.
 
 --------
+# To use plain CGI, which uses more resources per handled request,
+# but less static resources:
 fchild php
   exec callcgi -p php-cgi
+
+# To use FastCGI, which keeps PHP running at all times, but uses less
+# resources per handled request:
+child php
+  exec callfcgi multifscgi 5 php-cgi
+
 match
   filename *.php
   handler php
@@ -312,11 +321,12 @@ match directory
   fork htls
 --------
 
-If you want an entire directory to be dedicated to some external SCGI
-script engine, you can use the *callscgi*(1) program to serve it as
-follows. Note that *callscgi*, and therefore the script engine itself,
-is started in the directory itself, so that arbitrary code modules or
-data files can be put directly in that directory and easily found.
+The following configuration can be placed in a `.htrc` file in order
+to dedicate the directory containing that file to some external SCGI
+script engine. Note that *callscgi*, and therefore the script engine
+itself, is started in the directory itself, so that arbitrary code
+modules or data files can be put directly in that directory and easily
+found.
 
 --------
 child foo

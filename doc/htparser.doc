@@ -54,9 +54,9 @@ OPTIONS
 *-S*::
 
 	Log messages to *syslog*(3) instead of standard error. Also
-	sets the environment ASHD_USESYSLOG environment variable in
-	the root handler process, which indicates to the standard ashd
-	programs to do the same thing.
+	sets the ASHD_USESYSLOG environment variable in the root
+	handler process, which indicates to the standard ashd programs
+	to do the same thing.
 
 *-f*::
 
@@ -85,8 +85,8 @@ EXAMPLES
 
 `htparser plain -- dirplex /srv/www`::
 
-	This simple invocation will simply listen for HTTP requests on
-	port 80 and use *dirplex*(1) to serve files from the /srv/www
+	This simple invocation will listen for HTTP requests on port
+	80 and use *dirplex*(1) to serve files from the /srv/www
 	directory.
 
 `htparser plain:port=8080 -- dirplex /srv/www`::
@@ -97,7 +97,7 @@ EXAMPLES
 `htparser plain ssl:cert=/etc/ssl/private/web.pem -- dirplex /srv/www`::
 
 	The same as above, but will listen on port 443 for SSL
-	connections as well. The file `/etc/ssl/privte/web.pem` needs
+	connections as well. The file `/etc/ssl/private/web.pem` needs
 	to contain both the server certificate and its private key.
 
 `htparser plain -- sudo -u www-user dirplex /srv/www`::
@@ -115,6 +115,13 @@ EXAMPLES
 	started. Note that *patplex* still runs as root in the normal
 	file system, so that it can start other handler programs as
 	needed.
+
+`htparser -f plain -- errlogger -n ashd dirplex /srv/www`::
+
+	The same as the first example, but will daemonize and use the
+	*errlogger*(1) program to ensure that any errors or other
+	messages written by any handler program to its stderr are
+	recorded in the *syslog*(3).
 
 X-ASH HEADERS
 -------------

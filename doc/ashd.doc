@@ -15,9 +15,9 @@ technically. If you want a brief overview, please see the homepage at
 The basic premise of ashd is that of standard Unix philosophy; it
 consists of a number of different programs, each specialized to one
 precise task, passing HTTP requests around to each other in a manner
-akin to standard Unix pipelines. This document describes the protocols
-and conventions used between such programs that allows them to
-interoperate.
+akin to standard Unix pipelines. This document describes the set of
+protocols and conventions used between such programs that allows them
+to interoperate.
 
 REQUESTS
 --------
