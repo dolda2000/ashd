@@ -164,6 +164,72 @@ fail:
     return(-1);
 }
 
+struct hthead *parseresponse(FILE *in)
+{
+    struct hthead *req;
+    int code;
+    struct charbuf ver, msg;
+    int c;
+    
+    req = NULL;
+    bufinit(ver);
+    bufinit(msg);
+    code = 0;
+    while(1) {
+	c = getc(in);
+	if(c == ' ') {
+	    break;
+	} else if((c == EOF) || (c < 32) || (c >= 128)) {
+	    goto fail;
+	} else {
+	    bufadd(ver, c);
+	    if(ver.d >= 128)
+		goto fail;
+	}
+    }
+    while(1) {
+	c = getc(in);
+	if(c == ' ') {
+	    break;
+	} else if((c == EOF) || (c < '0') || (c > '9')) {
+	    goto fail;
+	} else {
+	    code = (code * 10) + (c - '0');
+	    if(code >= 10000)
+		goto fail;
+	}
+    }
+    while(1) {
+	c = getc(in);
+	if(c == 10) {
+	    break;
+	} else if(c == 13) {
+	} else if((c == EOF) || (c < 32)) {
+	    goto fail;
+	} else {
+	    bufadd(msg, c);
+	    if(msg.d >= 512)
+		goto fail;
+	}
+    }
+    bufadd(msg, 0);
+    bufadd(ver, 0);
+    req = mkresp(code, msg.b, ver.b);
+    if(parseheaders(req, in))
+	goto fail;
+    goto out;
+    
+fail:
+    if(req != NULL) {
+	freehthead(req);
+	req = NULL;
+    }
+out:
+    buffree(msg);
+    buffree(ver);
+    return(req);
+}
+
 void replrest(struct hthead *head, char *rest)
 {
     char *tmp;
