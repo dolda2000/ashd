@@ -255,6 +255,7 @@ static void reopenlog(void)
 	flog(LOG_WARNING, "accesslog: could not reopen log file `%s' on SIGHUP: %s", outname, strerror(errno));
 	return;
     }
+    fcntl(fileno(new), F_SETFD, FD_CLOEXEC);
     if(locklog) {
 	if(lockfile(new)) {
 	    if((errno == EAGAIN) || (errno == EACCES)) {
@@ -326,11 +327,13 @@ int main(int argc, char **argv)
 	outname = argv[optind];
     if(outname == NULL) {
 	out = stdout;
+	locklog = 0;
     } else {
 	if((out = fopen(argv[optind], "a")) == NULL) {
 	    flog(LOG_ERR, "accesslog: could not open %s for logging: %s", argv[optind], strerror(errno));
 	    exit(1);
 	}
+	fcntl(fileno(out), F_SETFD, FD_CLOEXEC);
     }
     if(locklog) {
 	if(lockfile(out)) {
@@ -342,7 +345,6 @@ int main(int argc, char **argv)
 	    }
 	}
     }
-    fcntl(fileno(out), F_SETFD, FD_CLOEXEC);
     if((ch = stdmkchild(argv + optind + 1, NULL, NULL)) < 0) {
 	flog(LOG_ERR, "accesslog: could not fork child: %s", strerror(errno));
 	exit(1);
