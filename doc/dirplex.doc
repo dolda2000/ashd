@@ -49,16 +49,20 @@ Mapping URLs into physical files is an iterative procedure, each step
 looking in one single physical directory, starting with 'DIR'. For
 each step, a path element is stripped off the beginning of the rest
 string and examined, the path element being either the leading part of
-the rest string up until the first slash, or the entire rest string if
-it contains no slashes. If the rest string is empty, the directory
-being examined is considered the result of the mapping. Otherwise, any
-escape sequences in the path element under consideration are unescaped
-before examining it.
+the rest string up until (but not including) the first slash, or the
+entire rest string if it contains no slashes. If the rest string is
+empty, the directory being examined is considered the result of the
+mapping. Otherwise, any escape sequences in the path element under
+consideration are unescaped before examining it.
 
 If the path element names a directory in the current directory, the
-procedure continues in that directory. If it names a file, that file
-is considered the result of the mapping (even if the rest string has
-not been exhausted yet).
+procedure continues in that directory, unless there is nothing left of
+the rest string, in which case *dirplex* responds with a HTTP 301
+redirect to the same URL, but ending with a slash. Otherwise, the
+remaining rest string begins with a slash, which is stripped off
+before continuing. If the path element names a file, that file is
+considered the result of the mapping (even if the rest string has not
+been exhausted yet).
 
 If the path element does not name anything in the directory under
 consideration, but contains no dots, then the directory is searched
