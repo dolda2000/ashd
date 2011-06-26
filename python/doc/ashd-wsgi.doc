@@ -59,7 +59,7 @@ OPTIONS
 	Allow at most 'LIMIT' requests to run concurrently. If a new
 	request is made when 'LIMIT' requests are executing, the new
 	request will wait up to ten seconds for one of them to
-	complete; if none does, the *ashd-wsgi* will assume that the
+	complete; if none does, *ashd-wsgi* will assume that the
 	process is foobar and *abort*(3).
 
 PROTOCOL
