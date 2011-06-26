@@ -92,10 +92,6 @@ def dowsgi(req):
     env["SERVER_PROTOCOL"] = req.ver
     env["REQUEST_METHOD"] = req.method
     env["REQUEST_URI"] = req.url
-    try:
-        env["PATH_INFO"] = unquoteurl(req.rest)
-    except:
-        env["PATH_INFO"] = req.rest
     name = req.url
     p = name.find('?')
     if p >= 0:
@@ -104,8 +100,19 @@ def dowsgi(req):
     else:
         env["QUERY_STRING"] = ""
     if name[-len(req.rest):] == req.rest:
+        # This is the same hack used in call*cgi.
         name = name[:-len(req.rest)]
+    try:
+        pi = unquoteurl(req.rest)
+    except:
+        pi = req.rest
+    if name == '/':
+        # This seems to be normal CGI behavior, but see callcgi.c for
+        # details.
+        pi = "/" + pi
+        name = ""
     env["SCRIPT_NAME"] = name
+    env["PATH_INFO"] = pi
     if "Host" in req: env["SERVER_NAME"] = req["Host"]
     if "X-Ash-Server-Port" in req: env["SERVER_PORT"] = req["X-Ash-Server-Port"]
     if "X-Ash-Protocol" in req and req["X-Ash-Protocol"] == "https": env["HTTPS"] = "on"

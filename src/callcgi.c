@@ -89,7 +89,7 @@ static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *u
     char *qp, **env, *name;
     int inp[2], outp[2];
     pid_t pid;
-    char *unqr;
+    char *pi;
 
     pipe(inp);
     pipe(outp);
@@ -111,8 +111,6 @@ static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *u
 	if(getenv("HTTP_VERSION"))
 	    putenv(sprintf2("SERVER_PROTOCOL=%s", getenv("HTTP_VERSION")));
 	putenv(sprintf2("REQUEST_METHOD=%s", method));
-	unqr = unquoteurl(rest);
-	putenv(sprintf2("PATH_INFO=%s", unqr?unqr:rest));
 	name = url;
 	/* XXX: This is an ugly hack (I think), but though I can think
 	 * of several alternatives, none seem to be better. */
@@ -120,6 +118,29 @@ static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *u
 	   !strcmp(rest, url + strlen(url) - strlen(rest))) {
 	    name = sprintf2("%.*s", (int)(strlen(url) - strlen(rest)), url);
 	}
+	if((pi = unquoteurl(rest)) == NULL)
+	    pi = rest;
+	if(!strcmp(name, "/")) {
+	    /*
+	     * Normal CGI behavior appears to be to always let
+	     * PATH_INFO begin with a slash and never let SCRIPT_NAME
+	     * end with one. That conflicts, however, with some
+	     * behaviors, such as "mounting" CGI applications on a
+	     * directory element of the URI space -- a handler
+	     * responding to "/foo/" would not be able to tell that it
+	     * is not called "/foo", which makes a large difference,
+	     * not least in relation to URI reconstruction and
+	     * redirections. A common practical case is CGI-handled
+	     * index files in directories. Therefore, this only
+	     * handles the nonconditional case of the root directory
+	     * and leaves other decisions to the previous handler
+	     * handing over the request to callcgi. It is unclear if
+	     * there is a better way to handle the problem.
+	     */
+	    name[0] = 0;
+	    pi = sprintf2("/%s", pi);
+	}
+	putenv(sprintf2("PATH_INFO=%s", pi));
 	putenv(sprintf2("SCRIPT_NAME=%s", name));
 	putenv(sprintf2("QUERY_STRING=%s", qp?qp:""));
 	if(getenv("REQ_HOST"))

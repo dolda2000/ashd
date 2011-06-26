@@ -441,19 +441,13 @@ static char *absolutify(char *file)
 static void mkcgienv(struct hthead *req, struct charbuf *dst)
 {
     int i;
-    char *url, *unq, *qp, *h, *p;
+    char *url, *pi, *tmp, *qp, *h, *p;
     
     bufaddenv(dst, "SERVER_SOFTWARE", "ashd/%s", VERSION);
     bufaddenv(dst, "GATEWAY_INTERFACE", "CGI/1.1");
     bufaddenv(dst, "SERVER_PROTOCOL", "%s", req->ver);
     bufaddenv(dst, "REQUEST_METHOD", "%s", req->method);
     bufaddenv(dst, "REQUEST_URI", "%s", req->url);
-    if((unq = unquoteurl(req->rest)) != NULL) {
-	bufaddenv(dst, "PATH_INFO", unq);
-	free(unq);
-    } else {
-	bufaddenv(dst, "PATH_INFO", req->rest);
-    }
     url = sstrdup(req->url);
     if((qp = strchr(url, '?')) != NULL)
 	*(qp++) = 0;
@@ -461,11 +455,21 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
      * several alternatives, none seem to be better. */
     if(*req->rest && (strlen(url) >= strlen(req->rest)) &&
        !strcmp(req->rest, url + strlen(url) - strlen(req->rest))) {
-	bufaddenv(dst, "SCRIPT_NAME", "%.*s", (int)(strlen(url) - strlen(req->rest)), url);
-    } else {
-	bufaddenv(dst, "SCRIPT_NAME", "%s", url);
+	url[strlen(url) - strlen(req->rest)] = 0;
     }
+    if((pi = unquoteurl(req->rest)) == NULL)
+	pi = sstrdup(req->rest);
+    if(!strcmp(url, "/")) {
+	/* This seems to be normal CGI behavior, but see callcgi.c for
+	 * details. */
+	url[0] = 0;
+	pi = sprintf2("/%s", tmp = pi);
+	free(tmp);
+    }
+    bufaddenv(dst, "PATH_INFO", pi);
+    bufaddenv(dst, "SCRIPT_NAME", url);
     bufaddenv(dst, "QUERY_STRING", "%s", qp?qp:"");
+    free(pi);
     free(url);
     if((h = getheader(req, "Host")) != NULL)
 	bufaddenv(dst, "SERVER_NAME", "%s", h);
