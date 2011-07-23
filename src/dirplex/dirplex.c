@@ -61,7 +61,7 @@ static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
     struct config *ccf;
     char *twd;
 
-    if(!strncmp(path, "./", 2))
+    if(!strncmp(path, "./", 2) && path[2])
 	path += 2;
     if(pat->fchild) {
 	headappheader(req, "X-Ash-File", path);
