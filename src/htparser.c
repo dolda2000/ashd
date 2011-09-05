@@ -212,6 +212,20 @@ static int canonreq(struct hthead *req)
     return(0);
 }
 
+static int http10keep(struct hthead *req, struct hthead *resp)
+{
+    int fc;
+    
+    fc = hasheader(resp, "connection", "close");
+    headrmheader(resp, "connection");
+    if(!fc && hasheader(req, "connection", "keep-alive")) {
+	headappheader(resp, "Connection", "Keep-Alive");
+	return(1);
+    } else {
+	return(0);
+    }
+}
+
 void serve(FILE *in, struct conn *conn)
 {
     int pfds[2];
@@ -219,6 +233,7 @@ void serve(FILE *in, struct conn *conn)
     struct hthead *req, *resp;
     char *hd;
     off_t dlen;
+    int keep;
     
     out = NULL;
     req = resp = NULL;
@@ -260,22 +275,25 @@ void serve(FILE *in, struct conn *conn)
 	    headappheader(resp, "Server", sprintf3("ashd/%s", VERSION));
 
 	if(!strcmp(req->ver, "HTTP/1.0")) {
-	    writeresp(in, resp);
-	    fprintf(in, "\r\n");
 	    if(!strcasecmp(req->method, "head")) {
-		if(!hasheader(req, "connection", "keep-alive"))
-		    break;
+		keep = http10keep(req, resp);
+		writeresp(in, resp);
+		fprintf(in, "\r\n");
 	    } else if((hd = getheader(resp, "content-length")) != NULL) {
+		keep = http10keep(req, resp);
 		dlen = atoo(hd);
+		writeresp(in, resp);
+		fprintf(in, "\r\n");
 		if(passdata(out, in, dlen) != dlen)
 		    break;
-		if(!hasheader(req, "connection", "keep-alive"))
-		    break;
 	    } else {
+		headrmheader(resp, "connection");
+		writeresp(in, resp);
+		fprintf(in, "\r\n");
 		passdata(out, in, -1);
 		break;
 	    }
-	    if(hasheader(req, "connection", "close") || hasheader(resp, "connection", "close"))
+	    if(!keep)
 		break;
 	} else if(!strcmp(req->ver, "HTTP/1.1")) {
 	    if(!strcasecmp(req->method, "head")) {
