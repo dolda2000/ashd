@@ -44,6 +44,11 @@ int block(int fd, int ev, time_t to)
     struct blocker *bl;
     int rv;
     
+    if(fd >= FD_SETSIZE) {
+	flog(LOG_ERR, "tried to use more file descriptors than select() can handle: fd %i", fd);
+	errno = EMFILE;
+	return(-1);
+    }
     omalloc(bl);
     bl->fd = fd;
     bl->ev = ev;
