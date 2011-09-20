@@ -188,7 +188,7 @@ void ioloop(void)
 	nev = epoll_wait(epfd, evr, sizeof(evr) / sizeof(*evr), toval);
 	if(nev < 0) {
 	    if(errno != EINTR) {
-		flog(LOG_CRIT, "ioloop: select errored out: %s", strerror(errno));
+		flog(LOG_CRIT, "ioloop: epoll_wait errored out: %s", strerror(errno));
 		/* To avoid CPU hogging in case it's bad, which it
 		 * probably is. */
 		sleep(1);
