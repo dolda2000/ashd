@@ -1,5 +1,5 @@
 AC_INIT(src/htparser.c)
-AM_INIT_AUTOMAKE([ashd], [0.9])
+AM_INIT_AUTOMAKE([ashd], [0.10])
 AM_CONFIG_HEADER(config.h)
 
 AC_PROG_CC
