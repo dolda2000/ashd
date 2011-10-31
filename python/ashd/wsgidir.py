@@ -27,15 +27,14 @@ form `.EXT=MODULE.HANDLER', where EXT is the file extension to be
 handled, and the MODULE.HANDLER string is treated by splitting it
 along its last constituent dot. The part left of the dot is the name
 of a module which is imported, and the part right of the dot is the
-name of an object in that module, which should be a callable of three
-arguments. When files of the given extension are handled, that
-callable is called with the file's absolute path, the WSGI environment
-and the WSGI `start_response' function, in that order. For example,
-the argument `.fpy=my.module.foohandler' can be given to pass requests
-for `.fpy' files to the function `foohandler' in the module
-`my.module' (which must, of course, be importable). When writing such
-handler functions, you will probably want to use the getmod() function
-in this module.
+name of an object in that module, which should be a callable adhering
+to the WSGI specification. When called, this module will have made
+sure that the WSGI environment contains the SCRIPT_FILENAME parameter
+and that it is properly working. For example, the argument
+`.fpy=my.module.foohandler' can be given to pass requests for `.fpy'
+files to the function `foohandler' in the module `my.module' (which
+must, of course, be importable). When writing such handler functions,
+you will probably want to use the getmod() function in this module.
 """
 
 import os, threading, types
@@ -110,7 +109,8 @@ def getmod(path):
     finally:
         cachelock.release()
 
-def chain(path, env, startreq):
+def chain(env, startreq):
+    path = env["SCRIPT_FILENAME"]
     mod = getmod(path)
     entry = None
     if mod is not None:
@@ -153,7 +153,7 @@ def application(env, startreq):
     ext = base[p + 1:]
     if not ext in exts:
         return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
-    return(exts[ext](path, env, startreq))
+    return(exts[ext](env, startreq))
 
 def wmain(*argv):
     """Main function for ashd(7)-compatible WSGI handlers
