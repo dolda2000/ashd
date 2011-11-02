@@ -37,6 +37,11 @@ following might be said to stand out:
    request handlers to extend  the server's functionality; and one can
    do that even without needing root privileges on the system.
 
+			   Getting Started
+
+To  get  Ashd  installed   and  running  quickly,  please  follow  the
+instructions in the `INSTALL' file.
+
 			Architecture Overview
 
 Though the  server as  a whole  is called `Ashd',  there is  no actual
