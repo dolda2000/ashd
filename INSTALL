@@ -14,11 +14,11 @@ probably want  to run `make install'  as root).  If  you are compiling
 from the Git repository, you  will need to run `./bootstrap' first, in
 order to create the `configure' script.
 
-Ashd  has few  dependencies.  Apart  from  a function  C compiler  and
+Ashd has  few dependencies.   Apart from a  functional C  compiler and
 standard system headers, it needs  libmagic. GnuTLS and libattr may be
 used  optionally.   If compiling  from  the  Git  repository, the  GNU
 autotools  and Asciidoc  need also  be installed.   On  a Debian-based
-system,  those dependencies  correspond,  in order,  the the  packages
+system,  those   dependencies  correspond,  in   order,  the  packages
 build-essential, libmagic-dev,  libgnutls-dev, libattr1-dev, autoconf,
 automake and asciidoc.
 
