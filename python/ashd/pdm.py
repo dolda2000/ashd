@@ -15,8 +15,12 @@ class repl(object):
         self.printer = pprint.PrettyPrinter(indent = 4, depth = 6)
         cl.sk.send("+REPL\n")
 
+    def sendlines(self, text):
+        for line in text.split("\n"):
+            self.cl.sk.send(" " + line + "\n")
+
     def echo(self, ob):
-        self.cl.sk.send(self.printer.pformat(ob) + "\n")
+        self.sendlines(self.printer.pformat(ob))
 
     def command(self, cmd):
         try:
@@ -31,7 +35,7 @@ class repl(object):
                 self.cl.sk.send("+OK\n")
         except:
             for line in traceback.format_exception(*sys.exc_info()):
-                self.cl.sk.send(line)
+                self.cl.sk.send(" " + line)
             self.cl.sk.send("+EXC\n")
 
     def handle(self, buf):
