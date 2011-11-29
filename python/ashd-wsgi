@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
-import sys, os, getopt, threading, time
+import sys, os, getopt, threading, time, locale, collections
 import ashd.proto, ashd.util
 
 def usage(out):
@@ -25,8 +25,8 @@ if len(args) < 1:
 
 try:
     handlermod = __import__(args[0], fromlist = ["dummy"])
-except ImportError, exc:
-    sys.stderr.write("ashd-wsgi: handler %s not found: %s\n" % (args[0], exc.message))
+except ImportError as exc:
+    sys.stderr.write("ashd-wsgi: handler %s not found: %s\n" % (args[0], exc.args[0]))
     sys.exit(1)
 if not modwsgi_compat:
     if not hasattr(handlermod, "wmain"):
@@ -41,7 +41,7 @@ else:
 
 class closed(IOError):
     def __init__(self):
-        super(closed, self).__init__("The client has closed the connection.")
+        super().__init__("The client has closed the connection.")
 
 cwd = os.getcwd()
 def absolutify(path):
@@ -50,77 +50,80 @@ def absolutify(path):
     return path
 
 def unquoteurl(url):
-    buf = ""
+    buf = bytearray()
     i = 0
     while i < len(url):
         c = url[i]
         i += 1
-        if c == '%':
+        if c == ord(b'%'):
             if len(url) >= i + 2:
                 c = 0
-                if '0' <= url[i] <= '9':
-                    c |= (ord(url[i]) - ord('0')) << 4
-                elif 'a' <= url[i] <= 'f':
-                    c |= (ord(url[i]) - ord('a') + 10) << 4
-                elif 'A' <= url[i] <= 'F':
-                    c |= (ord(url[i]) - ord('A') + 10) << 4
+                if ord(b'0') <= url[i] <= ord(b'9'):
+                    c |= (url[i] - ord(b'0')) << 4
+                elif ord(b'a') <= url[i] <= ord(b'f'):
+                    c |= (url[i] - ord(b'a') + 10) << 4
+                elif ord(b'A') <= url[i] <= ord(b'F'):
+                    c |= (url[i] - ord(b'A') + 10) << 4
                 else:
                     raise ValueError("Illegal URL escape character")
-                if '0' <= url[i + 1] <= '9':
-                    c |= ord(url[i + 1]) - ord('0')
-                elif 'a' <= url[i + 1] <= 'f':
-                    c |= ord(url[i + 1]) - ord('a') + 10
-                elif 'A' <= url[i + 1] <= 'F':
-                    c |= ord(url[i + 1]) - ord('A') + 10
+                if ord(b'0') <= url[i + 1] <= ord(b'9'):
+                    c |= url[i + 1] - ord('0')
+                elif ord(b'a') <= url[i + 1] <= ord(b'f'):
+                    c |= url[i + 1] - ord(b'a') + 10
+                elif ord(b'A') <= url[i + 1] <= ord(b'F'):
+                    c |= url[i + 1] - ord(b'A') + 10
                 else:
                     raise ValueError("Illegal URL escape character")
-                buf += chr(c)
+                buf.append(c)
                 i += 2
             else:
                 raise ValueError("Incomplete URL escape character")
         else:
-            buf += c
+            buf.append(c)
     return buf
 
 def dowsgi(req):
     env = {}
     env["wsgi.version"] = 1, 0
     for key, val in req.headers:
-        env["HTTP_" + key.upper().replace("-", "_")] = val
+        env["HTTP_" + key.upper().replace(b"-", b"_").decode("latin-1")] = val.decode("latin-1")
     env["SERVER_SOFTWARE"] = "ashd-wsgi/1"
     env["GATEWAY_INTERFACE"] = "CGI/1.1"
-    env["SERVER_PROTOCOL"] = req.ver
-    env["REQUEST_METHOD"] = req.method
-    env["REQUEST_URI"] = req.url
-    name = req.url
+    env["SERVER_PROTOCOL"] = req.ver.decode("latin-1")
+    env["REQUEST_METHOD"] = req.method.decode("latin-1")
+    try:
+        rawpi = unquoteurl(req.rest)
+    except:
+        rawpi = req.rest
+    try:
+        name, rest, pi = (v.decode("utf-8") for v in (req.url, req.rest, rawpi))
+        env["wsgi.uri_encoding"] = "utf-8"
+    except UnicodeError as exc:
+        name, rest, pi = (v.decode("latin-1") for v in (req.url, req.rest, rawpi))
+        env["wsgi.uri_encoding"] = "latin-1"
+    env["REQUEST_URI"] = name
     p = name.find('?')
     if p >= 0:
         env["QUERY_STRING"] = name[p + 1:]
         name = name[:p]
     else:
         env["QUERY_STRING"] = ""
-    if name[-len(req.rest):] == req.rest:
+    if name[-len(rest):] == rest:
         # This is the same hack used in call*cgi.
-        name = name[:-len(req.rest)]
-    try:
-        pi = unquoteurl(req.rest)
-    except:
-        pi = req.rest
-    if name == '/':
+        name = name[:-len(rest)]
+    if name == "/":
         # This seems to be normal CGI behavior, but see callcgi.c for
         # details.
         pi = "/" + pi
         name = ""
     env["SCRIPT_NAME"] = name
     env["PATH_INFO"] = pi
-    if "Host" in req: env["SERVER_NAME"] = req["Host"]
-    if "X-Ash-Server-Port" in req: env["SERVER_PORT"] = req["X-Ash-Server-Port"]
-    if "X-Ash-Protocol" in req and req["X-Ash-Protocol"] == "https": env["HTTPS"] = "on"
-    if "X-Ash-Address" in req: env["REMOTE_ADDR"] = req["X-Ash-Address"]
-    if "Content-Type" in req: env["CONTENT_TYPE"] = req["Content-Type"]
-    if "Content-Length" in req: env["CONTENT_LENGTH"] = req["Content-Length"]
-    if "X-Ash-File" in req: env["SCRIPT_FILENAME"] = absolutify(req["X-Ash-File"])
-    if "X-Ash-Protocol" in req: env["wsgi.url_scheme"] = req["X-Ash-Protocol"]
+    for src, tgt in [("HTTP_HOST", "SERVER_NAME"), ("HTTP_X_ASH_SERVER_PORT", "SERVER_PORT"),
+                     ("HTTP_X_ASH_ADDRESS", "REMOTE_ADDR"), ("HTTP_CONTENT_TYPE", "CONTENT_TYPE"),
+                     ("HTTP_CONTENT_LENGTH", "CONTENT_LENGTH"), ("HTTP_X_ASH_PROTOCOL", "wsgi.url_scheme")]:
+        if src in env: env[tgt] = env[src]
+    if "X-Ash-Protocol" in req and req["X-Ash-Protocol"] == b"https": env["HTTPS"] = "on"
+    if "X-Ash-File" in req: env["SCRIPT_FILENAME"] = absolutify(req["X-Ash-File"].decode(locale.getpreferredencoding()))
     env["wsgi.input"] = req.sk
     env["wsgi.errors"] = sys.stderr
     env["wsgi.multithread"] = True
@@ -130,17 +133,25 @@ def dowsgi(req):
     resp = []
     respsent = []
 
+    def recode(thing):
+        if isinstance(thing, collections.ByteString):
+            return thing
+        else:
+            return str(thing).encode("latin-1")
+
     def flushreq():
         if not respsent:
             if not resp:
-                raise Exception, "Trying to write data before starting response."
+                raise Exception("Trying to write data before starting response.")
             status, headers = resp
             respsent[:] = [True]
+            buf = bytearray()
+            buf += b"HTTP/1.1 " + recode(status) + b"\n"
+            for nm, val in headers:
+                buf += recode(nm) + b": " + recode(val) + b"\n"
+            buf += b"\n"
             try:
-                req.sk.write("HTTP/1.1 %s\n" % status)
-                for nm, val in headers:
-                    req.sk.write("%s: %s\n" % (nm, val))
-                req.sk.write("\n")
+                req.sk.write(buf)
             except IOError:
                 raise closed()
 
@@ -159,11 +170,11 @@ def dowsgi(req):
             if exc_info:                # Interesting, this...
                 try:
                     if respsent:
-                        raise exc_info[0], exc_info[1], exc_info[2]
+                        raise exc_info[1]
                 finally:
                     exc_info = None     # CPython GC bug?
             else:
-                raise Exception, "Can only start responding once."
+                raise Exception("Can only start responding once.")
         resp[:] = status, headers
         return write
 
@@ -185,14 +196,13 @@ inflight = 0
 
 class reqthread(threading.Thread):
     def __init__(self, req):
-        super(reqthread, self).__init__(name = "Request handler")
+        super().__init__(name = "Request handler")
         self.req = req.dup()
     
     def run(self):
         global inflight
         try:
-            flightlock.acquire()
-            try:
+            with flightlock:
                 if reqlimit != 0:
                     start = time.time()
                     while inflight >= reqlimit:
@@ -200,17 +210,12 @@ class reqthread(threading.Thread):
                         if time.time() - start > 10:
                             os.abort()
                 inflight += 1
-            finally:
-                flightlock.release()
             try:
                 dowsgi(self.req)
             finally:
-                flightlock.acquire()
-                try:
+                with flightlock:
                     inflight -= 1
                     flightlock.notify()
-                finally:
-                    flightlock.release()
         finally:
             self.req.close()
     

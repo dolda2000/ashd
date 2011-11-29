@@ -38,7 +38,7 @@ you will probably want to use the getmod() function in this module.
 """
 
 import os, threading, types
-import wsgiutil
+from . import wsgiutil
 
 __all__ = ["application", "wmain", "getmod", "cachedmod"]
 
@@ -102,7 +102,7 @@ def getmod(path):
         code = compile(text, path, "exec")
         mod = types.ModuleType(mangle(path))
         mod.__file__ = path
-        exec code in mod.__dict__
+        exec(code, mod.__dict__)
         entry = cachedmod(mod, sb.st_mtime)
         modcache[path] = entry
         return entry

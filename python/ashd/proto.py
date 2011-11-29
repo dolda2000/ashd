@@ -8,7 +8,7 @@ ashd.util module provides an easier-to-use interface.
 """
 
 import os, socket
-import htlib
+from . import htlib
 
 __all__ = ["req", "recvreq", "sendreq"]
 
@@ -46,12 +46,14 @@ class req(object):
         self.ver = ver
         self.rest = rest
         self.headers = headers
-        self.sk = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM).makefile('r+')
+        self.bsk = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sk = self.bsk.makefile('rwb')
         os.close(fd)
 
     def close(self):
         "Close this request's response socket."
         self.sk.close()
+        self.bsk.close()
 
     def __getitem__(self, header):
         """Find a HTTP header case-insensitively. For example,
@@ -59,6 +61,8 @@ class req(object):
         header regardlessly of whether the client specified it as
         "Content-Type", "content-type" or "Content-type".
         """
+        if isinstance(header, str):
+            header = header.encode("ascii")
         header = header.lower()
         for key, val in self.headers:
             if key.lower() == header:
@@ -69,6 +73,8 @@ class req(object):
         """Works analogously to the __getitem__ method for checking
         header presence case-insensitively.
         """
+        if isinstance(header, str):
+            header = header.encode("ascii")
         header = header.lower()
         for key, val in self.headers:
             if key.lower() == header:
@@ -79,7 +85,7 @@ class req(object):
         """Creates a duplicate of this request, referring to a
         duplicate of the response socket.
         """
-        return req(self.method, self.url, self.ver, self.rest, self.headers, os.dup(self.sk.fileno()))
+        return req(self.method, self.url, self.ver, self.rest, self.headers, os.dup(self.bsk.fileno()))
 
     def match(self, match):
         """If the `match' argument matches exactly the leading part of
@@ -95,13 +101,17 @@ class req(object):
         else:
             util.respond(req, "Not found", status = "404 Not Found", ctype = "text/plain")
         """
+        if isinstance(match, str):
+            match = match.encode("utf-8")
         if self.rest[:len(match)] == match:
             self.rest = self.rest[len(match):]
             return True
         return False
 
     def __str__(self):
-        return "\"%s %s %s\"" % (self.method, self.url, self.ver)
+        def dec(b):
+            return b.decode("ascii", errors="replace")
+        return "\"%s %s %s\"" % (dec(self.method), dec(self.url), dec(self.ver))
 
     def __enter__(self):
         return self
@@ -127,14 +137,14 @@ def recvreq(sock = 0):
     if fd is None:
         return None
     try:
-        parts = data.split('\0')[:-1]
+        parts = data.split(b'\0')[:-1]
         if len(parts) < 5:
             raise protoerr("Truncated request")
         method, url, ver, rest = parts[:4]
         headers = []
         i = 4
         while True:
-            if parts[i] == "": break
+            if parts[i] == b"": break
             if len(parts) - i < 3:
                 raise protoerr("Truncated request")
             headers.append((parts[i], parts[i + 1]))
@@ -151,13 +161,13 @@ def sendreq(sock, req):
     This function may raise an OSError if an error occurs on the
     socket.
     """
-    data = ""
-    data += req.method + '\0'
-    data += req.url + '\0'
-    data += req.ver + '\0'
-    data += req.rest + '\0'
+    data = b""
+    data += req.method + b'\0'
+    data += req.url + b'\0'
+    data += req.ver + b'\0'
+    data += req.rest + b'\0'
     for key, val in req.headers:
-        data += key + '\0'
-        data += val + '\0'
-    data += '\0'
+        data += key + b'\0'
+        data += val + b'\0'
+    data += b'\0'
     htlib.sendfd(sock, req.sk.fileno(), data)

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import sys, os, getopt
 import socket
@@ -41,8 +41,8 @@ if sk is None:
 
 try:
     handlermod = __import__(args[0], fromlist = ["dummy"])
-except ImportError, exc:
-    sys.stderr.write("scgi-wsgi: handler %s not found: %s\n" % (args[0], exc.message))
+except ImportError as exc:
+    sys.stderr.write("scgi-wsgi: handler %s not found: %s\n" % (args[0], exc.args[0]))
     sys.exit(1)
 if not modwsgi_compat:
     if not hasattr(handlermod, "wmain"):
