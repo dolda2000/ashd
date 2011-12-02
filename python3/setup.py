@@ -5,7 +5,7 @@ from distutils.core import setup, Extension
 htlib = Extension("ashd.htlib", ["htp.c"],
                   libraries = ["ht"])
 
-setup(name = "ashd-py",
+setup(name = "ashd-py3",
       version = "0.4",
       description = "Python module for handling ashd requests",
       author = "Fredrik Tolf",
