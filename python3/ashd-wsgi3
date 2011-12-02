@@ -218,6 +218,7 @@ class reqthread(threading.Thread):
                     flightlock.notify()
         finally:
             self.req.close()
+            sys.stderr.flush()
     
 def handle(req):
     reqthread(req).start()
