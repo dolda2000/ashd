@@ -130,6 +130,7 @@ def chain(env, startreq):
         return entry(env, startreq)
     return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "Invalid WSGI handler.")
 exts["wsgi"] = chain
+exts["wsgi3"] = chain
 
 def addext(ext, handler):
     p = handler.rindex('.')
