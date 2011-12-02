@@ -25,5 +25,6 @@ def simpleerror(env, startreq, code, title, msg):
 <p>%s</p>
 </body>
 </html>""" % (title, title, htmlquote(msg))
+    buf = buf.encode("ascii")
     startreq("%i %s" % (code, title), [("Content-Type", "text/html"), ("Content-Length", str(len(buf)))])
     return [buf]

@@ -41,7 +41,7 @@ static PyObject *p_recvfd(PyObject *self, PyObject *args)
 	PyErr_SetFromErrno(PyExc_OSError);
 	return(NULL);
     }
-    ro = Py_BuildValue("Ni", PyString_FromStringAndSize(data, dlen), ret);
+    ro = Py_BuildValue("Ni", PyBytes_FromStringAndSize(data, dlen), ret);
     free(data);
     return(ro);
 }
@@ -49,17 +49,14 @@ static PyObject *p_recvfd(PyObject *self, PyObject *args)
 static PyObject *p_sendfd(PyObject *self, PyObject *args)
 {
     int sock, fd, ret;
-    PyObject *data;
+    Py_buffer data;
     
-    if(!PyArg_ParseTuple(args, "iiO", &sock, &fd, &data))
+    if(!PyArg_ParseTuple(args, "iiy*", &sock, &fd, &data))
 	return(NULL);
-    if(!PyString_Check(data)) {
-	PyErr_SetString(PyExc_TypeError, "datagram must be a string");
-	return(NULL);
-    }
     Py_BEGIN_ALLOW_THREADS;
-    ret = sendfd(sock, fd, PyString_AsString(data), PyString_Size(data));
+    ret = sendfd(sock, fd, data.buf, data.len);
     Py_END_ALLOW_THREADS;
+    PyBuffer_Release(&data);
     if(ret < 0) {
 	PyErr_SetFromErrno(PyExc_OSError);
 	return(NULL);
@@ -73,7 +70,14 @@ static PyMethodDef methods[] = {
     {NULL, NULL, 0, NULL}
 };
 
-PyMODINIT_FUNC inithtlib(void)
+static struct PyModuleDef module = {
+    PyModuleDef_HEAD_INIT,
+    .m_name = "htlib",
+    .m_size = -1,
+    .m_methods = methods,
+};
+
+PyMODINIT_FUNC PyInit_htlib(void)
 {
-    Py_InitModule("ashd.htlib", methods);
+    return(PyModule_Create(&module));
 }

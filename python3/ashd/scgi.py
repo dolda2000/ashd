@@ -1,4 +1,4 @@
-import sys
+import sys, collections
 import threading
 
 class protoerr(Exception):
@@ -12,21 +12,21 @@ def readns(sk):
     hln = 0
     while True:
         c = sk.read(1)
-        if c == ':':
+        if c == b':':
             break
-        elif c >= '0' or c <= '9':
-            hln = (hln * 10) + (ord(c) - ord('0'))
+        elif c >= b'0' or c <= b'9':
+            hln = (hln * 10) + (ord(c) - ord(b'0'))
         else:
-            raise protoerr, "Invalid netstring length byte: " + c
+            raise protoerr("Invalid netstring length byte: " + c)
     ret = sk.read(hln)
-    if sk.read(1) != ',':
-        raise protoerr, "Non-terminated netstring"
+    if sk.read(1) != b',':
+        raise protoerr("Non-terminated netstring")
     return ret
 
 def readhead(sk):
-    parts = readns(sk).split('\0')[:-1]
+    parts = readns(sk).split(b'\0')[:-1]
     if len(parts) % 2 != 0:
-        raise protoerr, "Malformed headers"
+        raise protoerr("Malformed headers")
     ret = {}
     i = 0
     while i < len(parts):
@@ -37,7 +37,7 @@ def readhead(sk):
 class reqthread(threading.Thread):
     def __init__(self, sk, handler):
         super(reqthread, self).__init__(name = "SCGI request handler")
-        self.sk = sk.dup().makefile("r+")
+        self.sk = sk.dup().makefile("rwb")
         self.handler = handler
 
     def run(self):
@@ -59,9 +59,17 @@ def servescgi(socket, handler):
         finally:
             nsk.close()
 
+def decodehead(head, coding):
+    return {k.decode(coding): v.decode(coding) for k, v in head.items()}
+
 def wrapwsgi(handler):
     def handle(head, sk):
-        env = dict(head)
+        try:
+            env = decodehead(head, "utf-8")
+            env["wsgi.uri_encoding"] = "utf-8"
+        except UnicodeError:
+            env = decodehead(head, "latin-1")
+            env["wsgi.uri_encoding"] = "latin-1"
         env["wsgi.version"] = 1, 0
         if "HTTP_X_ASH_PROTOCOL" in env:
             env["wsgi.url_scheme"] = env["HTTP_X_ASH_PROTOCOL"]
@@ -78,17 +86,25 @@ def wrapwsgi(handler):
         resp = []
         respsent = []
 
+        def recode(thing):
+            if isinstance(thing, collections.ByteString):
+                return thing
+            else:
+                return str(thing).encode("latin-1")
+
         def flushreq():
             if not respsent:
                 if not resp:
-                    raise Exception, "Trying to write data before starting response."
+                    raise Exception("Trying to write data before starting response.")
                 status, headers = resp
                 respsent[:] = [True]
+                buf = bytearray()
+                buf += b"Status: " + recode(status) + b"\n"
+                for nm, val in headers:
+                    buf += recode(nm) + b": " + recode(val) + b"\n"
+                buf += b"\n"
                 try:
-                    sk.write("Status: %s\n" % status)
-                    for nm, val in headers:
-                        sk.write("%s: %s\n" % (nm, val))
-                    sk.write("\n")
+                    sk.write(buf)
                 except IOError:
                     raise closed()
 
@@ -107,11 +123,11 @@ def wrapwsgi(handler):
                 if exc_info:                # Interesting, this...
                     try:
                         if respsent:
-                            raise exc_info[0], exc_info[1], exc_info[2]
+                            raise exc_info[1]
                     finally:
                         exc_info = None     # CPython GC bug?
                 else:
-                    raise Exception, "Can only start responding once."
+                    raise Exception("Can only start responding once.")
             resp[:] = status, headers
             return write
 

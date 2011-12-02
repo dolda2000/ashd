@@ -1,0 +1,58 @@
+#!/usr/bin/python
+
+import sys, os, getopt
+import socket
+import ashd.scgi
+
+def usage(out):
+    out.write("usage: scgi-wsgi [-hA] [-p MODPATH] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
+
+sk = None
+modwsgi_compat = False
+opts, args = getopt.getopt(sys.argv[1:], "+hAp:T:")
+for o, a in opts:
+    if o == "-h":
+        usage(sys.stdout)
+        sys.exit(0)
+    elif o == "-p":
+        sys.path.insert(0, a)
+    elif o == "-T":
+        sk = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        p = a.rfind(":")
+        if p < 0:
+            bindhost = "localhost"
+            bindport = int(a)
+        else:
+            bindhost = a[:p]
+            bindport = int(a[p + 1:])
+        sk.bind((bindhost, bindport))
+        sk.listen(32)
+    elif o == "-A":
+        modwsgi_compat = True
+if len(args) < 1:
+    usage(sys.stderr)
+    sys.exit(1)
+
+if sk is None:
+    # This is suboptimal, since the socket on stdin is not necessarily
+    # AF_UNIX, but Python does not seem to offer any way around it,
+    # that I can find.
+    sk = socket.fromfd(0, socket.AF_UNIX, socket.SOCK_STREAM)
+
+try:
+    handlermod = __import__(args[0], fromlist = ["dummy"])
+except ImportError, exc:
+    sys.stderr.write("scgi-wsgi: handler %s not found: %s\n" % (args[0], exc.message))
+    sys.exit(1)
+if not modwsgi_compat:
+    if not hasattr(handlermod, "wmain"):
+        sys.stderr.write("scgi-wsgi: handler %s has no `wmain' function\n" % args[0])
+        sys.exit(1)
+    handler = handlermod.wmain(*args[1:])
+else:
+    if not hasattr(handlermod, "application"):
+        sys.stderr.write("scgi-wsgi: handler %s has no `application' object\n" % args[0])
+        sys.exit(1)
+    handler = handlermod.application
+
+ashd.scgi.servescgi(sk, ashd.scgi.wrapwsgi(handler))

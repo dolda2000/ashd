@@ -1,0 +1,63 @@
+scgi-wsgi(1)
+============
+
+NAME
+----
+scgi-wsgi - WSGI adapter for SCGI
+
+SYNOPSIS
+--------
+*scgi-wsgi* [*-hA*] [*-p* 'MODPATH'] [*-T* \[HOST:]'PORT'] 'HANDLER-MODULE' ['ARGS'...]
+
+DESCRIPTION
+-----------
+
+The *scgi-wsgi* program translates SCGI requests to WSGI requests, and
+passes them to a specified Python module. It is mainly written to
+emulate the behavior of *ashd-wsgi*(1), but over SCGI instead of the
+native *ashd*(7) protocol, so please see its documentation for details
+of Python interoperation. Unlike *ashd-wsgi* which requires CPython,
+however, *scgi-wsgi* is written in pure Python using only the standard
+library, and so should be usable by any Python implementation. If
+using it under *ashd*(7), please see the documentation for
+*callscgi*(1) as well.
+
+Following *callscgi*(1) conventions, *scgi-wsgi* will, by default,
+accept connections on a socket passed on its standard input (a
+behavior which is, obviously, not available on all Python
+implementations). Use the *-T* option to listen to a TCP address
+instead.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-A*::
+
+	Use the convention used by Apache's mod_wsgi module to find
+	the WSGI application object. See the PROTOCOL section of
+	*ashd-wsgi*(1) for details.
+
+*-p* 'MODPATH'::
+
+	Prepend 'MODPATH' to Python's `sys.path`; can be given multiple
+	times.
+
+*-T* \[HOST:]'PORT'::
+
+	Instead of using a listening socket passed on standard input
+	to accept SCGI connections, bind a TCP socket to the 'HOST'
+	address listening for connections on 'PORT' instead. If 'HOST'
+	is not given, `localhost` is used by default.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*ashd-wsgi*(1), *callscgi*(1), <http://wsgi.org/>,
+<http://www.python.ca/scgi/>

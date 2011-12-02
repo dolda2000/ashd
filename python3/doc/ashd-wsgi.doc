@@ -1,0 +1,115 @@
+ashd-wsgi(1)
+============
+
+NAME
+----
+ashd-wsgi - WSGI adapter for ashd(7)
+
+SYNOPSIS
+--------
+*ashd-wsgi* [*-hA*] [*-p* 'MODPATH'] [*-l* 'LIMIT'] 'HANDLER-MODULE' ['ARGS'...]
+
+DESCRIPTION
+-----------
+
+The *ashd-wsgi* handler translates *ashd*(7) requests to WSGI
+requests, and passes them to a specified Python handler module. The
+precise Python convention for doing so is described in the PROTOCOL
+section, below.
+
+*ashd-wsgi* is a persistent handler, as defined in *ashd*(7). It uses
+multithreaded dispatching in a single Python interpreter, which means
+that WSGI applications that use it need to be thread-safe, but that
+they can also share all Python data structures and global variables
+between requests.
+
+The Python module that *ashd-wsgi* comes with also contains a standard
+handler module, `ashd.wsgidir`, which serves individual WSGI
+applications directly from the files in which they reside and as such
+makes this program useful as a *dirplex*(1) handler. Please see its
+Python documentation for further details.
+
+*ashd-wsgi* requires the `ashd.proto` and `ashd.util` modules, which
+are only available for CPython. If you want to use some other Python
+implementation instead, you may want to use the *scgi-wsgi*(1) program
+instead, along with *callscgi*(1).
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-A*::
+
+	Use the convention used by Apache's mod_wsgi module to find
+	the WSGI application object. See the PROTOCOL section, below,
+	for details.
+
+*-p* 'MODPATH'::
+
+	Prepend 'MODPATH' to Python's `sys.path`; can be given multiple
+	times. Note that the working directory of *ashd-wsgi* is not
+	on Python's module path by default, so if you want to use a
+	module in that directory, you will need to specify "`-p .`".
+
+*-l* 'LIMIT'::
+
+	Allow at most 'LIMIT' requests to run concurrently. If a new
+	request is made when 'LIMIT' requests are executing, the new
+	request will wait up to ten seconds for one of them to
+	complete; if none does, *ashd-wsgi* will assume that the
+	process is foobar and *abort*(3).
+
+PROTOCOL
+--------
+
+When starting, *ashd-wsgi* will attempt to import the module named by
+'HANDLER-MODULE', look for an object named `wmain` in that module,
+call that object passing the 'ARGS' (as Python strings) as positional
+parameters, and use the returned object as the WSGI application
+object. If the *-A* option was specified, it will look for an object
+named `application` instead of `wmain`, and use that object directly
+as the WSGI application object.
+
+When calling the WSGI application, a new thread is started for each
+request, in which the WSGI application object is called. All requests
+run in the same interpreter, so it is guaranteed that data structures
+and global variables can be shared between requests.
+
+The WSGI environment is the standard CGI environment, including the
+`SCRIPT_FILENAME` variable whenever the `X-Ash-File` header was
+included in the request.
+
+EXAMPLES
+--------
+
+The following *dirplex*(1) configuration can be used for serving WSGI
+modules directly from the filesystem.
+
+--------
+child wsgidir
+  exec ashd-wsgi ashd.wsgidir
+match
+  filename *.wsgi
+  handler wsgidir
+--------
+
+Since *ashd-wsgi* is a persistent handler, it can be used directly as
+a root handler for *htparser*(1). For instance, if the directory
+`/srv/www/foo` contains a `wsgi.py` file, which declares a standard
+WSGI `application` object, it can be served with the following
+command:
+
+--------
+htparser plain:port=8080 -- ashd-wsgi -Ap /srv/www/foo wsgi
+--------
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*scgi-wsgi*(1), *ashd*(7), <http://wsgi.org/>
