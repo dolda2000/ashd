@@ -32,10 +32,13 @@ class req(object):
     Python stream object in the `sk' variable. Again, see the ashd(7)
     manpage for what to receive and transmit on the response socket.
 
-    Note that instances of this class contain a reference to the live
-    socket used for responding to requests, which should be closed
-    when you are done with the request. The socket can be closed
-    manually by calling the close() method on this
+    Note that all request parts are stored in byte, rather than
+    string, form. The response socket is also opened in binary mode.
+
+    Note also that instances of this class contain a reference to the
+    live socket used for responding to requests, which should be
+    closed when you are done with the request. The socket can be
+    closed manually by calling the close() method on this
     object. Alternatively, this class implements the resource-manager
     interface, so that it can be used in `with' statements.
     """
@@ -60,6 +63,9 @@ class req(object):
         req["Content-Type"] returns the value of the content-type
         header regardlessly of whether the client specified it as
         "Content-Type", "content-type" or "Content-type".
+        
+        If the header is given as a (Unicode) string, it is encoded
+        into Ascii for use in matching.
         """
         if isinstance(header, str):
             header = header.encode("ascii")
@@ -92,6 +98,9 @@ class req(object):
         the rest string, this method strips that part of the rest
         string off and returns True. Otherwise, it returns False
         without doing anything.
+
+        If the `match' argument is given as a (Unicode) string, it is
+        encoded into UTF-8.
 
         This can be used for simple dispatching. For example:
         if req.match("foo/"):

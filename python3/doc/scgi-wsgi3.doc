@@ -1,28 +1,28 @@
-scgi-wsgi(1)
+scgi-wsgi3(1)
 ============
 
 NAME
 ----
-scgi-wsgi - WSGI adapter for SCGI
+scgi-wsgi3 - WSGI adapter for SCGI
 
 SYNOPSIS
 --------
-*scgi-wsgi* [*-hA*] [*-p* 'MODPATH'] [*-T* \[HOST:]'PORT'] 'HANDLER-MODULE' ['ARGS'...]
+*scgi-wsgi3* [*-hA*] [*-p* 'MODPATH'] [*-T* \[HOST:]'PORT'] 'HANDLER-MODULE' ['ARGS'...]
 
 DESCRIPTION
 -----------
 
-The *scgi-wsgi* program translates SCGI requests to WSGI requests, and
-passes them to a specified Python module. It is mainly written to
+The *scgi-wsgi3* program translates SCGI requests to WSGI requests,
+and passes them to a specified Python module. It is mainly written to
 emulate the behavior of *ashd-wsgi*(1), but over SCGI instead of the
 native *ashd*(7) protocol, so please see its documentation for details
 of Python interoperation. Unlike *ashd-wsgi* which requires CPython,
-however, *scgi-wsgi* is written in pure Python using only the standard
-library, and so should be usable by any Python implementation. If
-using it under *ashd*(7), please see the documentation for
-*callscgi*(1) as well.
+however, *scgi-wsgi3* is written in pure Python using only the
+standard library, and so should be usable by any Python
+implementation. If using it under *ashd*(7), please see the
+documentation for *callscgi*(1) as well.
 
-Following *callscgi*(1) conventions, *scgi-wsgi* will, by default,
+Following *callscgi*(1) conventions, *scgi-wsgi3* will, by default,
 accept connections on a socket passed on its standard input (a
 behavior which is, obviously, not available on all Python
 implementations). Use the *-T* option to listen to a TCP address
@@ -59,5 +59,5 @@ Fredrik Tolf <fredrik@dolda2000.com>
 
 SEE ALSO
 --------
-*ashd-wsgi*(1), *callscgi*(1), <http://wsgi.org/>,
+*ashd-wsgi3*(1), *callscgi*(1), <http://wsgi.org/>,
 <http://www.python.ca/scgi/>

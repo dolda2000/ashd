@@ -126,7 +126,8 @@ def respond(req, body, status = ("200 OK"), ctype = "text/html"):
     and the `ctype' argument can be used to specify a non-HTML
     MIME-type.
 
-    If `body' is a Unicode object, it will be encoded as UTF-8.
+    If `body' is not a byte string, its string representation will be
+    encoded as UTF-8.
 
     For example:
         respond(req, "Not found", status = "404 Not Found", ctype = "text/plain")
