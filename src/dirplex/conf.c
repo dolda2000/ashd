@@ -46,9 +46,16 @@ static void freerule(struct rule *rule)
 static void freepattern(struct pattern *pat)
 {
     struct rule **rule;
+    struct headmod *head;
     
     for(rule = pat->rules; *rule; rule++)
 	freerule(*rule);
+    while((head = pat->headers) != NULL) {
+	pat->headers = head->next;
+	free(head->name);
+	free(head->value);
+	free(head);
+    }
     if(pat->childnm != NULL)
 	free(pat->childnm);
     freeca(pat->fchild);
@@ -131,6 +138,7 @@ static struct pattern *parsepattern(struct cfstate *s)
 {
     struct pattern *pat;
     struct rule *rule;
+    struct headmod *head;
     int sl;
 
     if(!strcmp(s->argv[0], "match")) {
@@ -177,6 +185,16 @@ static struct pattern *parsepattern(struct cfstate *s)
 	    pat->childnm = sstrdup(s->argv[1]);
 	} else if(!strcmp(s->argv[0], "fork")) {
 	    pat->fchild = cadup(s->argv + 1);
+	} else if(!strcmp(s->argv[0], "set")) {
+	    if(s->argc < 3) {
+		flog(LOG_WARNING, "%s:%i: missing header name or pattern for `set' directive", s->file, s->lno);
+		continue;
+	    }
+	    omalloc(head);
+	    head->name = sstrdup(s->argv[1]);
+	    head->value = sstrdup(s->argv[2]);
+	    head->next = pat->headers;
+	    pat->headers = head;
 	} else if(!strcmp(s->argv[0], "end") || !strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {

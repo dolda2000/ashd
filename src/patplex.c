@@ -57,8 +57,14 @@ struct rule {
     regex_t *pattern;
 };
 
+struct headmod {
+    struct headmod *next;
+    char *name, *value;
+};
+
 struct pattern {
     struct pattern *next;
+    struct headmod *headers;
     char *childnm;
     struct rule **rules;
     char *restpat;
@@ -70,6 +76,7 @@ static volatile int reload = 0;
 static void freepattern(struct pattern *pat)
 {
     struct rule **rule;
+    struct headmod *head;
     
     for(rule = pat->rules; *rule; rule++) {
 	if((*rule)->header != NULL)
@@ -79,6 +86,12 @@ static void freepattern(struct pattern *pat)
 	    free((*rule)->pattern);
 	}
 	free(*rule);
+    }
+    while((head = pat->headers) != NULL) {
+	pat->headers = head->next;
+	free(head->name);
+	free(head->value);
+	free(head);
     }
     if(pat->childnm != NULL)
 	free(pat->childnm);
@@ -154,6 +167,7 @@ static struct pattern *parsepattern(struct cfstate *s)
     struct pattern *pat;
     int sl;
     struct rule *rule;
+    struct headmod *head;
     regex_t *regex;
     int rxfl;
     
@@ -235,6 +249,16 @@ static struct pattern *parsepattern(struct cfstate *s)
 	    if(pat->restpat != NULL)
 		free(pat->restpat);
 	    pat->restpat = sstrdup(s->argv[1]);
+	} else if(!strcmp(s->argv[0], "set")) {
+	    if(s->argc < 3) {
+		flog(LOG_WARNING, "%s:%i: missing header name or pattern for `set' directive", s->file, s->lno);
+		continue;
+	    }
+	    omalloc(head);
+	    head->name = sstrdup(s->argv[1]);
+	    head->value = sstrdup(s->argv[2]);
+	    head->next = pat->headers;
+	    pat->headers = head;
 	} else if(!strcmp(s->argv[0], "end") || !strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
@@ -333,7 +357,7 @@ static void exprestpat(struct hthead *req, struct pattern *pat, char **mstr)
     buffree(buf);
 }
 
-static char *findmatch(struct config *cf, struct hthead *req, int trydefault)
+static struct pattern *findmatch(struct config *cf, struct hthead *req, int trydefault)
 {
     int i, o;
     struct pattern *pat;
@@ -396,7 +420,7 @@ static char *findmatch(struct config *cf, struct hthead *req, int trydefault)
 	    }
 	    if(mstr)
 		freeca(mstr);
-	    return(pat->childnm);
+	    return(pat);
 	}
 	if(mstr) {
 	    freeca(mstr);
@@ -408,37 +432,42 @@ static char *findmatch(struct config *cf, struct hthead *req, int trydefault)
 
 static void serve(struct hthead *req, int fd)
 {
-    char *chnm;
+    struct pattern *pat;
+    struct headmod *head;
     struct child *ch;
     
-    chnm = NULL;
-    if(chnm == NULL)
-	chnm = findmatch(lconfig, req, 0);
-    if(chnm == NULL)
-	chnm = findmatch(lconfig, req, 1);
+    pat = NULL;
+    if(pat == NULL)
+	pat = findmatch(lconfig, req, 0);
+    if(pat == NULL)
+	pat = findmatch(lconfig, req, 1);
     if(gconfig != NULL) {
-	if(chnm == NULL)
-	    chnm = findmatch(gconfig, req, 0);
-	if(chnm == NULL)
-	    chnm = findmatch(gconfig, req, 1);
+	if(pat == NULL)
+	    pat = findmatch(gconfig, req, 0);
+	if(pat == NULL)
+	    pat = findmatch(gconfig, req, 1);
     }
-    if(chnm == NULL) {
+    if(pat == NULL) {
 	simpleerror(fd, 404, "Not Found", "The requested resource could not be found on this server.");
 	return;
     }
     ch = NULL;
     if(ch == NULL)
-	ch = getchild(lconfig, chnm);
+	ch = getchild(lconfig, pat->childnm);
     if(gconfig != NULL) {
 	if(ch == NULL)
-	    ch = getchild(gconfig, chnm);
+	    ch = getchild(gconfig, pat->childnm);
     }
     if(ch == NULL) {
-	flog(LOG_ERR, "child %s requested, but was not declared", chnm);
-	simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", chnm);
+	flog(LOG_ERR, "child %s requested, but was not declared", pat->childnm);
+	simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", pat->childnm);
 	return;
     }
     
+    for(head = pat->headers; head != NULL; head = head->next) {
+	headrmheader(req, head->name);
+	headappheader(req, head->name, head->value);
+    }
     if(childhandle(ch, req, fd, NULL, NULL))
 	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
 }

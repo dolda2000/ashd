@@ -59,8 +59,13 @@ static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
 {
     struct child *ch;
     struct config *ccf;
+    struct headmod *head;
     char *twd;
 
+    for(head = pat->headers; head != NULL; head = head->next) {
+	headrmheader(req, head->name);
+	headappheader(req, head->name, head->value);
+    }
     if(!strncmp(path, "./", 2) && path[2])
 	path += 2;
     if(pat->fchild) {

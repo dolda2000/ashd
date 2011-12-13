@@ -25,9 +25,15 @@ struct rule {
     char **patterns;
 };
 
+struct headmod {
+    struct headmod *next;
+    char *name, *value;
+};
+
 struct pattern {
     struct pattern *next;
     int type;
+    struct headmod *headers;
     char *childnm;
     char **fchild;
     struct rule **rules;
@@ -39,6 +45,7 @@ struct config *getconfig(char *path);
 struct config **getconfigs(char *file);
 struct child *findchild(char *file, char *name, struct config **cf);
 struct pattern *findmatch(char *file, int trydefault, int dir);
+void modheaders(struct hthead *req, struct pattern *pat);
 
 extern time_t now;
 extern struct child *notfound;
