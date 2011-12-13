@@ -37,9 +37,9 @@ PORT SPECIFICATION
 Currently, the available 'HANDLERs' are *plain* and *ssl*, for
 handling plain TCP connections and SSL/TLS-protected connections,
 respectively. For details regarding the arguments that each handler
-accept, simply run *htparser* with 'HANDLER'*:help*. For example, the
-command "`htparser ssl:help`" will display help for the *ssl* handler to
-standard output and then exit.
+accepts, simply run *htparser* with 'HANDLER'*:help*. For example, the
+command "`htparser ssl:help`" will display help for the *ssl* handler
+to standard output and then exit.
 
 The port specifications must be followed by the `--` argument to
 distinguish them from the root handler specification.
@@ -63,19 +63,19 @@ OPTIONS
 	Daemonize after all specified ports have been successfully
 	bound and the root handler has been started.
 
-*-u*::
+*-u* 'USER'::
 
 	Change UID to 'USER' once all specified ports have been
 	successfully bound and the root handler has been
 	started. 'USER' must be specified symbolically (i.e. not as a
 	numeric UID).
 
-*-r*::
+*-r* 'ROOT'::
 
 	Change root directory to 'ROOT' once all specified ports have
 	been successfully bound and the root handler has been started.
 
-*-p*::
+*-p* 'PIDFILE'::
 
 	After having daemonized, write the PID of the new process to
 	'PIDFILE'.
