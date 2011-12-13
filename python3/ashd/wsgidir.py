@@ -17,7 +17,7 @@ omitted (such that the name is a string with no dots), in which case
 the handler object is looked up from this module.
 
 By default, this module will handle files with the extensions `.wsgi'
-or `.wsgi2' using the `chain' handler, which chainloads such files and
+or `.wsgi3' using the `chain' handler, which chainloads such files and
 runs them as independent WSGI applications. See its documentation for
 details.
 
