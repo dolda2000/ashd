@@ -1,7 +1,13 @@
+Version 0.10:
+
+	* Added options to dirplex and patplex for setting request headers
+	  based on matches.
+	* Documentation fixes.
+
 Version 0.9:
 
 	* Accumulated minor fixes.
-	
+
 Version 0.8:
 
 	* Various bug fixes, protocol compliance fixes, tunings,
@@ -14,35 +20,35 @@ Version 0.7:
 	* Made the Python module properly buildable.
 	* Added SSL session resuming.
 	* Fixed htparser memory leak.
-	
+
 Version 0.6:
 
 	* Made dirplex' 404 handling more flexible.
 	* Added epoll support.
 	* Added a program for logging stderr messages.
-	
+
 Version 0.5:
 
 	* Bugfixes.
 	* Added directory-local matching to dirplex.
-	
+
 Version 0.4:
 
 	* Added a FastCGI handler.
-	
+
 Version 0.3:
 
 	* Added SNI support.
 	* Added a filter program for BASIC authentication.
 	* Improved log message handling.
 	* Improved HTTP protocol compliance.
-	
+
 Version 0.2:
 
 	* Added an access logger program.
 	* Improved the sendfile program, particularly to support
 	  transmission of partial files.
-	
+
 Version 0.1:
 
 	* Initial release
