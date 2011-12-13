@@ -4,3 +4,10 @@ fchild php
 match
   filename *.php
   handler php
+
+# Use the following configuration to use FCGI with PHP instead of
+# ordinary CGI. Adjust the number of processes as you wish (see
+# multifscgi(1) for details).
+#
+# child php
+#   exec callfcgi multifscgi 3 php-cgi
