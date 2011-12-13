@@ -92,7 +92,7 @@ EXAMPLES
 `htparser plain:port=8080 -- dirplex /srv/www`::
 
 	The same as the previous example, but uses port 8080 instead,
-	so that it can be started without root privileges.]
+	so that it can be started without root privileges.
 
 `htparser plain ssl:cert=/etc/ssl/private/web.pem -- dirplex /srv/www`::
 
