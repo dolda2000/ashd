@@ -60,7 +60,6 @@ class cachedmod(object):
         self.mod = mod
         self.mtime = mtime
 
-exts = {}
 modcache = {}
 cachelock = threading.Lock()
 
@@ -114,6 +113,60 @@ def getmod(path):
     finally:
         entry.lock.release()
 
+class handler(object):
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.handlers = {}
+        self.exts = {}
+        self.addext("wsgi", "chain")
+        self.addext("wsgi2", "chain")
+
+    def resolve(self, name):
+        self.lock.acquire()
+        try:
+            if name in self.handlers:
+                return self.handlers[name]
+            p = name.rfind('.')
+            if p < 0:
+                return globals()[name]
+            mname = name[:p]
+            hname = name[p + 1:]
+            mod = __import__(mname, fromlist = ["dummy"])
+            ret = getattr(mod, hname)
+            self.handlers[name] = ret
+            return ret
+        finally:
+            self.lock.release()
+        
+    def addext(self, ext, handler):
+        self.exts[ext] = self.resolve(handler)
+
+    def handle(self, env, startreq):
+        if not "SCRIPT_FILENAME" in env:
+            return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
+        path = env["SCRIPT_FILENAME"]
+        base = os.path.basename(path)
+        p = base.rfind('.')
+        if p < 0 or not os.access(path, os.R_OK):
+            return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
+        ext = base[p + 1:]
+        if not ext in self.exts:
+            return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
+        return(self.exts[ext](env, startreq))
+
+def wmain(*argv):
+    """Main function for ashd(7)-compatible WSGI handlers
+
+    Returns the `application' function. If any arguments are given,
+    they are parsed according to the module documentation.
+    """
+    ret = handler()
+    for arg in argv:
+        if arg[0] == '.':
+            p = arg.index('=')
+            ret.addext(arg[1:p], arg[p + 1:])
+    return ret.handle
+
 def chain(env, startreq):
     path = env["SCRIPT_FILENAME"]
     mod = getmod(path)
@@ -134,40 +187,5 @@ def chain(env, startreq):
     if entry is not None:
         return entry(env, startreq)
     return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "Invalid WSGI handler.")
-exts["wsgi"] = chain
 
-def addext(ext, handler):
-    p = handler.rindex('.')
-    mname = handler[:p]
-    hname = handler[p + 1:]
-    mod = __import__(mname, fromlist = ["dummy"])
-    exts[ext] = getattr(mod, hname)
-
-def application(env, startreq):
-    """WSGI handler function
-
-    Handles WSGI requests as per the module documentation.
-    """
-    if not "SCRIPT_FILENAME" in env:
-        return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
-    path = env["SCRIPT_FILENAME"]
-    base = os.path.basename(path)
-    p = base.rfind('.')
-    if p < 0 or not os.access(path, os.R_OK):
-        return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
-    ext = base[p + 1:]
-    if not ext in exts:
-        return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
-    return(exts[ext](env, startreq))
-
-def wmain(*argv):
-    """Main function for ashd(7)-compatible WSGI handlers
-
-    Returns the `application' function. If any arguments are given,
-    they are parsed according to the module documentation.
-    """
-    for arg in argv:
-        if arg[0] == '.':
-            p = arg.index('=')
-            addext(arg[1:p], arg[p + 1:])
-    return application
+application = handler().handle
