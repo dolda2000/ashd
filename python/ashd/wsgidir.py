@@ -87,13 +87,13 @@ def getmod(path):
         if path in modcache:
             entry = modcache[path]
         else:
-            entry = cachedmod()
+            entry = [threading.Lock(), None]
             modcache[path] = entry
     finally:
         cachelock.release()
-    entry.lock.acquire()
+    entry[0].acquire()
     try:
-        if entry.mod is None or sb.st_mtime > entry.mtime:
+        if entry[1] is None or sb.st_mtime > entry[1].mtime:
             f = open(path, "r")
             try:
                 text = f.read()
@@ -103,11 +103,10 @@ def getmod(path):
             mod = types.ModuleType(mangle(path))
             mod.__file__ = path
             exec code in mod.__dict__
-            entry.mod = mod
-            entry.mtime = sb.st_mtime
-        return entry
+            entry[1] = cachedmod(mod, sb.st_mtime)
+        return entry[1]
     finally:
-        entry.lock.release()
+        entry[0].release()
 
 class handler(object):
     def __init__(self):
