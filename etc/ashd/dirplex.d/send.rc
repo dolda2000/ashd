@@ -1,20 +1,33 @@
+fchild send
+  exec sendfile
+
 match
   filename *.html
-  fork sendfile -c text/html
+  xset content-type text/html
+  handler send
 match
   filename *.css
-  fork sendfile -c text/css
+  xset content-type text/css
+  handler send
 match
   filename *.txt
-  fork sendfile -c text/plain
+  xset content-type text/plain
+  handler send
+match
+  filename *.js
+  xset content-type text/javascript
+  handler send
 
 # Image types
 match
   filename *.gif
-  fork sendfile -c image/gif
+  xset content-type image/gif
+  handler send
 match
   filename *.png
-  fork sendfile -c image/png
+  xset content-type image/png
+  handler send
 match
   filename *.jpg *.jpeg
-  fork sendfile -c image/jpeg
+  xset content-type image/jpeg
+  handler send
