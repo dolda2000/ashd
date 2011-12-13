@@ -36,7 +36,7 @@ functions, you may want to use the getmod() function in this module.
 import os, threading, types
 import wsgiutil
 
-__all__ = ["application", "wmain", "getmod", "cachedmod"]
+__all__ = ["application", "wmain", "getmod", "cachedmod", "chain"]
 
 class cachedmod(object):
     """Cache entry for modules loaded by getmod()
