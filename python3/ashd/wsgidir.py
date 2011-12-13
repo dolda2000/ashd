@@ -37,7 +37,7 @@ must, of course, be importable). When writing such handler functions,
 you will probably want to use the getmod() function in this module.
 """
 
-import os, threading, types
+import os, threading, types, importlib
 from . import wsgiutil
 
 __all__ = ["application", "wmain", "getmod", "cachedmod"]
@@ -55,7 +55,7 @@ class cachedmod(object):
     Additional data attributes can be arbitrarily added for recording
     any meta-data about the module.
     """
-    def __init__(self, mod, mtime):
+    def __init__(self, mod = None, mtime = -1):
         self.lock = threading.Lock()
         self.mod = mod
         self.mtime = mtime
@@ -90,20 +90,19 @@ def getmod(path):
     with cachelock:
         if path in modcache:
             entry = modcache[path]
-            if sb.st_mtime <= entry.mtime:
-                return entry
-        
-        f = open(path)
-        try:
-            text = f.read()
-        finally:
-            f.close()
-        code = compile(text, path, "exec")
-        mod = types.ModuleType(mangle(path))
-        mod.__file__ = path
-        exec(code, mod.__dict__)
-        entry = cachedmod(mod, sb.st_mtime)
-        modcache[path] = entry
+        else:
+            entry = cachedmod()
+            modcache[path] = entry
+    with entry.lock:
+        if entry.mod is None or sb.st_mtime > entry.mtime:
+            with open(path, "rb") as f:
+                text = f.read()
+            code = compile(text, path, "exec")
+            mod = types.ModuleType(mangle(path))
+            mod.__file__ = path
+            exec(code, mod.__dict__)
+            entry.mod = mod
+            entry.mtime = sb.st_mtime
         return entry
 
 def chain(env, startreq):

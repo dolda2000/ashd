@@ -55,7 +55,7 @@ class cachedmod(object):
     Additional data attributes can be arbitrarily added for recording
     any meta-data about the module.
     """
-    def __init__(self, mod, mtime):
+    def __init__(self, mod = None, mtime = -1):
         self.lock = threading.Lock()
         self.mod = mod
         self.mtime = mtime
@@ -91,23 +91,28 @@ def getmod(path):
     try:
         if path in modcache:
             entry = modcache[path]
-            if sb.st_mtime <= entry.mtime:
-                return entry
-        
-        f = open(path)
-        try:
-            text = f.read()
-        finally:
-            f.close()
-        code = compile(text, path, "exec")
-        mod = types.ModuleType(mangle(path))
-        mod.__file__ = path
-        exec code in mod.__dict__
-        entry = cachedmod(mod, sb.st_mtime)
-        modcache[path] = entry
-        return entry
+        else:
+            entry = cachedmod()
+            modcache[path] = entry
     finally:
         cachelock.release()
+    entry.lock.acquire()
+    try:
+        if entry.mod is None or sb.st_mtime > entry.mtime:
+            f = open(path, "r")
+            try:
+                text = f.read()
+            finally:
+                f.close()
+            code = compile(text, path, "exec")
+            mod = types.ModuleType(mangle(path))
+            mod.__file__ = path
+            exec code in mod.__dict__
+            entry.mod = mod
+            entry.mtime = sb.st_mtime
+        return entry
+    finally:
+        entry.lock.release()
 
 def chain(env, startreq):
     path = env["SCRIPT_FILENAME"]
