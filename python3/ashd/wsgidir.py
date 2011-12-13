@@ -1,40 +1,36 @@
 """WSGI handler for serving chained WSGI modules from physical files
 
-The WSGI handler in this module examines the SCRIPT_FILENAME variable
-of the requests it handles -- that is, the physical file corresponding
-to the request, as determined by the webserver -- determining what to
-do with the request based on the extension of that file.
+The WSGI handler in this module ensures that the SCRIPT_FILENAME
+variable is properly set in every request and points out a file that
+exists and is readable. It then dispatches the request in one of two
+ways: If the header X-Ash-Python-Handler is set in the request, its
+value is used as the name of a handler object to dispatch the request
+to; otherwise, the file extension of the SCRIPT_FILENAME is used to
+determine the handler object.
 
-By default, it handles files named `.wsgi' by compiling them into
-Python modules and using them, in turn, as chained WSGI handlers, but
-handlers for other extensions can be installed as well.
+The name of a handler object is specified as a string, which is split
+along its last constituent dot. The part left of the dot is the name
+of a module, which is imported; and the part right of the dot is the
+name of an object in that module, which should be a callable adhering
+to the WSGI specification. Alternatively, the module part may be
+omitted (such that the name is a string with no dots), in which case
+the handler object is looked up from this module.
 
-When handling `.wsgi' files, the compiled modules are cached and
-reused until the file is modified, in which case the previous module
-is discarded and the new file contents are loaded into a new module in
-its place. When chaining such modules, an object named `wmain' is
-first looked for and called with no arguments if found. The object it
-returns is then used as the WSGI application object for that module,
-which is reused until the module is reloaded. If `wmain' is not found,
-an object named `application' is looked for instead. If found, it is
-used directly as the WSGI application object.
+By default, this module will handle files with the extensions `.wsgi'
+or `.wsgi2' using the `chain' handler, which chainloads such files and
+runs them as independent WSGI applications. See its documentation for
+details.
 
 This module itself contains both an `application' and a `wmain'
 object. If this module is used by ashd-wsgi(1) or scgi-wsgi(1) so that
 its wmain function is called, arguments can be specified to it to
 install handlers for other file extensions. Such arguments take the
-form `.EXT=MODULE.HANDLER', where EXT is the file extension to be
-handled, and the MODULE.HANDLER string is treated by splitting it
-along its last constituent dot. The part left of the dot is the name
-of a module which is imported, and the part right of the dot is the
-name of an object in that module, which should be a callable adhering
-to the WSGI specification. When called, this module will have made
-sure that the WSGI environment contains the SCRIPT_FILENAME parameter
-and that it is properly working. For example, the argument
-`.fpy=my.module.foohandler' can be given to pass requests for `.fpy'
-files to the function `foohandler' in the module `my.module' (which
-must, of course, be importable). When writing such handler functions,
-you will probably want to use the getmod() function in this module.
+form `.EXT=HANDLER', where EXT is the file extension to be handled,
+and HANDLER is a handler name, as described above. For example, the
+argument `.fpy=my.module.foohandler' can be given to pass requests for
+`.fpy' files to the function `foohandler' in the module `my.module'
+(which must, of course, be importable). When writing such handler
+functions, you may want to use the getmod() function in this module.
 """
 
 import os, threading, types, importlib
@@ -133,14 +129,20 @@ class handler(object):
         if not "SCRIPT_FILENAME" in env:
             return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
         path = env["SCRIPT_FILENAME"]
-        base = os.path.basename(path)
-        p = base.rfind('.')
-        if p < 0 or not os.access(path, os.R_OK):
+        if not os.access(path, os.R_OK):
             return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
-        ext = base[p + 1:]
-        if not ext in self.exts:
-            return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
-        return(self.exts[ext](env, startreq))
+        if "HTTP_X_ASH_PYTHON_HANDLER" in env:
+            handler = self.resolve(env["HTTP_X_ASH_PYTHON_HANDLER"])
+        else:
+            base = os.path.basename(path)
+            p = base.rfind('.')
+            if p < 0:
+                return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
+            ext = base[p + 1:]
+            if not ext in self.exts:
+                return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
+            handler = self.exts[ext]
+        return handler(env, startreq)
 
 def wmain(*argv):
     """Main function for ashd(7)-compatible WSGI handlers
@@ -156,6 +158,20 @@ def wmain(*argv):
     return ret.handle
 
 def chain(env, startreq):
+    """Chain-loading WSGI handler
+    
+    This handler loads requested files, compiles them and loads them
+    into their own modules. The compiled modules are cached and reused
+    until the file is modified, in which case the previous module is
+    discarded and the new file contents are loaded into a new module
+    in its place. When chaining such modules, an object named `wmain'
+    is first looked for and called with no arguments if found. The
+    object it returns is then used as the WSGI application object for
+    that module, which is reused until the module is reloaded. If
+    `wmain' is not found, an object named `application' is looked for
+    instead. If found, it is used directly as the WSGI application
+    object.
+    """
     path = env["SCRIPT_FILENAME"]
     mod = getmod(path)
     entry = None
