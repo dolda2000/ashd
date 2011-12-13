@@ -279,8 +279,12 @@ int main(int argc, char **argv)
 	simpleerror(1, 405, "Method not allowed", "The requested method is not defined for this resource.");
 	return(0);
     }
-    if(contype == NULL)
-	contype = getmimetype(file, &sb);
+    if(contype == NULL) {
+	if((hdr = getenv("REQ_X_ASH_CONTENT_TYPE")) != NULL)
+	    contype = hdr;
+	else
+	    contype = getmimetype(file, &sb);
+    }
     contype = ckctype(contype);
     
     checkcache(file, &sb);
