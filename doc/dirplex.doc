@@ -261,14 +261,21 @@ following actions are recognized:
 	by a *fchild* stanza. This action exists mostly for
 	convenience.
 
-A *match* stanza may also contain any number of *set* lines, as
-follows:
+A *match* stanza may also contain any number of the following,
+optional directives:
 
 *set* 'HEADER' 'VALUE'::
 
 	If the *match* stanza is selected as the match for a file, the
 	named HTTP 'HEADER' in the request is set to 'VALUE' before
 	passing the request on to the specified handler.
+
+*xset* 'HEADER' 'VALUE'::
+
+	*xset* does exactly the same thing as *set*, except the
+         'HEADER' is automatically prepended with the `X-Ash-`
+         prefix. The intention is only to make configuration files
+         look nicer in this very common case.
 
 404 RESPONSES
 -------------

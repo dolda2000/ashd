@@ -249,13 +249,16 @@ static struct pattern *parsepattern(struct cfstate *s)
 	    if(pat->restpat != NULL)
 		free(pat->restpat);
 	    pat->restpat = sstrdup(s->argv[1]);
-	} else if(!strcmp(s->argv[0], "set")) {
+	} else if(!strcmp(s->argv[0], "set") || !strcmp(s->argv[0], "xset")) {
 	    if(s->argc < 3) {
-		flog(LOG_WARNING, "%s:%i: missing header name or pattern for `set' directive", s->file, s->lno);
+		flog(LOG_WARNING, "%s:%i: missing header name or pattern for `%s' directive", s->file, s->lno, s->argv[0]);
 		continue;
 	    }
 	    omalloc(head);
-	    head->name = sstrdup(s->argv[1]);
+	    if(!strcmp(s->argv[0], "xset"))
+		head->name = sprintf2("X-Ash-%s", s->argv[1]);
+	    else
+		head->name = sstrdup(s->argv[1]);
 	    head->value = sstrdup(s->argv[2]);
 	    head->next = pat->headers;
 	    pat->headers = head;

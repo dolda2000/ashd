@@ -111,6 +111,13 @@ optional lines:
 	request on to the specified handler. A *match* stanza may
 	contain any number of *set* lines.
 
+*xset* 'HEADER' 'VALUE'::
+
+	*xset* does exactly the same thing as *set*, except the
+         'HEADER' is automatically prepended with the `X-Ash-`
+         prefix. The intention is only to make configuration files
+         look nicer in this very common case.
+
 *restpat* 'TEMPLATE'::
 
 	If the *match* stanza as a whole matches, 'TEMPLATE' is
