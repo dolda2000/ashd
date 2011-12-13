@@ -129,7 +129,7 @@ def addext(ext, handler):
     p = handler.rindex('.')
     mname = handler[:p]
     hname = handler[p + 1:]
-    mod = __import__(mname, fromlist = ["dummy"])
+    mod = importlib.import_module(mname)
     exts[ext] = getattr(mod, hname)
 
 def application(env, startreq):
