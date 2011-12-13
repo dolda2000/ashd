@@ -26,6 +26,12 @@ empty. However, if the *-f* argument is given, the given 'FILE' will
 always be served instead, and the `X-Ash-File` header and any rest
 string is ignored.
 
+A file's MIME type may be specified explicitly either by using the
+*-c* option, or by passing the header `X-Ash-Content-Type` to
+*sendfile* with the MIME type of the file. That header might, for
+instance, be set using the *set* directives of *dirplex*(1) or
+*patplex*(1).
+
 If a MIME-type is not explicitly specified, *sendfile* uses
 *libmagic*(3) to determine the MIME-type automatically. If *sendfile*
 is compiled with support for filesystem attributes (see *attr*(5) if
