@@ -101,14 +101,23 @@ only the *handler* action is recognized:
 	'HANDLER' must be a named handler as declared by a *child* or
 	*fchild* stanza, to which the request is passed.
 
-Additionally, a *match* stanza may contain a *restpat* line:
+Additionally, a *match* stanza may contain any of the following,
+optional lines:
+
+*set* 'HEADER' 'VALUE'::
+
+	If the *match* stanza as a whole matches, the named HTTP
+	'HEADER' in the request is set to 'VALUE' before passing the
+	request on to the specified handler. A *match* stanza may
+	contain any number of *set* lines.
 
 *restpat* 'TEMPLATE'::
 
 	If the *match* stanza as a whole matches, 'TEMPLATE' is
 	expanded and installed as the rest string of the request
 	before it is passed to the specified handler. In 'TEMPLATE',
-	the following parameters are recognized and expanded.
+	the following parameters are recognized and expanded. At most
+	one *restpat* line may be given per *match* stanza.
 
 *$0* ... *$9*::
 

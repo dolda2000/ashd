@@ -261,6 +261,15 @@ following actions are recognized:
 	by a *fchild* stanza. This action exists mostly for
 	convenience.
 
+A *match* stanza may also contain any number of *set* lines, as
+follows:
+
+*set* 'HEADER' 'VALUE'::
+
+	If the *match* stanza is selected as the match for a file, the
+	named HTTP 'HEADER' in the request is set to 'VALUE' before
+	passing the request on to the specified handler.
+
 404 RESPONSES
 -------------
 
