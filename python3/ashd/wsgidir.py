@@ -87,8 +87,7 @@ def getmod(path):
     about the module. See its documentation for details.
     """
     sb = os.stat(path)
-    cachelock.acquire()
-    try:
+    with cachelock:
         if path in modcache:
             entry = modcache[path]
             if sb.st_mtime <= entry.mtime:
@@ -106,16 +105,13 @@ def getmod(path):
         entry = cachedmod(mod, sb.st_mtime)
         modcache[path] = entry
         return entry
-    finally:
-        cachelock.release()
 
 def chain(env, startreq):
     path = env["SCRIPT_FILENAME"]
     mod = getmod(path)
     entry = None
     if mod is not None:
-        mod.lock.acquire()
-        try:
+        with mod.lock:
             if hasattr(mod, "entry"):
                 entry = mod.entry
             else:
@@ -124,8 +120,6 @@ def chain(env, startreq):
                 elif hasattr(mod.mod, "application"):
                     entry = mod.mod.application
                 mod.entry = entry
-        finally:
-            mod.lock.release()
     if entry is not None:
         return entry(env, startreq)
     return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "Invalid WSGI handler.")
