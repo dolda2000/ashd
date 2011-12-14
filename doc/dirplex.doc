@@ -307,9 +307,13 @@ EXAMPLES
 The *sendfile*(1) program can be used to serve HTML files as follows.
 
 --------
+fchild send
+  exec sendfile
+
 match
   filename *.html
-  fork sendfile -c text/html
+  xset content-type text/html
+  handler send
 --------
 
 Assuming the PHP CGI interpreter is installed on the system, PHP
