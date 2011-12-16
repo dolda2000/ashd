@@ -7,7 +7,7 @@ ashd-wsgi3 - WSGI adapter for ashd(7)
 
 SYNOPSIS
 --------
-*ashd-wsgi3* [*-hA*] [*-p* 'MODPATH'] [*-l* 'LIMIT'] 'HANDLER-MODULE' ['ARGS'...]
+*ashd-wsgi3* [*-hA*] [*-m* 'PDM-SPEC'] [*-p* 'MODPATH'] [*-l* 'LIMIT'] 'HANDLER-MODULE' ['ARGS'...]
 
 DESCRIPTION
 -----------
@@ -61,6 +61,12 @@ OPTIONS
 	request will wait up to ten seconds for one of them to
 	complete; if none does, *ashd-wsgi3* will assume that the
 	process is foobar and *abort*(3).
+
+*-m* 'PDM-SPEC'::
+
+	If the PDM library is installed on the system, create a
+	listening socket for connection PDM clients according to
+	'PDM-SPEC'.
 
 PROTOCOL
 --------
