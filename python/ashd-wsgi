@@ -193,6 +193,7 @@ def dowsgi(req):
             reqevent.response(resp)
     except:
         exc = sys.exc_info()
+        raise
     finally:
         reqevent.__exit__(*exc)
 
