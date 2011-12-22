@@ -13,7 +13,7 @@ if pdm:
 
     class reqstart(pdm.perf.startevent):
         def __init__(self, env):
-            super(reqstart, self).__init__()
+            super().__init__()
             self.method = env.get("REQUEST_METHOD")
             self.uri = env.get("REQUEST_URI")
             self.host = env.get("HTTP_HOST")
@@ -22,7 +22,7 @@ if pdm:
 
     class reqfinish(pdm.perf.finishevent):
         def __init__(self, start, aborted, status):
-            super(reqfinish, self).__init__(start, aborted)
+            super().__init__(start, aborted)
             self.status = status
 
 class request(object):
