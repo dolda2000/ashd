@@ -16,6 +16,8 @@ if pdm:
             self.method = env.get("REQUEST_METHOD")
             self.uri = env.get("REQUEST_URI")
             self.host = env.get("HTTP_HOST")
+            self.remoteaddr = env.get("REMOTE_ADDR")
+            self.remoteport = env.get("REMOTE_PORT")
 
     class reqfinish(pdm.perf.finishevent):
         def __init__(self, start, aborted, status):
