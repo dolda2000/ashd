@@ -329,6 +329,8 @@ struct config **getconfigs(char *file)
     if(ret != NULL)
 	free(ret);
     bufinit(buf);
+    if(!strncmp(file, "./", 2))
+	file += 2;
     tmp = sstrdup(file);
     while(1) {
 	if((p = strrchr(tmp, '/')) == NULL)
