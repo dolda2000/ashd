@@ -224,11 +224,13 @@ The following rules are recognized:
 
 *pathname* 'PATTERN'...::
 
-	Matches if the entire path (relative as considered from the
-	root directory being served) of the file under consideration
+	Matches if the entire path of the file under consideration
 	matches any of the 'PATTERNs'. A 'PATTERN' is an ordinary glob
 	pattern, except that slashes are not matched by wildcards. See
-	*fnmatch*(3) for more information.
+	*fnmatch*(3) for more information. If a *pathname* rule is
+	specified in a `.htrc` file, the path will be examined as
+	relative to the directory containing the `.htrc` file, rather
+	than to the root directory being served.
 
 *default*::
 

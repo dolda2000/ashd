@@ -374,7 +374,7 @@ struct child *findchild(char *file, char *name, struct config **cf)
 struct pattern *findmatch(char *file, int trydefault, int dir)
 {
     int i, o, c;
-    char *bn;
+    char *bn, *ln;
     struct config **cfs;
     struct pattern *pat;
     struct rule *rule;
@@ -386,6 +386,15 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
 	bn = file;
     cfs = getconfigs(file);
     for(c = 0; cfs[c] != NULL; c++) {
+	if(cfs[c]->path == NULL) {
+	    ln = file;
+	} else {
+	    pl = strlen(cfs[c]->path);
+	    if((strlen(file) > pl) && !strncmp(file, cfs[c]->path, pl) && (file[pl] == '/'))
+		ln = file + pl + 1;
+	    else
+		ln = file;	/* This should only happen in the base directory. */
+	}
 	for(pat = cfs[c]->patterns; pat != NULL; pat = pat->next) {
 	    if(!dir && (pat->type == PT_DIR))
 		continue;
@@ -401,7 +410,7 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
 			break;
 		} else if(rule->type == PAT_PATHNAME) {
 		    for(o = 0; rule->patterns[o] != NULL; o++) {
-			if(!fnmatch(rule->patterns[o], file, FNM_PATHNAME))
+			if(!fnmatch(rule->patterns[o], ln, FNM_PATHNAME))
 			    break;
 		    }
 		    if(rule->patterns[o] == NULL)
@@ -411,10 +420,7 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
 		    if(!trydefault)
 			break;
 		} else if(rule->type == PAT_LOCAL) {
-		    if(cfs[c]->path == NULL)
-			break;
-		    pl = strlen(cfs[c]->path);
-		    if(!((strlen(file) > pl) && !strncmp(file, cfs[c]->path, pl) && (file[pl] == '/') && !strchr(file + pl + 1, '/')))
+		    if(strchr(ln, '/'))
 			break;
 		}
 	    }
