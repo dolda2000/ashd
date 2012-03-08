@@ -24,6 +24,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <sys/poll.h>
+#include <sys/wait.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -343,6 +344,7 @@ int main(int argc, char **argv, char **envp)
     FILE *in, *out;
     char **headers;
     pid_t child;
+    int estat;
     
     environ = envp;
     signal(SIGPIPE, SIG_IGN);
@@ -404,5 +406,14 @@ int main(int argc, char **argv, char **envp)
     printf("\n");
     if(passdata(out, stdout))
 	kill(child, SIGINT);
-    return(0);
+    if(waitpid(child, &estat, 0) == child) {
+	if(WCOREDUMP(estat))
+	    flog(LOG_WARNING, "CGI handler `%s' dumped core", prog);
+	if(WIFEXITED(estat) && !WEXITSTATUS(estat))
+	    return(0);
+	else
+	    return(1);
+    }
+    flog(LOG_WARNING, "could not wait for CGI handler: %s", strerror(errno));
+    return(1);
 }
