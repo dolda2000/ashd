@@ -86,7 +86,6 @@ static char *absolutify(char *file)
 
 static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *url, char *rest, int *infd, int *outfd)
 {
-    int i;
     char *qp, **env, *name;
     int inp[2], outp[2];
     pid_t pid;
@@ -99,12 +98,12 @@ static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *u
 	exit(1);
     }
     if(pid == 0) {
-	close(inp[1]);
-	close(outp[0]);
 	dup2(inp[0], 0);
 	dup2(outp[1], 1);
-	for(i = 3; i < FD_SETSIZE; i++)
-	    close(i);
+	close(inp[0]);
+	close(inp[1]);
+	close(outp[0]);
+	close(outp[1]);
 	if((qp = strchr(url, '?')) != NULL)
 	    *(qp++) = 0;
 	putenv(sprintf2("SERVER_SOFTWARE=ashd/%s", VERSION));
