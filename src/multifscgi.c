@@ -66,6 +66,8 @@ static void manage(void)
 	pselect(0, NULL, NULL, NULL, NULL, &ns);
 	if(chdone) {
 	    while((ch = waitpid(-1, &st, WNOHANG)) > 0) {
+		if(WCOREDUMP(st))
+		    fprintf(stderr, "multifscgi: child %i (%s) dumped core\n", ch, chspec[0]);
 		for(i = 0; i < nchildren; i++) {
 		    if(children[i] == ch)
 			children[i] = 0;
@@ -108,6 +110,8 @@ static void killall(void)
 	    pselect(0, NULL, NULL, NULL, &to, &ns);
 	    if(chdone) {
 		while((ch = waitpid(-1, &st, WNOHANG)) > 0) {
+		    if(WCOREDUMP(st))
+			fprintf(stderr, "multifscgi: child %i (%s) dumped core\n", ch, chspec[0]);
 		    for(i = 0; i < nchildren; i++) {
 			if(children[i] == ch)
 			    children[i] = 0;

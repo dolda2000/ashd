@@ -320,10 +320,12 @@ static void serve(struct hthead *req, int fd)
 static void chldhandler(int sig)
 {
     pid_t pid;
+    int st;
     
-    do {
-	pid = waitpid(-1, NULL, WNOHANG);
-    } while(pid > 0);
+    while((pid = waitpid(-1, &st, WNOHANG)) > 0) {
+	if(WCOREDUMP(st))
+	    flog(LOG_WARNING, "child process %i dumped core", pid);
+    }
 }
 
 static void sighandler(int sig)

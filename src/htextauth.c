@@ -285,6 +285,8 @@ static int auth(struct hthead *req, int fd, char *user, char *pass)
 	buffree(ebuf);
 	return(0);
     }
+    if(WCOREDUMP(status))
+	flog(LOG_WARNING, "htextauth: authenticator process dumped core");
     if(WIFEXITED(status) && (WEXITSTATUS(status) == 0))
 	rv = 1;
     else
