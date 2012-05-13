@@ -88,7 +88,8 @@ write such programs. The *htparser*(1) program will only start a
 persistent program as the root handler.
 
 A persistent handler program, when started, is passed a Unix socket of
-SEQPACKET type on standard input. Its parent program will then pass
+SEQPACKET type on standard input (while standard output and error are
+inherited from the parent process). Its parent program will then pass
 one datagram per request on that socket, containing the above listed
 parts of the request using the datagram format described below. By
 convention, the handler program should exit normally if it receives
