@@ -93,7 +93,7 @@ rules are recognized:
 	rule has matched.
 
 In addition to the rules, a *match* stanza must contain exactly one
-follow-up line specifying the action to take if it mathces. Currently,
+follow-up line specifying the action to take if it matches. Currently,
 only the *handler* action is recognized:
 
 *handler* 'HANDLER'::

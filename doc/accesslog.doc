@@ -55,9 +55,9 @@ OPTIONS
 
 *-p* 'PIDFILE'::
 
-	Write the PID of the *accesslog* to 'PIDFILE'. 'PIDFILE' may
-	be `-`, in which case the string "`.pid`" is appended to the
-	log file name and used instead.
+	Write the PID of the *accesslog* process to
+	'PIDFILE'. 'PIDFILE' may be `-`, in which case the string
+	"`.pid`" is appended to the log file name and used instead.
 
 *-a*::
 

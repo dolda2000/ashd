@@ -26,8 +26,9 @@ automake and asciidoc.
 
 When  Ashd is compiled  and installed,  you will  most likely  want to
 install  its  default  configuration.   To  do  so,  simply  copy  the
-`etc/ashd' directory  into either `/etc' or  `/usr/local/etc'. It does
-not matter which you choose.
+`etc/ashd' directory  into either `/etc' or  `/usr/local/etc'. As long
+as  your system  is  fairly normal,  it  should not  matter which  you
+choose.
 
 			       Testing
 

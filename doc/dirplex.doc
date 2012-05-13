@@ -126,7 +126,7 @@ as part of the word. Empty lines are ignored, and lines whose first
 character after leading whitespace is a hash character (`#`) are
 treated as comments and ignored.
 
-The follow configuration directives are recognized:
+The following configuration directives are recognized:
 
 *include* ['FILENAME'...]::
 
@@ -189,7 +189,7 @@ The follow configuration directives are recognized:
 	above is aborted as soon as the directory containing the
 	`.htrc` file is encountered. The request is passed, with any
 	remaining rest string, to the specified 'HANDLER', which must
-	by a named request handler specified either in the same
+	be a named request handler specified either in the same
 	`.htrc` file or elsewhere. The *capture* directive accepts no
 	follow-up lines. Note that the `X-Ash-File` header is not
 	added to requests passed via *capture* directives.
@@ -274,7 +274,7 @@ optional directives:
 
 *xset* 'HEADER' 'VALUE'::
 
-	*xset* does exactly the same thing as *set*, except the
+	*xset* does exactly the same thing as *set*, except that
          'HEADER' is automatically prepended with the `X-Ash-`
          prefix. The intention is only to make configuration files
          look nicer in this very common case.
@@ -288,7 +288,7 @@ A HTTP 404 response is sent to the client if
  * A path element is encountered during mapping which, after URL
    unescaping, either begins with a dot or contains slashes;
  * The mapping procedure finds a file which is neither a directory nor
-   a regular file;
+   a regular file (or a symbolic link to any of the same);
  * An empty, non-final path element is encountered during mapping; or
  * The mapping procedure results in a file which is not matched by any
    *match* stanza.
@@ -313,7 +313,7 @@ fchild send
   exec sendfile
 
 match
-  filename *.html
+  filename *.html *.htm
   xset content-type text/html
   handler send
 --------
@@ -350,9 +350,9 @@ match directory
 The following configuration can be placed in a `.htrc` file in order
 to dedicate the directory containing that file to some external SCGI
 script engine. Note that *callscgi*, and therefore the script engine
-itself, is started in the directory itself, so that arbitrary code
-modules or data files can be put directly in that directory and easily
-found.
+itself, is started in the same directory, so that arbitrary code
+modules or data files can be put directly in that directory and be
+easily found.
 
 --------
 child foo

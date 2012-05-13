@@ -32,17 +32,17 @@ OPTIONS
 
 *-m*::
 
-	Include the time the listed files and directories were last
-	modified in the listing.
+	Include the time of last modification for the listed files and
+	directories in the listing.
 
 *-s*::
 
-	Include the size for files listed in the listing.
+	Include the size of the listed files in the listing.
 
 *-c* 'STYLESHEET'::
 
 	Instead of including an inline stylesheet, insert 'STYLESHEET'
-	as stylesheet link in the generated index.
+	as a stylesheet link in the generated index.
 
 AUTHOR
 ------
