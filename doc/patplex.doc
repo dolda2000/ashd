@@ -113,7 +113,7 @@ optional lines:
 
 *xset* 'HEADER' 'VALUE'::
 
-	*xset* does exactly the same thing as *set*, except the
+	*xset* does exactly the same thing as *set*, except that
          'HEADER' is automatically prepended with the `X-Ash-`
          prefix. The intention is only to make configuration files
          look nicer in this very common case.
