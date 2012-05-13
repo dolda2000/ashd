@@ -72,7 +72,7 @@ so please see those for further details.
    listens to TCP connections and speaks HTTP with the clients.
 
  * dirplex  -- dirplex  is the  program  used for  serving files  from
-   actual directories, in a manner  akin to how most other HTTP server
+   actual directories, in a manner akin to how most other HTTP servers
    work. In order to do that, dirplex maps URLs into existing physical
    files, and then performs  various kinds of pattern-matching against
    the names of those physical  files to determine the handler to call
