@@ -87,12 +87,12 @@ static void login(struct passwd *pwd)
      * getting Kerberos credentials, running PAM session modules, and
      * who knows what. I'll add them along as I find them useful. */
     if(((fd = open(".ashd/output", O_WRONLY | O_APPEND)) >= 0) ||
-       ((fd = open("/dev/null", 0)) >= 0)) {
+       ((fd = open("/dev/null", O_WRONLY)) >= 0)) {
 	dup2(fd, 1);
 	close(fd);
     }
     if(((fd = open(".ashd/error", O_WRONLY | O_APPEND)) >= 0) ||
-       ((fd = open("/dev/null", 0)) >= 0)) {
+       ((fd = open("/dev/null", O_WRONLY)) >= 0)) {
 	dup2(fd, 2);
 	close(fd);
     }
