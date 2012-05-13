@@ -41,8 +41,8 @@ OPTIONS
 
 *-c* 'STYLESHEET'::
 
-	Instead of including an inline stylesheet, insert
-	'STYLESHEET' a stylesheet link in the generated index.
+	Instead of including an inline stylesheet, insert 'STYLESHEET'
+	as stylesheet link in the generated index.
 
 AUTHOR
 ------
