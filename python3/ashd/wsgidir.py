@@ -33,7 +33,7 @@ argument `.fpy=my.module.foohandler' can be given to pass requests for
 functions, you may want to use the getmod() function in this module.
 """
 
-import os, threading, types, importlib
+import os, threading, types, importlib, getopt
 from . import wsgiutil
 
 __all__ = ["application", "wmain", "getmod", "cachedmod", "chain"]
@@ -149,12 +149,20 @@ def wmain(*argv):
     Returns the `application' function. If any arguments are given,
     they are parsed according to the module documentation.
     """
-    ret = handler()
-    for arg in argv:
+    hnd = handler()
+    ret = hnd.handle
+
+    opts, args = getopt.getopt(argv, "-V")
+    for o, a in opts:
+        if o == "-V":
+            import wsgiref.validate
+            ret = wsgiref.validate.validator(ret)
+
+    for arg in args:
         if arg[0] == '.':
             p = arg.index('=')
-            ret.addext(arg[1:p], arg[p + 1:])
-    return ret.handle
+            hnd.addext(arg[1:p], arg[p + 1:])
+    return ret
 
 def chain(env, startreq):
     """Chain-loading WSGI handler
