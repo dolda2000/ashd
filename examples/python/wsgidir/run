@@ -1,0 +1,15 @@
+#!/bin/sh
+
+# Change to the directory containing this script
+set -e
+cd "$(dirname "$0")"
+
+# Invoke dirplex running in this directory, loading the wsgidir.rc
+# configuration file. The same configuration can be put in
+# e.g. /etc/ashd/dirplex.d or in any .htrc file.
+
+# The setsid command ensures that SIGINT is only received by htparser
+# and not by dirplex or its children; it is not of any importance, but
+# makes shutdown slightly cleaner, and hides the KeyboardInterrupt
+# otherwise raised by Python.
+htparser plain:port=8080 -- setsid dirplex -c ./wsgidir.rc .

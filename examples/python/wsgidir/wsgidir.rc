@@ -1,0 +1,20 @@
+# Python 2 handler process
+child wsgidir
+  exec ashd-wsgi ashd.wsgidir
+# Python 3 scripts can also be served, using ashd-wsgi3
+child wsgidir3
+  exec ashd-wsgi3 ashd.wsgidir
+
+# Dispatch any *.wsgi files to wsgidir
+# See the Python documention for the ashd.wsgidir module for the
+#  meaning of the "xset python-handler chain" directive and what other
+#  values it can take.
+match
+  filename *.wsgi
+  xset python-handler chain
+  handler wsgidir
+# Do the same for Python3 scripts names *.wsgi3
+match
+  filename *.wsgi3
+  xset python-handler chain
+  handler wsgidir3

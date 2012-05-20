@@ -1,0 +1,14 @@
+import sys, ashd.wsgiutil
+
+def application(env, startreq):
+    startreq("200 OK", [("Content-Type", "text/html")])
+    # Note that WSGI 3 requires returned data to be bytes, not strings.
+    yield b"<html>\n"
+    yield b"<head><title>Hello world from Python3!</title></head>\n"
+    yield b"<body>\n"
+    yield b"<h1>Hello world from Python3!</h1>\n"
+    yield b"<p>This example does nothing in particular except demonstrating "
+    yield b"that there is support for Python3 as well.</p>\n"
+    yield b"<p>The current Python interpreter is <code>" + ashd.wsgiutil.htmlquote(sys.version).encode("utf-8") + b"</code>.</p>"
+    yield b"</body>\n"
+    yield b"</html>\n"

@@ -1,0 +1,6 @@
+This example demonstrates how the shipped Python module ashd.wsgidir
+can be used to call WSGI scripts in dirplex-served directories as
+easily as PHP scripts or mod_python scripts under Apache.
+
+To try this example, run it on your local machine and request
+<http://localhost:8080/> or <http://127.0.0.1:8080/>.
