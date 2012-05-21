@@ -138,8 +138,8 @@ def recvreq(sock = 0):
     done, to avoid leaking response sockets. If end-of-file is
     received on the socket, None is returned.
 
-    This function may either raise on OSError if an error occurs on
-    the socket, or a ashd.proto.protoerr if the incoming request is
+    This function may either raise an OSError if an error occurs on
+    the socket, or an ashd.proto.protoerr if the incoming request is
     invalidly encoded.
     """
     data, fd = htlib.recvfd(sock)
