@@ -86,16 +86,12 @@ char *htmlquote(char *text)
     return(ret = buf.b);
 }
 
-void simpleerror(int fd, int code, char *msg, char *fmt, ...)
+static void simpleerror2v(FILE *out, int code, char *msg, char *fmt, va_list args)
 {
     struct charbuf buf;
     char *tmp;
-    va_list args;
-    FILE *out;
     
-    va_start(args, fmt);
     tmp = vsprintf2(fmt, args);
-    va_end(args);
     bufinit(buf);
     bufcatstr(buf, "<?xml version=\"1.0\" encoding=\"US-ASCII\"?>\r\n");
     bufcatstr(buf, "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\r\n");
@@ -108,15 +104,34 @@ void simpleerror(int fd, int code, char *msg, char *fmt, ...)
     bprintf(&buf, "<p>%s</p>\r\n", htmlquote(tmp));
     bufcatstr(buf, "</body>\r\n");
     bufcatstr(buf, "</html>\r\n");
-    out = fdopen(dup(fd), "w");
     fprintf(out, "HTTP/1.1 %i %s\n", code, msg);
     fprintf(out, "Content-Type: text/html\n");
     fprintf(out, "Content-Length: %zi\n", buf.d);
     fprintf(out, "\n");
     fwrite(buf.b, 1, buf.d, out);
-    fclose(out);
     buffree(buf);
     free(tmp);
+}
+
+void simpleerror2(FILE *out, int code, char *msg, char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    simpleerror2v(out, code, msg, fmt, args);
+    va_end(args);
+}
+
+void simpleerror(int fd, int code, char *msg, char *fmt, ...)
+{
+    va_list args;
+    FILE *out;
+
+    va_start(args, fmt);
+    out = fdopen(dup(fd), "w");
+    simpleerror2v(out, code, msg, fmt, args);
+    fclose(out);
+    va_end(args);
 }
 
 void stdredir(struct hthead *req, int fd, int code, char *dst)
