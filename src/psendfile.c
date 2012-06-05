@@ -268,7 +268,8 @@ static void serve(struct muth *muth, va_list args)
 out:
     if(sfile != NULL)
 	fclose(sfile);
-    free(contype);
+    if(contype != NULL)
+	free(contype);
     fclose(out);
     freehthead(req);
 }
