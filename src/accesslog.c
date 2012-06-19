@@ -58,7 +58,7 @@ static void qputs(char *s, FILE *o)
 	} else if(*s == '\t') {
 	    fputs("\\t", o);
 	} else if((*s < 32) || (*s >= 128)) {
-	    fprintf(o, "\\x%02x", *s);
+	    fprintf(o, "\\x%02x", (int)(unsigned char)*s);
 	} else {
 	    fputc(*s, o);
 	}
