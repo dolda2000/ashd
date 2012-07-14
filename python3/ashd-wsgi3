@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys, os, getopt, threading, time, locale, collections
+import sys, os, getopt, threading, logging, time, locale, collections
 import ashd.proto, ashd.util, ashd.perf
 try:
     import pdm.srv
@@ -8,17 +8,20 @@ except:
     pdm = None
 
 def usage(out):
-    out.write("usage: ashd-wsgi3 [-hA] [-m PDM-SPEC] [-p MODPATH] [-l REQLIMIT] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: ashd-wsgi3 [-hAL] [-m PDM-SPEC] [-p MODPATH] [-l REQLIMIT] HANDLER-MODULE [ARGS...]\n")
 
 reqlimit = 0
 modwsgi_compat = False
-opts, args = getopt.getopt(sys.argv[1:], "+hAp:l:m:")
+setlog = True
+opts, args = getopt.getopt(sys.argv[1:], "+hALp:l:m:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
         sys.exit(0)
     elif o == "-p":
         sys.path.insert(0, a)
+    elif o == "-L":
+        setlog = False
     elif o == "-A":
         modwsgi_compat = True
     elif o == "-l":
@@ -29,6 +32,8 @@ for o, a in opts:
 if len(args) < 1:
     usage(sys.stderr)
     sys.exit(1)
+if setlog:
+    logging.basicConfig(format="ashd-wsgi3(%(name)s): %(levelname)s: %(message)s")
 
 try:
     handlermod = __import__(args[0], fromlist = ["dummy"])
