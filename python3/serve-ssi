@@ -1,0 +1,62 @@
+#!/usr/bin/python3
+
+import sys, os, io, logging
+import ashd.ssi, ashd.wsgiutil
+
+def simpleerror(out, code, title, msg):
+    html = """<?xml version="1.0" encoding="US-ASCII"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+<head>
+<title>%s</title>
+</head>
+<body>
+<h1>%s</h1>
+<p>%s</p>
+</body>
+</html>
+""" % (title, title, ashd.wsgiutil.htmlquote(msg))
+    out.write("HTTP/1.1 %d %s\n" % (code, title))
+    out.write("Content-Type: text/html\n")
+    out.write("Content-Length: %d\n" % len(html))
+    out.write("\n")
+    out.write(html)
+
+if len(sys.argv) < 4:
+    sys.stderr.write("usage: serve-ssi METHOD URL REST\n")
+    sys.exit(1)
+method, url, rest = sys.argv[1:]
+path = os.getenv("REQ_X_ASH_FILE")
+if path is None:
+    simpleerror(sys.stdout, 500, "Server Error", "The server is erroneously configured.")
+    sys.stderr.write("serve-ssi: must be called with the X-Ash-File header\n")
+    sys.exit(1)
+if rest != "":
+    simpleerror(sys.stdout, 404, "Not Found", "The resource specified by the URL does not exist.")
+    sys.exit(0)
+
+class encwrap(io.TextIOWrapper):
+    def close(self):
+        pass
+
+logging.basicConfig(format="serve-ssi: %(message)s")
+try:
+    try:
+        f = ashd.ssi.getfile(path)
+    except Exception as e:
+        sys.stderr.write("server-ssi: %s\n" % e)
+        simpleerror(sys.stdout, 500, "Server Error", "The server could not access its data.")
+        sys.exit(1)
+    sys.stdout.write("HTTP/1.1 200 OK\n")
+    sys.stdout.write("Content-Type: text/html; charset=UTF-8\n")
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+    wrap = encwrap(sys.stdout.buffer, encoding="utf8")
+    f.process(ashd.ssi.context(wrap, f))
+    wrap.flush()
+except IOError:
+    # This is for catching EPIPE, when the client has closed the
+    # connection. This shouldn't *really* be necessary since the
+    # process should terminate with SIGPIPE, but apparently Python
+    # ignores that.
+    sys.exit(1)

@@ -13,5 +13,5 @@ setup(name = "ashd-py3",
       url = "http://www.dolda2000.com/~fredrik/ashd/",
       ext_modules = [htlib],
       packages = ["ashd"],
-      scripts = ["ashd-wsgi3", "scgi-wsgi3"],
+      scripts = ["ashd-wsgi3", "scgi-wsgi3", "serve-ssi"],
       license = "GPL-3")
