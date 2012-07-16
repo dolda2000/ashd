@@ -1,3 +1,5 @@
+import time
+
 def htmlquote(text):
     ret = ""
     for c in text:
@@ -28,3 +30,15 @@ def simpleerror(env, startreq, code, title, msg):
     buf = buf.encode("ascii")
     startreq("%i %s" % (code, title), [("Content-Type", "text/html"), ("Content-Length", str(len(buf)))])
     return [buf]
+
+def httpdate(ts):
+    return time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(ts))
+
+def phttpdate(dstr):
+    tz = dstr[-6:]
+    dstr = dstr[:-6]
+    if tz[0] != " " or (tz[1] != "+" and tz[1] != "-") or not tz[2:].isdigit():
+        return None
+    tz = int(tz[1:])
+    tz = (((tz / 100) * 60) + (tz % 100)) * 60
+    return time.mktime(time.strptime(dstr, "%a, %d %b %Y %H:%M:%S")) - tz - time.altzone
