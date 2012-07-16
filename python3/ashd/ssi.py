@@ -59,7 +59,9 @@ class context(object):
 class ssifile(object):
     def __init__(self, path):
         self.path = path
-        self.mtime = os.stat(self.path).st_mtime
+        sb = os.stat(self.path)
+        self.cache = (sb.st_mode & 0o010) != 0
+        self.mtime = int(sb.st_mtime)
         with open(path) as fp:
             self.parts = self.parse(fp.read())
 
@@ -128,7 +130,7 @@ def getfile(path):
     cf = filecache.get(path)
     if not cf:
         cf = filecache[path] = ssifile(path)
-    elif os.stat(path).st_mtime != cf.mtime:
+    elif int(os.stat(path).st_mtime) != cf.mtime:
         cf = filecache[path] = ssifile(path)
     return cf
 
@@ -137,10 +139,23 @@ def wsgi(env, startreq):
         if env["PATH_INFO"] != "":
             return wsgiutil.simpleerror(env, startreq, 404, "Not Found", "The resource specified by the URL does not exist.")
         root = getfile(env["SCRIPT_FILENAME"])
+
+        if root.cache and "HTTP_IF_MODIFIED_SINCE" in env:
+            try:
+                lmt = wsgiutil.phttpdate(env["HTTP_IF_MODIFIED_SINCE"])
+                if root.mtime <= lmt:
+                    startreq("304 Not Modified", [("Content-Length", "0")])
+                    return []
+            except:
+                pass
+
         buf = io.StringIO()
         root.process(context(buf, root))
     except Exception:
-        return wsgituil.simpleerror(env, startreq, 500, "Internal Error", "The server encountered an unpexpected error while handling SSI.")
+        return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server encountered an unpexpected error while handling SSI.")
     ret = buf.getvalue().encode("utf8")
-    startreq("200 OK", [("Content-Type", "text/html; charset=UTF-8"), ("Content-Length", str(len(ret)))])
+    head = [("Content-Type", "text/html; charset=UTF-8"), ("Content-Length", str(len(ret)))]
+    if root.cache:
+        head.append(("Last-Modified", wsgiutil.httpdate(root.mtime)))
+    startreq("200 OK", head)
     return [ret]
