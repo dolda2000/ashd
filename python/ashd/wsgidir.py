@@ -140,19 +140,27 @@ class handler(object):
 
     def handle(self, env, startreq):
         if not "SCRIPT_FILENAME" in env:
+            log.error("wsgidir called without SCRIPT_FILENAME set")
             return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
         path = env["SCRIPT_FILENAME"]
         if not os.access(path, os.R_OK):
+            log.error("%s: not readable" % path)
             return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
         if "HTTP_X_ASH_PYTHON_HANDLER" in env:
-            handler = self.resolve(env["HTTP_X_ASH_PYTHON_HANDLER"])
+            try:
+                handler = self.resolve(env["HTTP_X_ASH_PYTHON_HANDLER"])
+            except Exception:
+                log.error("could not load handler %s" % env["HTTP_X_ASH_PYTHON_HANDLER"], exc_info=sys.exc_info())
+                return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
         else:
             base = os.path.basename(path)
             p = base.rfind('.')
             if p < 0:
+                log.error("wsgidir called with neither X-Ash-Python-Handler nor a file extension: %s" % path)
                 return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
             ext = base[p + 1:]
             if not ext in self.exts:
+                log.error("unregistered file extension: %s" % ext)
                 return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "The server is erroneously configured.")
             handler = self.exts[ext]
         return handler(env, startreq)
