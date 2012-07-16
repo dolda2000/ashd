@@ -33,10 +33,12 @@ argument `.fpy=my.module.foohandler' can be given to pass requests for
 functions, you may want to use the getmod() function in this module.
 """
 
-import os, threading, types, getopt
+import sys, os, threading, types, logging, getopt
 import wsgiutil
 
 __all__ = ["application", "wmain", "getmod", "cachedmod", "chain"]
+
+log = logging.getLogger("wsgidir")
 
 class cachedmod(object):
     """Cache entry for modules loaded by getmod()
@@ -192,7 +194,11 @@ def chain(env, startreq):
     object.
     """
     path = env["SCRIPT_FILENAME"]
-    mod = getmod(path)
+    try:
+        mod = getmod(path)
+    except Exception:
+        log.error("Exception occurred when loading %s" % path, exc_info=sys.exc_info())
+        return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "Could not load WSGI handler.")
     entry = None
     if mod is not None:
         mod.lock.acquire()
