@@ -37,7 +37,7 @@ if len(args) < 1:
     usage(sys.stderr)
     sys.exit(1)
 if setlog:
-    logging.basicConfig(format="ashd-wsgi(%(name)s): %(levelname)s: %(message)s")
+    logging.basicConfig(format="scgi-wsgi3(%(name)s): %(levelname)s: %(message)s")
 
 if sk is None:
     # This is suboptimal, since the socket on stdin is not necessarily
