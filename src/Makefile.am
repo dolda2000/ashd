@@ -2,7 +2,7 @@ SUBDIRS = dirplex
 
 bin_PROGRAMS =	htparser sendfile callcgi patplex userplex htls \
 		callscgi accesslog htextauth callfcgi multifscgi \
-		errlogger
+		errlogger httimed
 
 noinst_PROGRAMS=psendfile
 

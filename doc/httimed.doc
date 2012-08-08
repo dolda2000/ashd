@@ -1,0 +1,49 @@
+httimed(1)
+==========
+
+NAME
+----
+httimed - Ashd handler expiration pipe
+
+SYNOPSIS
+--------
+*httimed* [*-h*] [*-t* 'TIMEOUT'] 'CHILD' ['ARGS'...]
+
+DESCRIPTION
+-----------
+
+The *httimed* handler starts a single child handler which it passes
+all request it receives unmodified, and in addition keeps track of
+time and simply exits if no requests are received in a certain
+interval, which might be useful for handlers which are only rarely
+used and waste unproportionally much system resources if kept beyond
+their usefulness.
+
+*httimed* is a persistent handler, as defined in *ashd*(7), and the
+specified child handler must also be a persistent handler.
+
+By default, *httimed* exits if it receives no requests in five
+minutes, but the time interval can be specified using the *-t* option.
+
+If the child handler exits, *httimed* exits as well.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-t* 'TIMEOUT'::
+
+	Exit if no requests are received after 'TIMEOUT' seconds since
+	the last one. If *-t* is not specified, 'TIMEOUT' is five
+	minutes by default.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*ashd*(7)
