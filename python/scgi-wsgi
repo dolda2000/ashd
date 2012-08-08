@@ -1,23 +1,27 @@
 #!/usr/bin/python
 
-import sys, os, getopt
+import sys, os, getopt, logging
 import socket
 import ashd.scgi
 
 def usage(out):
-    out.write("usage: scgi-wsgi [-hA] [-p MODPATH] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: scgi-wsgi [-hAL] [-p MODPATH] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
 
 sk = None
 modwsgi_compat = False
-opts, args = getopt.getopt(sys.argv[1:], "+hAp:T:")
+setlog = True
+opts, args = getopt.getopt(sys.argv[1:], "+hALp:T:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
         sys.exit(0)
     elif o == "-p":
         sys.path.insert(0, a)
+    elif o == "-L":
+        setlog = False
     elif o == "-T":
         sk = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sk.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         p = a.rfind(":")
         if p < 0:
             bindhost = "localhost"
@@ -32,6 +36,8 @@ for o, a in opts:
 if len(args) < 1:
     usage(sys.stderr)
     sys.exit(1)
+if setlog:
+    logging.basicConfig(format="ashd-wsgi(%(name)s): %(levelname)s: %(message)s")
 
 if sk is None:
     # This is suboptimal, since the socket on stdin is not necessarily
