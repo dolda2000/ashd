@@ -37,7 +37,8 @@ def readhead(sk):
 class reqthread(threading.Thread):
     def __init__(self, sk, handler):
         super(reqthread, self).__init__(name = "SCGI request handler")
-        self.sk = sk.dup().makefile("r+")
+        self.bsk = sk.dup()
+        self.sk = self.bsk.makefile("r+")
         self.handler = handler
 
     def run(self):
@@ -46,6 +47,7 @@ class reqthread(threading.Thread):
             self.handler(head, self.sk)
         finally:
             self.sk.close()
+            self.bsk.close()
 
 def handlescgi(sk, handler):
     t = reqthread(sk, handler)
