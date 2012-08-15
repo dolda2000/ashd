@@ -192,11 +192,9 @@ The following configuration directives are recognized:
 	be a named request handler specified either in the same
 	`.htrc` file or elsewhere. The *capture* directive accepts no
 	follow-up lines. Note that the `X-Ash-File` header is not
-	added to requests passed via *capture* directives.
-
-	If 'FLAGS' contain the character `R`, this *capture* directive
-	will be ignored if it is in the root directory that *dirplex*
-	serves.
+	added to requests passed via *capture* directives.  If 'FLAGS'
+	contain the character `R`, this *capture* directive will be
+	ignored if it is in the root directory that *dirplex* serves.
 
 MATCHING
 --------
