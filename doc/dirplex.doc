@@ -182,7 +182,7 @@ The following configuration directives are recognized:
 	pattern-matching procedure and the follow-up lines accepted by
 	this stanza are described below, under MATCHING.
 
-*capture* 'HANDLER'::
+*capture* 'HANDLER' ['FLAGS']::
 
 	Only meaningful in `.htrc` files. If a *capture* directive is
 	specified, then the URL-to-file mapping procedure as described
@@ -193,6 +193,10 @@ The following configuration directives are recognized:
 	`.htrc` file or elsewhere. The *capture* directive accepts no
 	follow-up lines. Note that the `X-Ash-File` header is not
 	added to requests passed via *capture* directives.
+
+	If 'FLAGS' contain the character `R`, this *capture* directive
+	will be ignored if it is in the root directory that *dirplex*
+	serves.
 
 MATCHING
 --------

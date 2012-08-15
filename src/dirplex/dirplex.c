@@ -244,7 +244,7 @@ static int checkdir(struct hthead *req, int fd, char *path, char *rest)
     struct child *ch;
     
     cf = getconfig(path);
-    if(cf->capture != NULL) {
+    if((cf->capture != NULL) && (cf->caproot || !cf->path || strcmp(cf->path, "."))) {
 	cpath = sprintf2("%s/", path);
 	if((ch = findchild(cpath, cf->capture, &ccf)) == NULL) {
 	    free(cpath);

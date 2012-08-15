@@ -18,6 +18,7 @@ struct config {
     struct pattern *patterns;
     char **index;
     char *capture;
+    int caproot;
 };
 
 struct rule {
