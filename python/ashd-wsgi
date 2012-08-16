@@ -34,6 +34,7 @@ if len(args) < 1:
     sys.exit(1)
 if setlog:
     logging.basicConfig(format="ashd-wsgi(%(name)s): %(levelname)s: %(message)s")
+log = logging.getLogger("ashd-wsgi")
 
 try:
     handlermod = __import__(args[0], fromlist = ["dummy"])
@@ -182,18 +183,18 @@ def dowsgi(req):
     reqevent = ashd.perf.request(env)
     exc = (None, None, None)
     try:
-        respiter = handler(env, startreq)
         try:
+            respiter = handler(env, startreq)
             try:
                 for data in respiter:
                     write(data)
                 if resp:
                     flushreq()
-            except closed:
-                pass
-        finally:
-            if hasattr(respiter, "close"):
-                respiter.close()
+            finally:
+                if hasattr(respiter, "close"):
+                    respiter.close()
+        except closed:
+            pass
         if resp:
             reqevent.response(resp)
     except:
@@ -233,6 +234,8 @@ class reqthread(threading.Thread):
                     flightlock.notify()
                 finally:
                     flightlock.release()
+        except:
+            log.error("exception occurred in handler thread", exc_info=True)
         finally:
             self.req.close()
     
