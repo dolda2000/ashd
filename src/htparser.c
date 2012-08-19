@@ -274,7 +274,7 @@ void serve(FILE *in, struct conn *conn)
 	if(!getheader(resp, "server"))
 	    headappheader(resp, "Server", sprintf3("ashd/%s", VERSION));
 
-	if(!strcmp(req->ver, "HTTP/1.0")) {
+	if(!strcasecmp(req->ver, "HTTP/1.0")) {
 	    if(!strcasecmp(req->method, "head")) {
 		keep = http10keep(req, resp);
 		writeresp(in, resp);
@@ -295,7 +295,7 @@ void serve(FILE *in, struct conn *conn)
 	    }
 	    if(!keep)
 		break;
-	} else if(!strcmp(req->ver, "HTTP/1.1")) {
+	} else if(!strcasecmp(req->ver, "HTTP/1.1")) {
 	    if(!strcasecmp(req->method, "head")) {
 		writeresp(in, resp);
 		fprintf(in, "\r\n");
