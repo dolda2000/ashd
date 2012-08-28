@@ -130,8 +130,14 @@ def dowsgi(req):
     if "X-Ash-Server-Port" in req: env["SERVER_PORT"] = req["X-Ash-Server-Port"]
     if "X-Ash-Protocol" in req and req["X-Ash-Protocol"] == "https": env["HTTPS"] = "on"
     if "X-Ash-Address" in req: env["REMOTE_ADDR"] = req["X-Ash-Address"]
-    if "Content-Type" in req: env["CONTENT_TYPE"] = req["Content-Type"]
-    if "Content-Length" in req: env["CONTENT_LENGTH"] = req["Content-Length"]
+    if "Content-Type" in req:
+        env["CONTENT_TYPE"] = req["Content-Type"]
+        # The CGI specification does not strictly require this, but
+        # many actualy programs and libraries seem to.
+        del env["HTTP_CONTENT_TYPE"]
+    if "Content-Length" in req:
+        env["CONTENT_LENGTH"] = req["Content-Length"]
+        del env["HTTP_CONTENT_TYPE"]
     if "X-Ash-File" in req: env["SCRIPT_FILENAME"] = absolutify(req["X-Ash-File"])
     if "X-Ash-Protocol" in req: env["wsgi.url_scheme"] = req["X-Ash-Protocol"]
     env["wsgi.input"] = req.sk
