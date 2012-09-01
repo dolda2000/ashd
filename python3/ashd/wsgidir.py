@@ -101,6 +101,27 @@ def getmod(path):
             entry[1] = cachedmod(mod, sb.st_mtime)
         return entry[1]
 
+def importlocal(filename):
+    import inspect
+    cf = inspect.currentframe()
+    if cf is None: raise ImportError("could not get current frame")
+    if cf.f_back is None: raise ImportError("could not get caller frame")
+    cfile = cf.f_back.f_code.co_filename
+    if not os.path.exists(cfile):
+        raise ImportError("caller is not in a proper file")
+    path = os.path.realpath(os.path.join(os.path.dirname(cfile), filename))
+    if '.' not in os.path.basename(path):
+        for ext in [".pyl", ".py"]:
+            if os.path.exists(path + ext):
+                path += ext
+                break
+        else:
+            raise ImportError("could not resolve file: " + filename)
+    else:
+        if not os.path.exists(cfile):
+            raise ImportError("no such file: " + filename)
+    return getmod(path).mod
+
 class handler(object):
     def __init__(self):
         self.lock = threading.Lock()
