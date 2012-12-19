@@ -148,6 +148,59 @@ static off_t passdata(FILE *in, FILE *out, off_t max)
     return(total);
 }
 
+static int recvchunks(FILE *in, FILE *out)
+{
+    char buf[8192];
+    size_t read, chlen;
+    int c, r;
+    
+    while(1) {
+	chlen = 0;
+	r = 0;
+	while(1) {
+	    c = getc(in);
+	    if(c == 10) {
+		if(!r)
+		    return(-1);
+		break;
+	    } else if(c == 13) {
+	    } else if((c >= '0') && (c <= '9')) {
+		chlen = (chlen << 4) + (c - '0');
+		r = 1;
+	    } else if((c >= 'A') && (c <= 'F')) {
+		chlen = (chlen << 4) + (c + 10 - 'A');
+		r = 1;
+	    } else if((c >= 'a') && (c <= 'f')) {
+		chlen = (chlen << 4) + (c + 10 - 'a');
+		r = 1;
+	    } else {
+		/* XXX: Technically, there may be chunk extensions to
+		 * be read, but since that will likely never actually
+		 * happen in practice, I can just as well add support
+		 * for that if it actually does become relevant. */
+		return(-1);
+	    }
+	}
+	if(chlen == 0)
+	    break;
+	while(chlen > 0) {
+	    read = fread(buf, 1, min(sizeof(buf), chlen), in);
+	    if(feof(in) || ferror(in))
+		return(-1);
+	    if(fwrite(buf, 1, read, out) != read)
+		return(-1);
+	    chlen -= read;
+	}
+	if((getc(in) != 13) || (getc(in) != 10))
+	    return(-1);
+    }
+    /* XXX: Technically, there may be trailers to be read, but that's
+     * just about as likely as chunk extensions. */
+    if((getc(in) != 13) || (getc(in) != 10))
+	return(-1);
+    return(0);
+}
+
 static int passchunks(FILE *in, FILE *out)
 {
     char buf[8192];
@@ -255,11 +308,18 @@ void serve(FILE *in, struct conn *conn)
 	close(pfds[0]);
 	out = mtstdopen(pfds[1], 1, 600, "r+");
 
-	if((hd = getheader(req, "content-length")) != NULL) {
-	    dlen = atoo(hd);
-	    if(dlen > 0) {
-		if(passdata(in, out, dlen) != dlen)
+	if(getheader(req, "content-type") != NULL) {
+	    if((hd = getheader(req, "content-length")) != NULL) {
+		dlen = atoo(hd);
+		if(dlen > 0) {
+		    if(passdata(in, out, dlen) != dlen)
+			break;
+		}
+	    } else if(((hd = getheader(req, "transfer-encoding")) != NULL) && !strcasecmp(hd, "chunked")) {
+		if(recvchunks(in, out))
 		    break;
+	    } else {
+		break;
 	    }
 	}
 	if(fflush(out))
