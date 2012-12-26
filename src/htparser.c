@@ -319,7 +319,8 @@ void serve(FILE *in, struct conn *conn)
 		if(recvchunks(in, out))
 		    break;
 	    } else {
-		break;
+		/* Ignore rather than abort, to be kinder to broken clients. */
+		headrmheader(req, "content-type");
 	    }
 	}
 	if(fflush(out))
