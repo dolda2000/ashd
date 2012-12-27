@@ -473,6 +473,8 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
     free(url);
     if((h = getheader(req, "Host")) != NULL)
 	bufaddenv(dst, "SERVER_NAME", "%s", h);
+    if((h = getheader(req, "X-Ash-Server-Address")) != NULL)
+	bufaddenv(dst, "SERVER_ADDR", "%s", h);
     if((h = getheader(req, "X-Ash-Server-Port")) != NULL)
 	bufaddenv(dst, "SERVER_PORT", "%s", h);
     if((h = getheader(req, "X-Ash-Remote-User")) != NULL)
@@ -481,6 +483,8 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
 	bufaddenv(dst, "HTTPS", "on");
     if((h = getheader(req, "X-Ash-Address")) != NULL)
 	bufaddenv(dst, "REMOTE_ADDR", "%s", h);
+    if((h = getheader(req, "X-Ash-Port")) != NULL)
+	bufaddenv(dst, "REMOTE_PORT", "%s", h);
     if((h = getheader(req, "Content-Type")) != NULL)
 	bufaddenv(dst, "CONTENT_TYPE", "%s", h);
     if((h = getheader(req, "Content-Length")) != NULL)

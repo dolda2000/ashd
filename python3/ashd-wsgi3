@@ -131,9 +131,10 @@ def dowsgi(req):
         name = ""
     env["SCRIPT_NAME"] = name
     env["PATH_INFO"] = pi
-    for src, tgt in [("HTTP_HOST", "SERVER_NAME"), ("HTTP_X_ASH_SERVER_PORT", "SERVER_PORT"),
-                     ("HTTP_X_ASH_ADDRESS", "REMOTE_ADDR"), ("HTTP_CONTENT_TYPE", "CONTENT_TYPE"),
-                     ("HTTP_CONTENT_LENGTH", "CONTENT_LENGTH"), ("HTTP_X_ASH_PROTOCOL", "wsgi.url_scheme")]:
+    for src, tgt in [("HTTP_HOST", "SERVER_NAME"), ("HTTP_X_ASH_PROTOCOL", "wsgi.url_scheme"),
+                     ("HTTP_X_ASH_SERVER_ADDRESS", "SERVER_ADDR"), ("HTTP_X_ASH_SERVER_PORT", "SERVER_PORT"),
+                     ("HTTP_X_ASH_ADDRESS", "REMOTE_ADDR"), ("HTTP_X_ASH_PORT", "REMOTE_PORT"),
+                     ("HTTP_CONTENT_TYPE", "CONTENT_TYPE"), ("HTTP_CONTENT_LENGTH", "CONTENT_LENGTH")]:
         if src in env: env[tgt] = env[src]
     for key in ["HTTP_CONTENT_TYPE", "HTTP_CONTENT_LENGTH"]:
         # The CGI specification does not strictly require this, but

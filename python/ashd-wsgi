@@ -127,9 +127,11 @@ def dowsgi(req):
     env["SCRIPT_NAME"] = name
     env["PATH_INFO"] = pi
     if "Host" in req: env["SERVER_NAME"] = req["Host"]
+    if "X-Ash-Server-Address" in req: env["SERVER_ADDR"] = req["X-Ash-Server-Address"]
     if "X-Ash-Server-Port" in req: env["SERVER_PORT"] = req["X-Ash-Server-Port"]
     if "X-Ash-Protocol" in req and req["X-Ash-Protocol"] == "https": env["HTTPS"] = "on"
     if "X-Ash-Address" in req: env["REMOTE_ADDR"] = req["X-Ash-Address"]
+    if "X-Ash-Port" in req: env["REMOTE_PORT"] = req["X-Ash-Port"]
     if "Content-Type" in req:
         env["CONTENT_TYPE"] = req["Content-Type"]
         # The CGI specification does not strictly require this, but
