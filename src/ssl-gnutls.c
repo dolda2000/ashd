@@ -607,9 +607,9 @@ void handlegnussl(int argc, char **argp, char **argv)
     pd->creds = creds;
     pd->ncreds = ncreds.b;
     mustart(listenloop, pd);
-    if((fd = listensock6(port)) < 0) {
+    if((fd = listensock4(port)) < 0) {
 	if(errno != EADDRINUSE) {
-	    flog(LOG_ERR, "could not listen on IPv6 port (port %i): %s", port, strerror(errno));
+	    flog(LOG_ERR, "could not listen on IPv4 port (port %i): %s", port, strerror(errno));
 	    exit(1);
 	}
     } else {

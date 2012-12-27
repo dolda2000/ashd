@@ -426,8 +426,8 @@ static void initroot(void *uu)
 {
     int fd;
     
+    setsid();
     if(daemonize) {
-	setsid();
 	chdir("/");
 	if((fd = open("/dev/null", O_RDWR)) >= 0) {
 	    dup2(fd, 0);
