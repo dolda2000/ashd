@@ -145,12 +145,16 @@ static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *u
 	putenv(sprintf2("QUERY_STRING=%s", qp?qp:""));
 	if(getenv("REQ_HOST"))
 	    putenv(sprintf2("SERVER_NAME=%s", getenv("REQ_HOST")));
+	if(getenv("REQ_X_ASH_SERVER_ADDRESS"))
+	    putenv(sprintf2("SERVER_ADDR=%s", getenv("REQ_X_ASH_SERVER_ADDRESS")));
 	if(getenv("REQ_X_ASH_SERVER_PORT"))
 	    putenv(sprintf2("SERVER_PORT=%s", getenv("REQ_X_ASH_SERVER_PORT")));
 	if(getenv("REQ_X_ASH_PROTOCOL") && !strcmp(getenv("REQ_X_ASH_PROTOCOL"), "https"))
 	    putenv("HTTPS=on");
 	if(getenv("REQ_X_ASH_ADDRESS"))
 	    putenv(sprintf2("REMOTE_ADDR=%s", getenv("REQ_X_ASH_ADDRESS")));
+	if(getenv("REQ_X_ASH_PORT"))
+	    putenv(sprintf2("REMOTE_PORT=%s", getenv("REQ_X_ASH_PORT")));
 	if(getenv("REQ_X_ASH_REMOTE_USER"))
 	    putenv(sprintf2("REMOTE_USER=%s", getenv("REQ_X_ASH_REMOTE_USER")));
 	if(getenv("REQ_CONTENT_TYPE"))
