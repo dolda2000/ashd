@@ -24,7 +24,8 @@ all the 'ARGS' as command-line arguments. Only after that will
 *htparser* do any daemonizing or chrooting as specified by options.
 
 The root handler must be a persistent program as specified in
-*ashd*(7). If the handler program exits, *htparser* will exit too.
+*ashd*(7). If the handler program exits, *htparser* will exit too,
+following the procedure described below under SIGNALS.
 
 PORT SPECIFICATION
 ------------------
@@ -87,8 +88,9 @@ SIGTERM, SIGINT::
 
 	Upon first reception, `htparser` closes all listening ports
 	and the socket to the root handler, but continues to serve all
-	currently ongoing requests until none remain. Upon second
-	reception, `htparser` shuts down completely.
+	currently ongoing requests until none remain, not keeping the
+	connections open for keep-alive. Upon second reception,
+	`htparser` shuts down completely.
 
 EXAMPLES
 --------
