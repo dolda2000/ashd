@@ -16,6 +16,7 @@
 #define bufinit(buf) memset(&(buf), 0, sizeof(buf))
 #define buffree(buf) do { if((buf).b != NULL) {free((buf).b);} bufinit(buf); } while(0)
 #define sizebuf(buf, wanted) (_sizebuf((struct buffer *)&(buf), (wanted), sizeof(*((buf).b))))
+#define bufdel(buf, i) (memmove((buf).b + (i), (buf).b + (i) + 1, (--((buf).d) - (i)) * sizeof(*((buf).b))))
 #define bufadd(buf, new) \
 do { \
     _sizebuf((struct buffer *)&(buf), (buf).d + 1, sizeof(*((buf).b))); \
