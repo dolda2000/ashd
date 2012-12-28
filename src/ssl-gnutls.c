@@ -359,7 +359,7 @@ out:
 static void listenloop(struct muth *muth, va_list args)
 {
     vavar(struct sslport *, pd);
-    int ns;
+    int i, ns;
     struct sockaddr_storage name;
     socklen_t namelen;
     
@@ -378,6 +378,10 @@ static void listenloop(struct muth *muth, va_list args)
 out:
     close(pd->fd);
     free(pd);
+    for(i = 0; i < listeners.d; i++) {
+	if(listeners.b[i] == muth)
+	    bufdel(listeners, i);
+    }
 }
 
 static gnutls_dh_params_t dhparams(void)

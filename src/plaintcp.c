@@ -168,7 +168,7 @@ void servetcp(struct muth *muth, va_list args)
 static void listenloop(struct muth *muth, va_list args)
 {
     vavar(struct tcpport *, tcp);
-    int ns;
+    int i, ns;
     struct sockaddr_storage name;
     socklen_t namelen;
     
@@ -187,6 +187,10 @@ static void listenloop(struct muth *muth, va_list args)
 out:
     close(tcp->fd);
     free(tcp);
+    for(i = 0; i < listeners.d; i++) {
+	if(listeners.b[i] == muth)
+	    bufdel(listeners, i);
+    }
 }
 
 void handleplain(int argc, char **argp, char **argv)

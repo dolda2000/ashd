@@ -405,7 +405,7 @@ static void plexwatch(struct muth *muth, va_list args)
 {
     vavar(int, fd);
     char *buf;
-    int ret;
+    int i, ret;
     
     while(1) {
 	if(block(fd, EV_READ, 0) == 0)
@@ -416,7 +416,8 @@ static void plexwatch(struct muth *muth, va_list args)
 	    flog(LOG_WARNING, "received error on rootplex read channel: %s", strerror(errno));
 	    exit(1);
 	} else if(ret == 0) {
-	    exit(0);
+	    free(buf);
+	    break;
 	}
 	/* Maybe I'd like to implement some protocol in this direction
 	 * some day... */
@@ -424,6 +425,13 @@ static void plexwatch(struct muth *muth, va_list args)
     }
     close(plex);
     plex = -1;
+    for(i = 0; i < listeners.d; i++) {
+	if(listeners.b[i] == muth)
+	    bufdel(listeners, i);
+    }
+    flog(LOG_INFO, "root handler exited, so shutting down listening...");
+    while(listeners.d > 0)
+	resume(listeners.b[0], 0);
 }
 
 static void initroot(void *uu)
@@ -602,9 +610,8 @@ int main(int argc, char **argv)
 	    break;
 	case 1:
 	    if(listeners.d > 0) {
-		for(i = 0; i < listeners.d; i++)
-		    resume(listeners.b[i], 0);
-		listeners.d = 0;
+		while(listeners.d > 0)
+		    resume(listeners.b[0], 0);
 		flog(LOG_INFO, "no longer listening");
 	    } else {
 		d = 1;
