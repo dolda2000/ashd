@@ -80,6 +80,16 @@ OPTIONS
 	After having daemonized, write the PID of the new process to
 	'PIDFILE'.
 
+SIGNALS
+-------
+
+SIGTERM, SIGINT::
+
+	Upon first reception, `htparser` closes all listening ports
+	and the socket to the root handler, but continues to serve all
+	currently ongoing requests until none remain. Upon second
+	reception, `htparser` shuts down completely.
+
 EXAMPLES
 --------
 
