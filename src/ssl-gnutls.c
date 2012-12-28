@@ -365,7 +365,8 @@ static void listenloop(struct muth *muth, va_list args)
     
     while(1) {
 	namelen = sizeof(name);
-	block(pd->fd, EV_READ, 0);
+	if(block(pd->fd, EV_READ, 0) == 0)
+	    goto out;
 	ns = accept(pd->fd, (struct sockaddr *)&name, &namelen);
 	if(ns < 0) {
 	    flog(LOG_ERR, "accept: %s", strerror(errno));
@@ -606,7 +607,7 @@ void handlegnussl(int argc, char **argp, char **argv)
     pd->sport = port;
     pd->creds = creds;
     pd->ncreds = ncreds.b;
-    mustart(listenloop, pd);
+    bufadd(listeners, mustart(listenloop, pd));
     if((fd = listensock4(port)) < 0) {
 	if(errno != EADDRINUSE) {
 	    flog(LOG_ERR, "could not listen on IPv4 port (port %i): %s", port, strerror(errno));
@@ -617,7 +618,7 @@ void handlegnussl(int argc, char **argp, char **argv)
 	pd->fd = fd;
 	pd->sport = port;
 	pd->creds = creds;
-	mustart(listenloop, pd);
+	bufadd(listeners, mustart(listenloop, pd));
     }
 }
 

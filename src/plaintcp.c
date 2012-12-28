@@ -174,7 +174,8 @@ static void listenloop(struct muth *muth, va_list args)
     
     while(1) {
 	namelen = sizeof(name);
-	block(tcp->fd, EV_READ, 0);
+	if(block(tcp->fd, EV_READ, 0) == 0)
+	    goto out;
 	ns = accept(tcp->fd, (struct sockaddr *)&name, &namelen);
 	if(ns < 0) {
 	    flog(LOG_ERR, "accept: %s", strerror(errno));
@@ -215,7 +216,7 @@ void handleplain(int argc, char **argp, char **argv)
     omalloc(tcp);
     tcp->fd = fd;
     tcp->sport = port;
-    mustart(listenloop, tcp);
+    bufadd(listeners, mustart(listenloop, tcp));
     if((fd = listensock4(port)) < 0) {
 	if(errno != EADDRINUSE) {
 	    flog(LOG_ERR, "could not listen on IPv4 (port %i): %s", port, strerror(errno));
@@ -225,6 +226,6 @@ void handleplain(int argc, char **argp, char **argv)
 	omalloc(tcp);
 	tcp->fd = fd;
 	tcp->sport = port;
-	mustart(listenloop, tcp);
+	bufadd(listeners, mustart(listenloop, tcp));
     }
 }

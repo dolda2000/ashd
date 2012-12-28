@@ -6,6 +6,11 @@ struct conn {
     void *pdata;
 };
 
+struct mtbuf {
+    struct muth **b;
+    size_t s, d;
+};
+
 void serve(FILE *in, struct conn *conn);
 
 int listensock4(int port);
@@ -15,5 +20,7 @@ void handleplain(int argc, char **argp, char **argv);
 #ifdef HAVE_GNUTLS
 void handlegnussl(int argc, char **argp, char **argv);
 #endif
+
+extern struct mtbuf listeners;
 
 #endif

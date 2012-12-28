@@ -41,6 +41,7 @@
 static int plex;
 static char *pidfile = NULL;
 static int daemonize, usesyslog;
+struct mtbuf listeners;
 
 static void trimx(struct hthead *req)
 {
@@ -290,7 +291,7 @@ void serve(FILE *in, struct conn *conn)
     
     out = NULL;
     req = resp = NULL;
-    while(1) {
+    while(plex >= 0) {
 	if((req = parsereq(in)) == NULL)
 	    break;
 	if(!canonreq(req))
@@ -299,7 +300,7 @@ void serve(FILE *in, struct conn *conn)
 	if((conn->initreq != NULL) && conn->initreq(conn, req))
 	    break;
 	
-	if(block(plex, EV_WRITE, 60) <= 0)
+	if((plex < 0) || block(plex, EV_WRITE, 60) <= 0)
 	    break;
 	if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
 	    break;
@@ -407,7 +408,8 @@ static void plexwatch(struct muth *muth, va_list args)
     int ret;
     
     while(1) {
-	block(fd, EV_READ, 0);
+	if(block(fd, EV_READ, 0) == 0)
+	    break;
 	buf = smalloc(65536);
 	ret = recv(fd, buf, 65536, 0);
 	if(ret < 0) {
@@ -420,6 +422,8 @@ static void plexwatch(struct muth *muth, va_list args)
 	 * some day... */
 	free(buf);
     }
+    close(plex);
+    plex = -1;
 }
 
 static void initroot(void *uu)
@@ -494,9 +498,14 @@ static void addport(char *spec)
     buffree(vals);
 }
 
+static void sighandler(int sig)
+{
+    exitioloop(1);
+}
+
 int main(int argc, char **argv)
 {
-    int c;
+    int c, d;
     int i, s1;
     char *root;
     FILE *pidout;
@@ -548,7 +557,7 @@ int main(int argc, char **argv)
 	flog(LOG_ERR, "could not spawn root multiplexer: %s", strerror(errno));
 	return(1);
     }
-    mustart(plexwatch, plex);
+    bufadd(listeners, mustart(plexwatch, plex));
     pidout = NULL;
     if(pidfile != NULL) {
 	if((pidout = fopen(pidfile, "w")) == NULL) {
@@ -575,6 +584,9 @@ int main(int argc, char **argv)
 	}
     }
     signal(SIGPIPE, SIG_IGN);
+    signal(SIGCHLD, SIG_IGN);
+    signal(SIGINT, sighandler);
+    signal(SIGTERM, sighandler);
     if(daemonize) {
 	daemon(0, 0);
     }
@@ -582,6 +594,23 @@ int main(int argc, char **argv)
 	fprintf(pidout, "%i\n", getpid());
 	fclose(pidout);
     }
-    ioloop();
+    d = 0;
+    while(!d) {
+	switch(ioloop()) {
+	case 0:
+	    d = 1;
+	    break;
+	case 1:
+	    if(listeners.d > 0) {
+		for(i = 0; i < listeners.d; i++)
+		    resume(listeners.b[i], 0);
+		listeners.d = 0;
+		flog(LOG_INFO, "no longer listening");
+	    } else {
+		d = 1;
+	    }
+	    break;
+	}
+    }
     return(0);
 }
