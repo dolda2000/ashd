@@ -124,7 +124,8 @@ document of detailing the exact format of such a response, but the
 following points are noteworthy:
 
  * The HTTP version is actually ignored; it must simply be there for
-   completeness.
+   completeness. For the sake of forward compatibility, however,
+   handlers should output "HTTP/1.1".
 
  * In the header, Unix line endings are accepted; *htparser*(1) will
    still use CRLF line endings when passing the response to the
