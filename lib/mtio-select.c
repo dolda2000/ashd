@@ -32,6 +32,7 @@
 #include <mtio.h>
 
 static struct blocker *blockers;
+static int exitstatus;
 
 struct blocker {
     struct blocker *n, *p;
@@ -72,7 +73,7 @@ int block(int fd, int ev, time_t to)
     return(rv);
 }
 
-void ioloop(void)
+int ioloop(void)
 {
     int ret;
     fd_set rfds, wfds, efds;
@@ -82,6 +83,7 @@ void ioloop(void)
     int maxfd;
     int ev;
     
+    exitstatus = 0;
     while(blockers != NULL) {
 	FD_ZERO(&rfds);
 	FD_ZERO(&wfds);
@@ -100,6 +102,8 @@ void ioloop(void)
 	    if((bl->to != 0) && ((timeout == 0) || (timeout > bl->to)))
 		timeout = bl->to;
 	}
+	if(exitstatus)
+	    return(exitstatus);
 	toval.tv_sec = timeout - now;
 	toval.tv_usec = 0;
 	ret = select(maxfd + 1, &rfds, &wfds, &efds, timeout?(&toval):NULL);
@@ -110,21 +114,28 @@ void ioloop(void)
 		 * probably is. */
 		sleep(1);
 	    }
-	}
-	now = time(NULL);
-	for(bl = blockers; bl; bl = nbl) {
-	    nbl = bl->n;
-	    ev = 0;
-	    if(FD_ISSET(bl->fd, &rfds))
-		ev |= EV_READ;
-	    if(FD_ISSET(bl->fd, &wfds))
-		ev |= EV_WRITE;
-	    if(FD_ISSET(bl->fd, &efds))
-		ev = -1;
-	    if((ev < 0) || (ev & bl->ev))
-		resume(bl->th, ev);
-	    else if((bl->to != 0) && (bl->to <= now))
-		resume(bl->th, 0);
+	} else {
+	    now = time(NULL);
+	    for(bl = blockers; bl; bl = nbl) {
+		nbl = bl->n;
+		ev = 0;
+		if(FD_ISSET(bl->fd, &rfds))
+		    ev |= EV_READ;
+		if(FD_ISSET(bl->fd, &wfds))
+		    ev |= EV_WRITE;
+		if(FD_ISSET(bl->fd, &efds))
+		    ev = -1;
+		if((ev < 0) || (ev & bl->ev))
+		    resume(bl->th, ev);
+		else if((bl->to != 0) && (bl->to <= now))
+		    resume(bl->th, 0);
+	    }
 	}
     }
+    return(0);
+}
+
+void exitioloop(int status)
+{
+    exitstatus = status;
 }

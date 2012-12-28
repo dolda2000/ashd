@@ -7,7 +7,8 @@
 #define EV_WRITE 2
 
 int block(int fd, int ev, time_t to);
-void ioloop(void);
+int ioloop(void);
+void exitioloop(int status);
 FILE *mtstdopen(int fd, int issock, int timeout, char *mode);
 
 #endif

@@ -43,6 +43,7 @@ struct blocker {
 };
 
 static int epfd = -1, fdln = 0;
+static int exitstatus;
 static struct blocker **fdlist;
 
 static int regfd(struct blocker *bl)
@@ -125,6 +126,7 @@ static void remfd(struct blocker *bl)
 	    flog(LOG_ERR, "epoll_mod on fd %i: %s", bl->fd, strerror(errno));
 	}
     }
+    bl->reg = 0;
 }
 
 int block(int fd, int ev, time_t to)
@@ -158,13 +160,14 @@ int block(int fd, int ev, time_t to)
     return(rv);
 }
 
-void ioloop(void)
+int ioloop(void)
 {
     struct blocker *bl, *nbl;
     struct epoll_event evr[16];
     int i, fd, nev, ev, toval;
     time_t now, timeout;
     
+    exitstatus = 0;
     epfd = epoll_create(128);
     fcntl(epfd, F_SETFD, FD_CLOEXEC);
     for(bl = blockers; bl; bl = nbl) {
@@ -185,6 +188,8 @@ void ioloop(void)
 	    toval = (timeout - now) * 1000;
 	else
 	    toval = 1000;
+	if(exitstatus)
+	    break;
 	nev = epoll_wait(epfd, evr, sizeof(evr) / sizeof(*evr), toval);
 	if(nev < 0) {
 	    if(errno != EINTR) {
@@ -217,6 +222,14 @@ void ioloop(void)
 		resume(bl->th, 0);
 	}
     }
+    for(bl = blockers; bl; bl = bl->n)
+	remfd(bl);
     close(epfd);
     epfd = -1;
+    return(exitstatus);
+}
+
+void exitioloop(int status)
+{
+    exitstatus = status;
 }
