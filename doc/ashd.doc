@@ -110,9 +110,10 @@ variable called `HTTP_VERSION`. It is passed in full; i.e. as
 The response socket, as mentioned above, is also used for reading the
 request-body if the client provides one. For such purposes,
 *htparser*(1) ensures that the reader sees end-of-file at the end of
-the request-body, so that the reader (unlike in, for example, CGI)
-does not have to worry about the Content-Length header and counting
-bytes when reading.
+the request-body, allowing the reader (unlike in, for example, CGI) to
+not have to worry about the Content-Length header and counting bytes
+when reading, and also to handle chunked request-bodies in a natural
+fashion.
 
 To respond, the handler program needs to write an ordinary HTTP
 response to the response socket. That is, one line containing the HTTP
