@@ -98,18 +98,35 @@ static void login(struct passwd *pwd)
     }
 }
 
-static void execchild(struct passwd *pwd)
+static void discardreq(int fromfd)
+{
+    struct hthead *req;
+    int fd;
+    
+    if((fd = recvreq(fromfd, &req)) >= 0) {
+	freehthead(req);
+	close(fd);
+    }
+}
+
+static void execchild(struct passwd *pwd, struct hthead *forreq, int reqfd)
 {
     if(!ignore)
 	execl(".ashd/handler", ".ashd/handler", NULL);
     if(dirname != NULL) {
-	if(access(dirname, X_OK | R_OK))
+	if(access(dirname, X_OK | R_OK)) {
+	    discardreq(0);
+	    simpleerror(reqfd, 404, "Not Found", "No such resource could be found.");
 	    return;
+	}
     }
     execvp(childspec[0], childspec);
+    discardreq(0);
+    flog(LOG_ERR, "could not start request handler for user `%s': %s", pwd->pw_name, strerror(errno));
+    simpleerror(reqfd, 500, "User Error", "Could not start any request handler for that user.");
 }
 
-static int forkchild(char *usrnm)
+static int forkchild(char *usrnm, struct hthead *forreq, int reqfd)
 {
     struct passwd *pwd;
     pid_t pid;
@@ -131,7 +148,7 @@ static int forkchild(char *usrnm)
 	close(fd[0]);
 	close(fd[1]);
 	login(pwd);
-	execchild(pwd);
+	execchild(pwd, forreq, reqfd);
 	exit(127);
     }
     close(fd[0]);
@@ -142,19 +159,18 @@ static int forkchild(char *usrnm)
 static void serve2(struct user *usr, struct hthead *req, int fd)
 {
     if(usr->fd < 0)
-	usr->fd = forkchild(usr->name);
+	usr->fd = forkchild(usr->name, req, fd);
     if(sendreq(usr->fd, req, fd)) {
 	if((errno == EPIPE) || (errno == ECONNRESET)) {
 	    /* Assume that the child has crashed and restart it. */
 	    close(usr->fd);
-	    usr->fd = forkchild(usr->name);
+	    usr->fd = forkchild(usr->name, req, fd);
 	    if(!sendreq(usr->fd, req, fd))
 		return;
 	}
 	flog(LOG_ERR, "could not pass on request to user `%s': %s", usr->name, strerror(errno));
 	close(usr->fd);
 	usr->fd = -1;
-	simpleerror(fd, 500, "User Error", "The request handler for that user keeps crashing.");
     }
 }
 

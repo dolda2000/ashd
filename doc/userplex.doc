@@ -41,8 +41,8 @@ argument. 'PUBDIR' defaults to `htpub` if no 'PROGRAM' was specified.
 
 If 'PUBDIR' was given (either by being specified explicitly, or
 implicitly if no 'PROGRAM' argument was given), it is checked for
-existence. If it does not exist, *userplex* should return a 404
-response to the client (but see BUGS below).
+existence. If it does not exist, *userplex* returns a 404 response to
+the client.
 
 If there exists a file named `~/.ashd/error` in the user's home
 directory, it will be opened in append mode and connected to the
@@ -125,12 +125,6 @@ The standard *-l* switch to the shell (see *sh*(1)) will make it run
 its normal login procedure, and then *exec*(2) the *dirplex*(1)
 handler to serve files normally. Of course, the second line can be
 replaced by whatever other handler one might wish to use.
-
-BUGS
-----
-
-Currently, *userplex* does not, in fact, return a 404 response to the
-client if the 'PUBDIR' directory does not exist.
 
 AUTHOR
 ------
