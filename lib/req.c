@@ -290,7 +290,7 @@ int writeresp(FILE *out, struct hthead *resp)
     return(0);
 }
 
-int sendreq(int sock, struct hthead *req, int fd)
+int sendreq2(int sock, struct hthead *req, int fd, int flags)
 {
     int ret, i;
     struct charbuf buf;
@@ -305,12 +305,17 @@ int sendreq(int sock, struct hthead *req, int fd)
 	bufcatstr2(buf, req->headers[i][1]);
     }
     bufcatstr2(buf, "");
-    ret = sendfd(sock, fd, buf.b, buf.d);
+    ret = sendfd2(sock, fd, buf.b, buf.d, flags);
     buffree(buf);
     if(ret < 0)
 	return(-1);
     else
 	return(0);
+}
+
+int sendreq(int sock, struct hthead *req, int fd)
+{
+    return(sendreq2(sock, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT));
 }
 
 int recvreq(int sock, struct hthead **reqp)

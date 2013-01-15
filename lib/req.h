@@ -18,6 +18,7 @@ char *getheader(struct hthead *head, char *name);
 void headpreheader(struct hthead *head, const char *name, const char *val);
 void headappheader(struct hthead *head, const char *name, const char *val);
 void headrmheader(struct hthead *head, const char *name);
+int sendreq2(int sock, struct hthead *req, int fd, int flags);
 int sendreq(int sock, struct hthead *req, int fd);
 int recvreq(int sock, struct hthead **reqp);
 void replrest(struct hthead *head, char *rest);
