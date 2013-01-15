@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <glob.h>
 #include <libgen.h>
+#include <sys/socket.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -309,12 +310,12 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
     if(i->type == CH_SOCKET) {
 	if(i->fd < 0)
 	    i->fd = stdmkchild(i->argv, chinit, idata);
-	if(sendreq(i->fd, req, fd)) {
+	if(sendreq2(i->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT)) {
 	    if((errno == EPIPE) || (errno == ECONNRESET)) {
 		/* Assume that the child has crashed and restart it. */
 		close(i->fd);
 		i->fd = stdmkchild(i->argv, chinit, idata);
-		if(!sendreq(i->fd, req, fd))
+		if(!sendreq2(i->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
 		    return(0);
 	    }
 	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
