@@ -306,20 +306,22 @@ static struct chandler stdhandler = {
 static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
 {
     struct stdchild *i = ch->pdata;
+    int serr;
     
     if(i->type == CH_SOCKET) {
 	if(i->fd < 0)
 	    i->fd = stdmkchild(i->argv, chinit, idata);
 	if(sendreq2(i->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT)) {
-	    if((errno == EPIPE) || (errno == ECONNRESET)) {
+	    serr = errno;
+	    if((serr == EPIPE) || (serr == ECONNRESET)) {
 		/* Assume that the child has crashed and restart it. */
 		close(i->fd);
 		i->fd = stdmkchild(i->argv, chinit, idata);
 		if(!sendreq2(i->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
 		    return(0);
 	    }
-	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
-	    if(errno != EAGAIN) {
+	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(serr));
+	    if(serr != EAGAIN) {
 		close(i->fd);
 		i->fd = -1;
 	    }
