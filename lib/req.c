@@ -315,7 +315,7 @@ int sendreq2(int sock, struct hthead *req, int fd, int flags)
 
 int sendreq(int sock, struct hthead *req, int fd)
 {
-    return(sendreq2(sock, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT));
+    return(sendreq2(sock, req, fd, MSG_NOSIGNAL));
 }
 
 int recvreq(int sock, struct hthead **reqp)
