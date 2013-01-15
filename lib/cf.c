@@ -319,8 +319,10 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 		    return(0);
 	    }
 	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
-	    close(i->fd);
-	    i->fd = -1;
+	    if(errno != EAGAIN) {
+		close(i->fd);
+		i->fd = -1;
+	    }
 	    return(-1);
 	}
     } else if(i->type == CH_FORK) {
