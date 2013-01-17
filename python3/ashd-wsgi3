@@ -158,7 +158,7 @@ def recode(thing):
 
 class reqthread(ashd.serve.wsgithread):
     def __init__(self, req):
-        super().__init__(name = "Request handler")
+        super().__init__()
         self.req = req.dup()
 
     def handlewsgi(self):
