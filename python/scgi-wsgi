@@ -2,15 +2,19 @@
 
 import sys, os, getopt, logging
 import socket
-import ashd.scgi, ashd.serve
+import ashd.scgi, ashd.perf, ashd.serve
+try:
+    import pdm.srv
+except:
+    pdm = None
 
 def usage(out):
-    out.write("usage: scgi-wsgi [-hAL] [-p MODPATH] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: scgi-wsgi [-hAL] [-m PDM-SPEC] [-p MODPATH] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
 
 sk = None
 modwsgi_compat = False
 setlog = True
-opts, args = getopt.getopt(sys.argv[1:], "+hALp:T:")
+opts, args = getopt.getopt(sys.argv[1:], "+hALp:T:m:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
@@ -33,6 +37,9 @@ for o, a in opts:
         sk.listen(32)
     elif o == "-A":
         modwsgi_compat = True
+    elif o == "-m":
+        if pdm is not None:
+            pdm.srv.listen(a)
 if len(args) < 1:
     usage(sys.stderr)
     sys.exit(1)
@@ -105,7 +112,17 @@ class reqthread(ashd.serve.wsgithread):
     def handle(self):
         head = ashd.scgi.readhead(self.sk)
         self.env = mkenv(head, self.sk)
-        super(reqthread, self).handle()
+        reqevent = ashd.perf.request(self.env)
+        exc = (None, None, None)
+        try:
+            super(reqthread, self).handle()
+            if self.status:
+                reqevent.response([self.status, self.headers])
+        except:
+            exc = sys.exc_info()
+            raise
+        finally:
+            reqevent.__exit__(*exc)
 
     def run(self):
         try:
