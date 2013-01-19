@@ -1,4 +1,4 @@
-import threading, time, logging
+import os, threading, time, logging
 
 log = logging.getLogger("ashd.serve")
 seq = 1
@@ -125,3 +125,8 @@ class calllimiter(object):
             return target()
         finally:
             self.__exit__()
+
+class abortlimiter(calllimiter):
+    def waited(self, time):
+        if time > 10:
+            os.abort()

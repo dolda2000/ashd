@@ -146,7 +146,7 @@ def mkenv(req):
     return env
 
 if reqlimit != 0:
-    guard = ashd.serve.calllimiter(reqlimit).call
+    guard = ashd.serve.abortlimiter(reqlimit).call
 else:
     guard = lambda fun: fun()
 
