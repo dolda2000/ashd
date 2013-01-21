@@ -20,6 +20,6 @@ def serve(req):
                 children[dname] = util.pchild(["dirplex", path], autorespawn = True)
             children[dname].passreq(req)
             return
-    util.respond(req, "No such host in configured.\n", status = "404 Not Found", ctype = "text/plain")
+    util.respond(req, "No such host is configured.\n", status = "404 Not Found", ctype = "text/plain")
 
 util.serveloop(serve)

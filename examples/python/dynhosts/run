@@ -4,9 +4,5 @@
 set -e
 cd "$(dirname "$0")"
 
-# Start htparser running this dynhosts script. The setsid command
-# ensures that SIGINT is only received by htparser and not by
-# dynhosts; it is not of grave importance, but makes shutdown slightly
-# more clean, and hides the KeyboardInterrupt otherwise raised by
-# Python.
-htparser plain:port=8080 -- setsid ./dynhosts .
+# Start htparser running this dynhosts script.
+htparser plain:port=8080 -- ./dynhosts .
