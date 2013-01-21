@@ -7,7 +7,7 @@ scgi-wsgi3 - WSGI adapter for SCGI
 
 SYNOPSIS
 --------
-*scgi-wsgi3* [*-hA*] [*-p* 'MODPATH'] [*-T* \[HOST:]'PORT'] 'HANDLER-MODULE' ['ARGS'...]
+*scgi-wsgi3* [*-hA*] [*-m* 'PDM-SPEC'] [*-p* 'MODPATH'] [*-T* \[HOST:]'PORT'] 'HANDLER-MODULE' ['ARGS'...]
 
 DESCRIPTION
 -----------
@@ -52,6 +52,12 @@ OPTIONS
 	to accept SCGI connections, bind a TCP socket to the 'HOST'
 	address listening for connections on 'PORT' instead. If 'HOST'
 	is not given, `localhost` is used by default.
+
+*-m* 'PDM-SPEC'::
+
+	If the PDM library is installed on the system, create a
+	listening socket for connection PDM clients according to
+	'PDM-SPEC'.
 
 AUTHOR
 ------
