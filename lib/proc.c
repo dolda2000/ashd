@@ -83,7 +83,7 @@ int sendfd2(int sock, int fd, char *data, size_t datalen, int flags)
 
 int sendfd(int sock, int fd, char *data, size_t datalen)
 {
-    return(sendfd2(sock, fd, data, datalen, MSG_NOSIGNAL | MSG_DONTWAIT));
+    return(sendfd2(sock, fd, data, datalen, MSG_NOSIGNAL));
 }
 
 int recvfd(int sock, char **data, size_t *datalen)

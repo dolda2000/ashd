@@ -1,16 +1,20 @@
 #!/usr/bin/python3
 
-import sys, os, getopt, logging
+import sys, os, getopt, logging, collections
 import socket
-import ashd.scgi
+import ashd.scgi, ashd.perf, ashd.serve
+try:
+    import pdm.srv
+except:
+    pdm = None
 
 def usage(out):
-    out.write("usage: scgi-wsgi3 [-hAL] [-p MODPATH] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: scgi-wsgi3 [-hAL] [-m PDM-SPEC] [-p MODPATH] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
 
 sk = None
 modwsgi_compat = False
 setlog = True
-opts, args = getopt.getopt(sys.argv[1:], "+hALp:T:")
+opts, args = getopt.getopt(sys.argv[1:], "+hALp:T:m:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
@@ -33,6 +37,9 @@ for o, a in opts:
         sk.listen(32)
     elif o == "-A":
         modwsgi_compat = True
+    elif o == "-m":
+        if pdm is not None:
+            pdm.srv.listen(a)
 if len(args) < 1:
     usage(sys.stderr)
     sys.exit(1)
@@ -61,4 +68,78 @@ else:
         sys.exit(1)
     handler = handlermod.application
 
-ashd.scgi.servescgi(sk, ashd.scgi.wrapwsgi(handler))
+def mkenv(head, sk):
+    try:
+        env = ashd.scgi.decodehead(head, "utf-8")
+        env["wsgi.uri_encoding"] = "utf-8"
+    except UnicodeError:
+        env = ashd.scgi.decodehead(head, "latin-1")
+        env["wsgi.uri_encoding"] = "latin-1"
+    env["wsgi.version"] = 1, 0
+    if "HTTP_X_ASH_PROTOCOL" in env:
+        env["wsgi.url_scheme"] = env["HTTP_X_ASH_PROTOCOL"]
+    elif "HTTPS" in env:
+        env["wsgi.url_scheme"] = "https"
+    else:
+        env["wsgi.url_scheme"] = "http"
+    env["wsgi.input"] = sk
+    env["wsgi.errors"] = sys.stderr
+    env["wsgi.multithread"] = True
+    env["wsgi.multiprocess"] = False
+    env["wsgi.run_once"] = False
+    return env
+
+def recode(thing):
+    if isinstance(thing, collections.ByteString):
+        return thing
+    else:
+        return str(thing).encode("latin-1")
+
+class reqthread(ashd.serve.wsgithread):
+    def __init__(self, sk):
+        super().__init__()
+        self.bsk = sk.dup()
+        self.sk = self.bsk.makefile("rwb")
+
+    def handlewsgi(self):
+        return handler(self.env, self.startreq)
+
+    def writehead(self, status, headers):
+        buf = bytearray()
+        buf += b"Status: " + recode(status) + b"\n"
+        for nm, val in headers:
+            buf += recode(nm) + b": " + recode(val) + b"\n"
+        buf += b"\n"
+        try:
+            self.sk.write(buf)
+        except IOError:
+            raise ashd.serve.closed()
+
+    def writedata(self, data):
+        try:
+            self.sk.write(data)
+            self.sk.flush()
+        except IOError:
+            raise ashd.serve.closed()
+
+    def handle(self):
+        head = ashd.scgi.readhead(self.sk)
+        self.env = mkenv(head, self.sk)
+        with ashd.perf.request(self.env) as reqevent:
+            super().handle()
+            if self.status:
+                reqevent.response([self.status, self.headers])
+
+    def run(self):
+        try:
+            super().run()
+        finally:
+            self.sk.close()
+            self.bsk.close()
+
+while True:
+    nsk, addr = sk.accept()
+    try:
+        reqthread(nsk).start()
+    finally:
+        nsk.close()

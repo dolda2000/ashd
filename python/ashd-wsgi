@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import sys, os, getopt, threading, logging, time
-import ashd.proto, ashd.util, ashd.perf
+import ashd.proto, ashd.util, ashd.perf, ashd.serve
 try:
     import pdm.srv
 except:
@@ -52,10 +52,6 @@ else:
         sys.exit(1)
     handler = handlermod.application
 
-class closed(IOError):
-    def __init__(self):
-        super(closed, self).__init__("The client has closed the connection.")
-
 cwd = os.getcwd()
 def absolutify(path):
     if path[0] != '/':
@@ -95,7 +91,7 @@ def unquoteurl(url):
             buf += c
     return buf
 
-def dowsgi(req):
+def mkenv(req):
     env = {}
     env["wsgi.version"] = 1, 0
     for key, val in req.headers:
@@ -147,103 +143,54 @@ def dowsgi(req):
     env["wsgi.multithread"] = True
     env["wsgi.multiprocess"] = False
     env["wsgi.run_once"] = False
+    return env
 
-    resp = []
-    respsent = []
+if reqlimit != 0:
+    guard = ashd.serve.abortlimiter(reqlimit).call
+else:
+    guard = lambda fun: fun()
 
-    def flushreq():
-        if not respsent:
-            if not resp:
-                raise Exception, "Trying to write data before starting response."
-            status, headers = resp
-            respsent[:] = [True]
-            try:
-                req.sk.write("HTTP/1.1 %s\n" % status)
-                for nm, val in headers:
-                    req.sk.write("%s: %s\n" % (nm, val))
-                req.sk.write("\n")
-            except IOError:
-                raise closed()
-
-    def write(data):
-        if not data:
-            return
-        flushreq()
-        try:
-            req.sk.write(data)
-            req.sk.flush()
-        except IOError:
-            raise closed()
-
-    def startreq(status, headers, exc_info = None):
-        if resp:
-            if exc_info:                # Interesting, this...
-                try:
-                    if respsent:
-                        raise exc_info[0], exc_info[1], exc_info[2]
-                finally:
-                    exc_info = None     # CPython GC bug?
-            else:
-                raise Exception, "Can only start responding once."
-        resp[:] = status, headers
-        return write
-
-    reqevent = ashd.perf.request(env)
-    exc = (None, None, None)
-    try:
-        try:
-            respiter = handler(env, startreq)
-            try:
-                for data in respiter:
-                    write(data)
-                if resp:
-                    flushreq()
-            finally:
-                if hasattr(respiter, "close"):
-                    respiter.close()
-        except closed:
-            pass
-        if resp:
-            reqevent.response(resp)
-    except:
-        exc = sys.exc_info()
-        raise
-    finally:
-        reqevent.__exit__(*exc)
-
-flightlock = threading.Condition()
-inflight = 0
-
-class reqthread(threading.Thread):
+class reqthread(ashd.serve.wsgithread):
     def __init__(self, req):
-        super(reqthread, self).__init__(name = "Request handler")
+        super(reqthread, self).__init__()
         self.req = req.dup()
     
-    def run(self):
-        global inflight
+    def handlewsgi(self):
+        return handler(self.env, self.startreq)
+
+    def writehead(self, status, headers):
         try:
-            flightlock.acquire()
-            try:
-                if reqlimit != 0:
-                    start = time.time()
-                    while inflight >= reqlimit:
-                        flightlock.wait(10)
-                        if time.time() - start > 10:
-                            os.abort()
-                inflight += 1
-            finally:
-                flightlock.release()
-            try:
-                dowsgi(self.req)
-            finally:
-                flightlock.acquire()
-                try:
-                    inflight -= 1
-                    flightlock.notify()
-                finally:
-                    flightlock.release()
+            self.req.sk.write("HTTP/1.1 %s\n" % status)
+            for nm, val in headers:
+                self.req.sk.write("%s: %s\n" % (nm, val))
+            self.req.sk.write("\n")
+        except IOError:
+            raise ashd.serve.closed()
+
+    def writedata(self, data):
+        try:
+            self.req.sk.write(data)
+            self.req.sk.flush()
+        except IOError:
+            raise ashd.serve.closed()
+
+    def handle(self):
+        self.env = mkenv(self.req)
+        reqevent = ashd.perf.request(self.env)
+        exc = (None, None, None)
+        try:
+            super(reqthread, self).handle()
+            if self.status:
+                reqevent.response([self.status, self.headers])
         except:
-            log.error("exception occurred in handler thread", exc_info=True)
+            exc = sys.exc_info()
+            raise
+        finally:
+            reqevent.__exit__(*exc)
+
+    def run(self):
+        try:
+            guard(super(reqthread, self).run)
         finally:
             self.req.close()
     

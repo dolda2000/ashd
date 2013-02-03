@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <glob.h>
 #include <libgen.h>
+#include <sys/socket.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -305,21 +306,25 @@ static struct chandler stdhandler = {
 static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
 {
     struct stdchild *i = ch->pdata;
+    int serr;
     
     if(i->type == CH_SOCKET) {
 	if(i->fd < 0)
 	    i->fd = stdmkchild(i->argv, chinit, idata);
-	if(sendreq(i->fd, req, fd)) {
-	    if((errno == EPIPE) || (errno == ECONNRESET)) {
+	if(sendreq2(i->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT)) {
+	    serr = errno;
+	    if((serr == EPIPE) || (serr == ECONNRESET)) {
 		/* Assume that the child has crashed and restart it. */
 		close(i->fd);
 		i->fd = stdmkchild(i->argv, chinit, idata);
-		if(!sendreq(i->fd, req, fd))
+		if(!sendreq2(i->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
 		    return(0);
 	    }
-	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
-	    close(i->fd);
-	    i->fd = -1;
+	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(serr));
+	    if(serr != EAGAIN) {
+		close(i->fd);
+		i->fd = -1;
+	    }
 	    return(-1);
 	}
     } else if(i->type == CH_FORK) {

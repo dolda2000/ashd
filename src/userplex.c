@@ -158,19 +158,24 @@ static int forkchild(char *usrnm, struct hthead *forreq, int reqfd)
 
 static void serve2(struct user *usr, struct hthead *req, int fd)
 {
+    int serr;
+    
     if(usr->fd < 0)
 	usr->fd = forkchild(usr->name, req, fd);
-    if(sendreq(usr->fd, req, fd)) {
-	if((errno == EPIPE) || (errno == ECONNRESET)) {
+    if(sendreq2(usr->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT)) {
+	serr = errno;
+	if((serr == EPIPE) || (serr == ECONNRESET)) {
 	    /* Assume that the child has crashed and restart it. */
 	    close(usr->fd);
 	    usr->fd = forkchild(usr->name, req, fd);
-	    if(!sendreq(usr->fd, req, fd))
+	    if(!sendreq2(usr->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
 		return;
 	}
-	flog(LOG_ERR, "could not pass on request to user `%s': %s", usr->name, strerror(errno));
-	close(usr->fd);
-	usr->fd = -1;
+	flog(LOG_ERR, "could not pass on request to user `%s': %s", usr->name, strerror(serr));
+	if(serr != EAGAIN) {
+	    close(usr->fd);
+	    usr->fd = -1;
+	}
     }
 }
 
