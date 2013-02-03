@@ -405,8 +405,9 @@ static void plexwatch(struct muth *muth, va_list args)
 {
     vavar(int, fd);
     char *buf;
-    int i, ret;
+    int i, s, ret;
     
+    s = 0;
     while(1) {
 	if(block(fd, EV_READ, 0) == 0)
 	    break;
@@ -416,6 +417,7 @@ static void plexwatch(struct muth *muth, va_list args)
 	    flog(LOG_WARNING, "received error on rootplex read channel: %s", strerror(errno));
 	    exit(1);
 	} else if(ret == 0) {
+	    s = 1;
 	    free(buf);
 	    break;
 	}
@@ -428,9 +430,11 @@ static void plexwatch(struct muth *muth, va_list args)
 	if(listeners.b[i] == muth)
 	    bufdel(listeners, i);
     }
-    flog(LOG_INFO, "root handler exited, so shutting down listening...");
-    while(listeners.d > 0)
-	resume(listeners.b[0], 0);
+    if(s) {
+	flog(LOG_INFO, "root handler exited, so shutting down listening...");
+	while(listeners.d > 0)
+	    resume(listeners.b[0], 0);
+    }
 }
 
 static void initroot(void *uu)
