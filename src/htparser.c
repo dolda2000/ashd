@@ -423,8 +423,7 @@ static void plexwatch(struct muth *muth, va_list args)
 	 * some day... */
 	free(buf);
     }
-    close(plex);
-    plex = -1;
+    shutdown(plex, SHUT_RDWR);
     for(i = 0; i < listeners.d; i++) {
 	if(listeners.b[i] == muth)
 	    bufdel(listeners, i);
