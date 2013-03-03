@@ -66,4 +66,4 @@ Fredrik Tolf <fredrik@dolda2000.com>
 
 SEE ALSO
 --------
-*dirplex*(1), *ashd*(7)
+*dirplex*(1), *psendfile*(1), *ashd*(7)
