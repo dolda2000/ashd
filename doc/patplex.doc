@@ -40,7 +40,10 @@ directories named by the *PATH* environment variable, appended with
 `../etc/ashd`. For example, then, if *PATH* is
 `/usr/local/bin:/bin:/usr/bin`, the directories `/usr/local/etc/ashd`,
 `/etc/ashd` and `/usr/etc/ashd` are searched for `patplex.rc`, in that
-order. Only the first file found is used, should there exist several.
+order. Only the first file found is used, should there exist
+several. If the given 'CONFIGFILE' contains any slashes, it is opened
+by that exact name. Otherwise, it is searched for in the same manner
+as the global configuration file.
 
 Should the global and the given configuration files conflict, the
 directives from the given file take precedence.

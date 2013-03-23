@@ -514,7 +514,7 @@ int main(int argc, char **argv)
 {
     int c;
     int nodef;
-    char *gcf;
+    char *gcf, *lcf;
     struct hthead *req;
     int fd;
     
@@ -542,8 +542,14 @@ int main(int argc, char **argv)
 	    free(gcf);
 	}
     }
-    if((lconfig = readconfig(argv[optind])) == NULL) {
-	flog(LOG_ERR, "could not read `%s'", argv[optind]);
+    if((strchr(lcf = argv[optind], '/')) == NULL) {
+	if((lcf = findstdconf(sprintf3("ashd/%s", lcf))) == NULL) {
+	    flog(LOG_ERR, "could not find requested configuration file `%s'", argv[optind]);
+	    exit(1);
+	}
+    }
+    if((lconfig = readconfig(lcf)) == NULL) {
+	flog(LOG_ERR, "could not read `%s'", lcf);
 	exit(1);
     }
     signal(SIGCHLD, chldhandler);
@@ -551,7 +557,7 @@ int main(int argc, char **argv)
     signal(SIGPIPE, sighandler);
     while(1) {
 	if(reload) {
-	    reloadconf(argv[optind]);
+	    reloadconf(lcf);
 	    reload = 0;
 	}
 	if((fd = recvreq(0, &req)) < 0) {
