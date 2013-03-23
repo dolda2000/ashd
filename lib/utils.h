@@ -81,6 +81,7 @@ void bprintf(struct charbuf *buf, char *format, ...);
 void replstr(char **p, char *n);
 char *base64encode(char *data, size_t datalen);
 char *base64decode(char *data, size_t *datalen);
+int hexdigit(char c);
 int bbtreedel(struct btree **tree, void *item, int (*cmp)(void *, void *));
 void freebtree(struct btree **tree, void (*ffunc)(void *));
 int bbtreeput(struct btree **tree, void *item, int (*cmp)(void *, void *));

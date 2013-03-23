@@ -44,6 +44,7 @@
 #define PAT_DEFAULT 5
 
 #define PATFL_MSS 1
+#define PATFL_UNQ 2
 
 struct config {
     struct child *children;
@@ -207,6 +208,8 @@ static struct pattern *parsepattern(struct cfstate *s)
 	    if(s->argc >= 3) {
 		if(strchr(s->argv[2], 's'))
 		    rule->fl |= PATFL_MSS;
+		if(strchr(s->argv[2], 'q'))
+		    rule->fl |= PATFL_UNQ;
 	    }
 	} else if(!strcmp(s->argv[0], "header")) {
 	    if(s->argc < 3) {
@@ -360,12 +363,40 @@ static void exprestpat(struct hthead *req, struct pattern *pat, char **mstr)
     buffree(buf);
 }
 
+static void qoffsets(char *buf, int *obuf, char *pstr, int unquote)
+{
+    int i, o, d1, d2;
+    
+    if(unquote) {
+	i = o = 0;
+	while(pstr[i]) {
+	    obuf[o] = i;
+	    if((pstr[i] == '%') && ((d1 = hexdigit(pstr[i + 1])) >= 0) && ((d2 = hexdigit(pstr[i + 2])) >= 0)) {
+		buf[o] = (d1 << 4) | d2;
+		i += 3;
+	    } else {
+		buf[o] = pstr[i];
+		i++;
+	    }
+	    o++;
+	}
+	buf[o] = 0;
+    } else {
+	for(i = 0; pstr[i]; i++) {
+	    buf[i] = pstr[i];
+	    obuf[i] = i;
+	}
+	buf[i] = 0;
+    }
+}
+
 static struct pattern *findmatch(struct config *cf, struct hthead *req, int trydefault)
 {
     int i, o;
     struct pattern *pat;
     struct rule *rule;
-    int rmo, matched;
+    int rmo;
+    regex_t *rx;
     char *pstr;
     char **mstr;
     regmatch_t gr[10];
@@ -374,45 +405,51 @@ static struct pattern *findmatch(struct config *cf, struct hthead *req, int tryd
     for(pat = cf->patterns; pat != NULL; pat = pat->next) {
 	rmo = -1;
 	for(i = 0; (rule = pat->rules[i]) != NULL; i++) {
-	    matched = 0;
+	    rx = NULL;
 	    if(rule->type == PAT_REST) {
-		if((matched = !regexec(rule->pattern, pstr = req->rest, 10, gr, 0)))
-		    rmo = gr[0].rm_eo;
-		else
-		    break;
+		rx = rule->pattern;
+		pstr = req->rest;
 	    } else if(rule->type == PAT_URL) {
-		if(!(matched = !regexec(rule->pattern, pstr = req->url, 10, gr, 0)))
-		    break;
+		rx = rule->pattern;
+		pstr = req->url;
 	    } else if(rule->type == PAT_METHOD) {
-		if(!(matched = !regexec(rule->pattern, pstr = req->method, 10, gr, 0)))
-		    break;
+		rx = rule->pattern;
+		pstr = req->method;
 	    } else if(rule->type == PAT_HEADER) {
+		rx = rule->pattern;
 		if(!(pstr = getheader(req, rule->header)))
 		    break;
-		if(!(matched = !regexec(rule->pattern, pstr, 10, gr, 0)))
+	    }
+	    if(rx != NULL) {
+		char pbuf[strlen(pstr) + 1];
+		int  obuf[strlen(pstr) + 1];
+		qoffsets(pbuf, obuf, pstr, !!(rule->fl & PATFL_UNQ));
+		if(regexec(rx, pbuf, 10, gr, 0))
 		    break;
+		else if(rule->type == PAT_REST)
+		    rmo = obuf[gr[0].rm_eo];
+		if(rule->fl & PATFL_MSS) {
+		    if(mstr) {
+			flog(LOG_WARNING, "two pattern rules marked with `s' flag found (for handler %s)", pat->childnm);
+			freeca(mstr);
+		    }
+		    for(o = 0; o < 10; o++) {
+			if(gr[o].rm_so < 0)
+			    break;
+		    }
+		    mstr = szmalloc((o + 1) * sizeof(*mstr));
+		    for(o = 0; o < 10; o++) {
+			if(gr[o].rm_so < 0)
+			    break;
+			mstr[o] = smalloc(obuf[gr[o].rm_eo] - obuf[gr[o].rm_so] + 1);
+			memcpy(mstr[o], pstr + obuf[gr[o].rm_so], obuf[gr[o].rm_eo] - obuf[gr[o].rm_so]);
+			mstr[o][obuf[gr[o].rm_eo] - obuf[gr[o].rm_so]] = 0;
+		    }
+		}
 	    } else if(rule->type == PAT_ALL) {
 	    } else if(rule->type == PAT_DEFAULT) {
 		if(!trydefault)
 		    break;
-	    }
-	    if(matched && (rule->fl & PATFL_MSS)) {
-		if(mstr) {
-		    flog(LOG_WARNING, "two pattern rules marked with `s' flag found (for handler %s)", pat->childnm);
-		    freeca(mstr);
-		}
-		for(o = 0; o < 10; o++) {
-		    if(gr[o].rm_so < 0)
-			break;
-		}
-		mstr = szmalloc((o + 1) * sizeof(*mstr));
-		for(o = 0; o < 10; o++) {
-		    if(gr[o].rm_so < 0)
-			break;
-		    mstr[o] = smalloc(gr[o].rm_eo - gr[o].rm_so + 1);
-		    memcpy(mstr[o], pstr + gr[o].rm_so, gr[o].rm_eo - gr[o].rm_so);
-		    mstr[o][gr[o].rm_eo - gr[o].rm_so] = 0;
-		}
 	    }
 	}
 	if(!rule) {
