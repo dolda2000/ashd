@@ -233,22 +233,27 @@ void freecfparser(struct cfstate *s)
 
 char *findstdconf(char *name)
 {
-    char *path, *p, *p2, *t;
+    char *home, *path, *p, *p2, *t;
     
-    if((path = getenv("PATH")) == NULL)
-	return(NULL);
-    path = sstrdup(path);
-    for(p = strtok(path, ":"); p != NULL; p = strtok(NULL, ":")) {
-	if((p2 = strrchr(p, '/')) == NULL)
-	    continue;
-	*p2 = 0;
-	if(!access(t = sprintf2("%s/etc/%s", p, name), R_OK)) {
-	    free(path);
+    if((home = getenv("HOME")) != NULL) {
+	if(!access(t = sprintf2("%s/.ashd/etc/%s", home, name), R_OK))
 	    return(t);
-	}
 	free(t);
     }
-    free(path);
+    if((path = getenv("PATH")) != NULL) {
+	path = sstrdup(path);
+	for(p = strtok(path, ":"); p != NULL; p = strtok(NULL, ":")) {
+	    if((p2 = strrchr(p, '/')) == NULL)
+		continue;
+	    *p2 = 0;
+	    if(!access(t = sprintf2("%s/etc/%s", p, name), R_OK)) {
+		free(path);
+		return(t);
+	    }
+	    free(t);
+	}
+	free(path);
+    }
     return(NULL);
 }
 
