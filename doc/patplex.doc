@@ -37,9 +37,9 @@ In addition to the 'CONFIGFILE' specified on the command-line,
 *patplex* also attempts to find and read a global configuration file
 called `patplex.rc`, unless the *-N* option is given. It looks in all
 directories named by the *PATH* environment variable, appended with
-`../etc`. For example, then, if *PATH* is
-`/usr/local/bin:/bin:/usr/bin`, the directories `/usr/local/etc`,
-`/etc` and `/usr/etc` are searched for `patplex.rc`, in that
+`../etc/ashd`. For example, then, if *PATH* is
+`/usr/local/bin:/bin:/usr/bin`, the directories `/usr/local/etc/ashd`,
+`/etc/ashd` and `/usr/etc/ashd` are searched for `patplex.rc`, in that
 order. Only the first file found is used, should there exist several.
 
 Should the global and the given configuration files conflict, the
