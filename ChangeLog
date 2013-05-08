@@ -1,3 +1,11 @@
+Version 0.12:
+
+	* Support chunked request-bodies from clients.
+	* Improved general behavior when handlers are overloaded.
+	* Improved shutdown behavior.
+	* Properly support URL percent-escapes in patplex.
+	* Added psendfile.
+
 Version 0.11:
 
 	* Some useful configuration options for dirplex.
