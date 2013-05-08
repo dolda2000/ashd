@@ -6,7 +6,7 @@ htlib = Extension("ashd.htlib", ["htp.c"],
                   libraries = ["ht"])
 
 setup(name = "ashd-py",
-      version = "0.5",
+      version = "0.6",
       description = "Python module for handling ashd requests",
       author = "Fredrik Tolf",
       author_email = "fredrik@dolda2000.com",
