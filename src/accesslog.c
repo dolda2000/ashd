@@ -395,6 +395,7 @@ int main(int argc, char **argv)
 	if(pfd[1].revents & POLLHUP)
 	    break;
     }
+    fclose(out);
     if(pidfile != NULL)
 	unlink(pidfile);
     return(0);
