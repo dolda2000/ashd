@@ -41,6 +41,7 @@
 struct stdchild {
     int type;
     char **argv;
+    char **envp;
     int fd;
 };
 
@@ -310,30 +311,39 @@ static struct chandler stdhandler = {
 
 static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
 {
-    struct stdchild *i = ch->pdata;
+    struct stdchild *sd = ch->pdata;
     int serr;
     
-    if(i->type == CH_SOCKET) {
-	if(i->fd < 0)
-	    i->fd = stdmkchild(i->argv, chinit, idata);
-	if(sendreq2(i->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT)) {
+    void stdinit(void *data)
+    {
+	int i;
+	
+	for(i = 0; sd->envp[i]; i += 2)
+	    putenv(sprintf2("%s=%s", sd->envp[i], sd->envp[i + 1]));
+	chinit(data);
+    }
+    
+    if(sd->type == CH_SOCKET) {
+	if(sd->fd < 0)
+	    sd->fd = stdmkchild(sd->argv, stdinit, idata);
+	if(sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT)) {
 	    serr = errno;
 	    if((serr == EPIPE) || (serr == ECONNRESET)) {
 		/* Assume that the child has crashed and restart it. */
-		close(i->fd);
-		i->fd = stdmkchild(i->argv, chinit, idata);
-		if(!sendreq2(i->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
+		close(sd->fd);
+		sd->fd = stdmkchild(sd->argv, stdinit, idata);
+		if(!sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
 		    return(0);
 	    }
 	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(serr));
 	    if(serr != EAGAIN) {
-		close(i->fd);
-		i->fd = -1;
+		close(sd->fd);
+		sd->fd = -1;
 	    }
 	    return(-1);
 	}
-    } else if(i->type == CH_FORK) {
-	if(stdforkserve(i->argv, req, fd, chinit, idata) < 0)
+    } else if(sd->type == CH_FORK) {
+	if(stdforkserve(sd->argv, req, fd, chinit, idata) < 0)
 	    return(-1);
     }
     return(0);
@@ -359,6 +369,8 @@ static void stddestroy(struct child *ch)
 	close(d->fd);
     if(d->argv)
 	freeca(d->argv);
+    if(d->envp)
+	freeca(d->envp);
     free(d);
 }
 
@@ -366,6 +378,7 @@ struct child *parsechild(struct cfstate *s)
 {
     struct child *ch;
     struct stdchild *d;
+    struct charvbuf envbuf;
     int i;
     int sl;
     
@@ -393,6 +406,7 @@ struct child *parsechild(struct cfstate *s)
     }
     d->fd = -1;
     
+    bufinit(envbuf);
     while(1) {
 	getcfline(s);
 	if(!strcmp(s->argv[0], "exec")) {
@@ -403,12 +417,21 @@ struct child *parsechild(struct cfstate *s)
 	    d->argv = szmalloc(sizeof(*d->argv) * s->argc);
 	    for(i = 0; i < s->argc - 1; i++)
 		d->argv[i] = sstrdup(s->argv[i + 1]);
+	} else if(!strcmp(s->argv[0], "env")) {
+	    if(s->argc < 3) {
+		flog(LOG_WARNING, "%s:%i: too few parameters to `env'", s->file, s->lno);
+		continue;
+	    }
+	    bufadd(envbuf, sstrdup(s->argv[1]));
+	    bufadd(envbuf, sstrdup(s->argv[2]));
 	} else if(!strcmp(s->argv[0], "end") || !strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
 	    flog(LOG_WARNING, "%s:%i: unknown directive `%s' in child declaration", s->file, s->lno, s->argv[0]);
 	}
     }
+    bufadd(envbuf, NULL);
+    d->envp = envbuf.b;
     if(d->argv == NULL) {
 	flog(LOG_WARNING, "%s:%i: missing `exec' in child declaration %s", s->file, sl, ch->name);
 	freechild(ch);
