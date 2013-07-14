@@ -320,7 +320,8 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 	
 	for(i = 0; sd->envp[i]; i += 2)
 	    putenv(sprintf2("%s=%s", sd->envp[i], sd->envp[i + 1]));
-	chinit(data);
+	if(chinit != NULL)
+	    chinit(data);
     }
     
     if(sd->type == CH_SOCKET) {
