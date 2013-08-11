@@ -189,6 +189,7 @@ static struct pattern *parsepattern(struct cfstate *s)
 		flog(LOG_WARNING, "%s:%i: missing pattern for `%s' match", s->file, s->lno, s->argv[0]);
 		continue;
 	    }
+	    rxfl = 0;
 	    if(s->argc >= 3) {
 		if(strchr(s->argv[2], 'i'))
 		    rxfl |= REG_ICASE;
@@ -216,6 +217,7 @@ static struct pattern *parsepattern(struct cfstate *s)
 		flog(LOG_WARNING, "%s:%i: missing header name or pattern for `header' match", s->file, s->lno);
 		continue;
 	    }
+	    rxfl = 0;
 	    if(s->argc >= 4) {
 		if(strchr(s->argv[3], 'i'))
 		    rxfl |= REG_ICASE;
