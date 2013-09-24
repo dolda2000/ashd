@@ -23,7 +23,7 @@ suitable for a system under heavier load, while *sendfile* is more
 suitable for a system under light load.
 
 Accordingly, *psendfile* is a persistent handler, as defined in
-*ashd*(7). See the *sendfile*(1) manpage for all the details of it
+*ashd*(7). See the *sendfile*(1) manpage for all the details of its
 operations, as it mirrors that program exactly except in the special
 options it accepts.
 
