@@ -33,7 +33,7 @@ on its standard input, expecting the program to start accepting
 connections on that socket. *callscgi* will then connect to that
 socket for each request. If such a connection is refused, the child
 program will be assumed to have crashed, and *callscgi* will restart
-it. Also in anonymous mode, *callscgi*, will try and kill the child
+it. Also in anonymous mode, *callscgi* will try and kill the child
 program whenever *callscgi* itself exits for whatever reason (commonly
 because its own control socket is closed by its parent handler).
 
