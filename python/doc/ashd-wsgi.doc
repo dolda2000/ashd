@@ -65,7 +65,7 @@ OPTIONS
 *-m* 'PDM-SPEC'::
 
 	If the PDM library is installed on the system, create a
-	listening socket for connection PDM clients according to
+	listening socket for connecting PDM clients according to
 	'PDM-SPEC'.
 
 PROTOCOL
