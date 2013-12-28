@@ -62,7 +62,8 @@ static int passdata(FILE *in, FILE *out)
 		    return(1);
 		}
 		if(fwrite(buf, 1, ret, out) != ret) {
-		    flog(LOG_ERR, "callcgi: could not write output: %s", strerror(errno));
+		    if(errno != EPIPE)
+			flog(LOG_ERR, "callcgi: could not write output: %s", strerror(errno));
 		    return(1);
 		}
 	    }
