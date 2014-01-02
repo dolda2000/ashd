@@ -309,10 +309,56 @@ static struct chandler stdhandler = {
     .destroy = stddestroy,
 };
 
+static char **expandargs(struct stdchild *sd)
+{
+    int i;
+    char **ret, *p, *p2, *p3, *np, *env;
+    struct charbuf exp;
+    
+    ret = szmalloc(sizeof(*ret) * (calen(sd->argv) + 1));
+    bufinit(exp);
+    for(i = 0; sd->argv[i] != NULL; i++) {
+	if((p = strchr(sd->argv[i], '$')) == NULL) {
+	    ret[i] = sstrdup(sd->argv[i]);
+	} else {
+	    exp.d = 0;
+	    for(p2 = sd->argv[i]; p != NULL; p2 = np, p = strchr(np, '$')) {
+		bufcat(exp, p2, p - p2);
+		if(p[1] == '{') {
+		    if((p3 = strchr((p += 2), '}')) == NULL)
+			break;
+		    np = p3 + 1;
+		} else {
+		    for(p3 = ++p; *p3; p3++) {
+			if(!(((*p3 >= 'a') && (*p3 <= 'z')) ||
+			     ((*p3 >= 'A') && (*p3 <= 'Z')) ||
+			     ((*p3 >= '0') && (*p3 <= '9')) ||
+			     (*p3 == '_'))) {
+			    break;
+			}
+		    }
+		    np = p3;
+		}
+		char temp[(p3 - p) + 1];
+		memcpy(temp, p, p3 - p);
+		temp[p3 - p] = 0;
+		if((env = getenv(temp)) != NULL)
+		    bufcatstr(exp, env);
+	    }
+	    bufcatstr2(exp, np);
+	    ret[i] = sstrdup(exp.b);
+	}
+    }
+    ret[i] = NULL;
+    buffree(exp);
+    return(ret);
+}
+
 static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
 {
     struct stdchild *sd = ch->pdata;
     int serr;
+    char **args;
     
     void stdinit(void *data)
     {
@@ -325,14 +371,19 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
     }
     
     if(sd->type == CH_SOCKET) {
-	if(sd->fd < 0)
-	    sd->fd = stdmkchild(sd->argv, stdinit, idata);
+	if(sd->fd < 0) {
+	    args = expandargs(sd);
+	    sd->fd = stdmkchild(args, stdinit, idata);
+	    freeca(args);
+	}
 	if(sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT)) {
 	    serr = errno;
 	    if((serr == EPIPE) || (serr == ECONNRESET)) {
 		/* Assume that the child has crashed and restart it. */
 		close(sd->fd);
-		sd->fd = stdmkchild(sd->argv, stdinit, idata);
+		args = expandargs(sd);
+		sd->fd = stdmkchild(args, stdinit, idata);
+		freeca(args);
 		if(!sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
 		    return(0);
 	    }
@@ -344,8 +395,12 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 	    return(-1);
 	}
     } else if(sd->type == CH_FORK) {
-	if(stdforkserve(sd->argv, req, fd, chinit, idata) < 0)
+	args = expandargs(sd);
+	if(stdforkserve(args, req, fd, chinit, idata) < 0) {
+	    freeca(args);
 	    return(-1);
+	}
+	freeca(args);
     }
     return(0);
 }
