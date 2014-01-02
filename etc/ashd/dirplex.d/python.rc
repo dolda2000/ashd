@@ -7,6 +7,10 @@ match
   filename *.wsgi
   xset python-handler chain
   handler wsgidir
+match
+  filename *.wsgi2
+  xset python-handler chain
+  handler wsgidir
 
 match
   filename *.wsgi3
