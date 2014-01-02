@@ -40,6 +40,7 @@
 #endif
 #include <utils.h>
 #include <req.h>
+#include <resp.h>
 #include <log.h>
 #include <mt.h>
 #include <mtio.h>
@@ -473,46 +474,6 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
     }
 }
 
-static char *defstatus(int code)
-{
-    if(code == 200)
-	return("OK");
-    else if(code == 201)
-	return("Created");
-    else if(code == 202)
-	return("Accepted");
-    else if(code == 204)
-	return("No Content");
-    else if(code == 300)
-	return("Multiple Choices");
-    else if(code == 301)
-	return("Moved Permanently");
-    else if(code == 302)
-	return("Found");
-    else if(code == 303)
-	return("See Other");
-    else if(code == 304)
-	return("Not Modified");
-    else if(code == 307)
-	return("Moved Temporarily");
-    else if(code == 400)
-	return("Bad Request");
-    else if(code == 401)
-	return("Unauthorized");
-    else if(code == 403)
-	return("Forbidden");
-    else if(code == 404)
-	return("Not Found");
-    else if(code == 500)
-	return("Internal Server Error");
-    else if(code == 501)
-	return("Not Implemented");
-    else if(code == 503)
-	return("Service Unavailable");
-    else
-	return("Unknown status");
-}
-
 static struct hthead *parseresp(FILE *in)
 {
     struct hthead *resp;
@@ -531,7 +492,7 @@ static struct hthead *parseresp(FILE *in)
 	    resp->msg = sstrdup(p);
 	} else {
 	    resp->code = atoi(st);
-	    resp->msg = sstrdup(defstatus(resp->code));
+	    resp->msg = sstrdup(httpdefstatus(resp->code));
 	}
 	headrmheader(resp, "Status");
     } else if(getheader(resp, "Location")) {
