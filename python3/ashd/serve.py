@@ -86,13 +86,28 @@ class handler(object):
         return {}
 
 class freethread(handler):
-    def __init__(self, **kw):
+    def __init__(self, *, max=None, **kw):
         super().__init__(**kw)
         self.current = set()
         self.lk = threading.Lock()
+        self.tcond = threading.Condition(self.lk)
+        self.max = max
+
+    @classmethod
+    def parseargs(cls, *, max=None, **args):
+        ret = super().parseargs(**args)
+        if max:
+            ret["max"] = int(max)
+        return ret
 
     def handle(self, req):
-        reqthread(target=self.run, args=[req]).start()
+        with self.lk:
+            while self.max is not None and len(self.current) >= self.max:
+                self.tcond.wait()
+            th = reqthread(target=self.run, args=[req])
+            th.start()
+            while th.is_alive() and th not in self.current:
+                self.tcond.wait()
 
     def ckflush(self, req):
         while len(req.buffer) > 0:
@@ -104,6 +119,7 @@ class freethread(handler):
             th = threading.current_thread()
             with self.lk:
                 self.current.add(th)
+                self.tcond.notify_all()
             try:
                 env = req.mkenv()
                 with perf.request(env) as reqevent:
@@ -121,6 +137,7 @@ class freethread(handler):
             finally:
                 with self.lk:
                     self.current.remove(th)
+                    self.tcond.notify_all()
         finally:
             req.close()
 
