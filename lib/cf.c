@@ -386,6 +386,7 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 		freeca(args);
 		if(!sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
 		    return(0);
+		serr = errno;
 	    }
 	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(serr));
 	    if(serr != EAGAIN) {
