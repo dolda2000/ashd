@@ -399,7 +399,7 @@ class resplex(handler):
                             ckiter(req)
         except:
             log.critical("unexpected exception occurred in response handler thread", exc_info=True)
-            sys.exit(1)
+            os.abort()
 
     def close(self):
         while True:
