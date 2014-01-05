@@ -472,6 +472,14 @@ static struct pattern *findmatch(struct config *cf, struct hthead *req, int tryd
     return(NULL);
 }
 
+static void childerror(struct hthead *req, int fd)
+{
+    if(errno == EAGAIN)
+	simpleerror(fd, 500, "Server Error", "The request handler is overloaded.");
+    else
+	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+}
+
 static void serve(struct hthead *req, int fd)
 {
     struct pattern *pat;
@@ -511,7 +519,7 @@ static void serve(struct hthead *req, int fd)
 	headappheader(req, head->name, head->value);
     }
     if(childhandle(ch, req, fd, NULL, NULL))
-	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+	childerror(req, fd);
 }
 
 static void reloadconf(char *nm)

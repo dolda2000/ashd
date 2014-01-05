@@ -55,6 +55,14 @@ static void chinit(void *idata)
     }
 }
 
+static void childerror(struct hthead *req, int fd)
+{
+    if(errno == EAGAIN)
+	simpleerror(fd, 500, "Server Error", "The request handler is overloaded.");
+    else
+	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+}
+
 static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
 {
     struct child *ch;
@@ -91,7 +99,7 @@ static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
 	}
 	headappheader(req, "X-Ash-File", path);
 	if(childhandle(ch, req, fd, chinit, twd))
-	    simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+	    childerror(req, fd);
     }
 }
 
@@ -104,7 +112,7 @@ static void handle404(struct hthead *req, int fd, char *path)
     tmp = sstrdup(path);
     ch = findchild(tmp, ".notfound", &ccf);
     if(childhandle(ch, req, fd, chinit, ccf?ccf->path:NULL))
-	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+	childerror(req, fd);
     free(tmp);
 }
 
@@ -257,7 +265,7 @@ static int checkdir(struct hthead *req, int fd, char *path, char *rest)
 	    rest++;
 	replrest(req, rest);
 	if(childhandle(ch, req, fd, chinit, ccf?ccf->path:NULL))
-	    simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+	    childerror(req, fd);
 	return(1);
     }
     return(0);
