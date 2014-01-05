@@ -272,15 +272,22 @@ class resplex(handler):
                         data = next(respiter)
                     except StopIteration:
                         rem = True
-                        req.flushreq()
+                        try:
+                            req.flushreq()
+                        except:
+                            log.error("exception occurred when handling response data", exc_info=True)
                     except:
                         rem = True
                         log.error("exception occurred when iterating response", exc_info=True)
                     if not rem:
                         if data:
-                            req.flushreq()
-                            req.writedata(data)
-                    else:
+                            try:
+                                req.flushreq()
+                                req.writedata(data)
+                            except:
+                                log.error("exception occurred when handling response data", exc_info=True)
+                                rem = True
+                    if rem:
                         current[req] = None
                         try:
                             if hasattr(respiter, "close"):
