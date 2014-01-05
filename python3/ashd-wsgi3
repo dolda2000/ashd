@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys, os, getopt, threading, logging, time, locale, collections
+import sys, os, getopt, threading, socket, logging, time, locale, collections
 import ashd.proto, ashd.util, ashd.perf, ashd.serve
 try:
     import pdm.srv
@@ -156,47 +156,41 @@ def recode(thing):
     else:
         return str(thing).encode("latin-1")
 
-class reqthread(ashd.serve.wsgithread):
-    def __init__(self, req):
-        super().__init__()
-        self.req = req.dup()
+reqhandler = ashd.serve.freethread()
 
-    def handlewsgi(self):
-        return handler(self.env, self.startreq)
+class request(ashd.serve.wsgirequest):
+    def __init__(self, *, bkreq, **kw):
+        super().__init__(**kw)
+        self.bkreq = bkreq.dup()
+
+    def mkenv(self):
+        return mkenv(self.bkreq)
+
+    def handlewsgi(self, env, startreq):
+        return handler(env, startreq)
+
+    def fileno(self):
+        return self.bkreq.bsk.fileno()
 
     def writehead(self, status, headers):
-        buf = bytearray()
-        buf += b"HTTP/1.1 " + recode(status) + b"\n"
+        w = self.buffer.extend
+        w(b"HTTP/1.1 " + recode(status) + b"\n")
         for nm, val in headers:
-            buf += recode(nm) + b": " + recode(val) + b"\n"
-        buf += b"\n"
+            w(recode(nm) + b": " + recode(val) + b"\n")
+        w(b"\n")
+
+    def flush(self):
         try:
-            self.req.sk.write(buf)
+            ret = self.bkreq.bsk.send(self.buffer, socket.MSG_DONTWAIT)
+            self.buffer[:ret] = b""
         except IOError:
             raise ashd.serve.closed()
 
-    def writedata(self, data):
-        try:
-            self.req.sk.write(data)
-            self.req.sk.flush()
-        except IOError:
-            raise ashd.serve.closed()
+    def close(self):
+        self.bkreq.close()
 
-    def handle(self):
-        self.env = mkenv(self.req)
-        with ashd.perf.request(self.env) as reqevent:
-            super().handle()
-            if self.status:
-                reqevent.response([self.status, self.headers])
-    
-    def run(self):
-        try:
-            guard(super().run)
-        finally:
-            self.req.close()
-            sys.stderr.flush()
-    
 def handle(req):
-    reqthread(req).start()
+    reqhandler.handle(request(bkreq=req, handler=reqhandler))
 
 ashd.util.serveloop(handle)
+reqhandler.close()
