@@ -388,8 +388,8 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 		    return(0);
 		serr = errno;
 	    }
-	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(serr));
 	    if(serr != EAGAIN) {
+		flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(serr));
 		close(sd->fd);
 		sd->fd = -1;
 	    }
