@@ -88,6 +88,8 @@ class handler(object):
         return {}
 
 class single(handler):
+    cname = "single"
+
     def handle(self, req):
         try:
             env = req.mkenv()
@@ -107,6 +109,8 @@ class single(handler):
             req.close()
 
 class freethread(handler):
+    cname = "free"
+
     def __init__(self, *, max=None, timeout=None, **kw):
         super().__init__(**kw)
         self.current = set()
@@ -179,6 +183,8 @@ class freethread(handler):
             th.join()
 
 class resplex(handler):
+    cname = "rplex"
+
     def __init__(self, *, max=None, **kw):
         super().__init__(**kw)
         self.current = set()
@@ -326,9 +332,10 @@ class resplex(handler):
         os.close(self.cnpipe[1])
         self.rthread.join()
 
-names = {"single": single,
-         "free": freethread,
-         "rplex": resplex}
+names = {cls.cname: cls for cls in globals().values() if
+         isinstance(cls, type) and
+         issubclass(cls, handler) and
+         hasattr(cls, "cname")}
 
 def parsehspec(spec):
     if ":" not in spec:
