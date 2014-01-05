@@ -100,20 +100,17 @@ reqhandler = ashd.serve.freethread()
 class request(ashd.serve.wsgirequest):
     def __init__(self, *, sk, **kw):
         super().__init__(**kw)
-        self.sk = sk.dup()
+        self.bsk = sk.dup()
+        self.sk = self.bsk.makefile("rwb")
 
     def mkenv(self):
-        fsk = self.sk.dup().makefile("rwb")
-        try:
-            return mkenv(ashd.scgi.readhead(fsk), fsk)
-        finally:
-            fsk.close()
+        return mkenv(ashd.scgi.readhead(self.sk), self.sk)
 
     def handlewsgi(self, env, startreq):
         return handler(env, startreq)
 
     def fileno(self):
-        return self.sk.fileno()
+        return self.bsk.fileno()
 
     def writehead(self, status, headers):
         w = self.buffer.extend
@@ -124,13 +121,14 @@ class request(ashd.serve.wsgirequest):
 
     def flush(self):
         try:
-            ret = self.sk.send(self.buffer, socket.MSG_DONTWAIT)
+            ret = self.bsk.send(self.buffer, socket.MSG_DONTWAIT)
             self.buffer[:ret] = b""
         except IOError:
             raise ashd.serve.closed()
 
     def close(self):
         self.sk.close()
+        self.bsk.close()
 
 try:
     while True:
