@@ -8,12 +8,12 @@ except:
     pdm = None
 
 def usage(out):
-    out.write("usage: ashd-wsgi3 [-hAL] [-m PDM-SPEC] [-p MODPATH] [-t REQUEST-HANDLER[:PAR[=VAL](,PAR[=VAL])...]] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: ashd-wsgi3 [-hAL] [-m PDM-SPEC] [-p MODPATH] [-l REQLIMIT] [-t REQUEST-HANDLER[:PAR[=VAL](,PAR[=VAL])...]] HANDLER-MODULE [ARGS...]\n")
 
 hspec = "free", {}
 modwsgi_compat = False
 setlog = True
-opts, args = getopt.getopt(sys.argv[1:], "+hALp:t:m:")
+opts, args = getopt.getopt(sys.argv[1:], "+hALp:t:l:m:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
@@ -24,6 +24,8 @@ for o, a in opts:
         setlog = False
     elif o == "-A":
         modwsgi_compat = True
+    elif o == "-l":
+        hspec = "free", {"max": int(a), "abort": 10}
     elif o == "-t":
         hspec = ashd.serve.parsehspec(a)
     elif o == "-m":
