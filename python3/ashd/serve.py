@@ -75,7 +75,9 @@ class handler(object):
     def handle(self, request):
         raise Exception()
     def ckflush(self, req):
-        raise Exception()
+        while len(req.buffer) > 0:
+            rls, wls, els = select.select([], [req], [req])
+            req.flush()
     def close(self):
         pass
 
@@ -84,6 +86,25 @@ class handler(object):
         if len(args) > 0:
             raise ValueError("unknown handler argument: " + next(iter(args)))
         return {}
+
+class single(handler):
+    def handle(self, req):
+        try:
+            env = req.mkenv()
+            with perf.request(env) as reqevent:
+                respiter = req.handlewsgi(env, req.startreq)
+                for data in respiter:
+                    req.write(data)
+                if req.status:
+                    reqevent.response([req.status, req.headers])
+                    req.flushreq()
+                self.ckflush(req)
+        except closed:
+            pass
+        except:
+            log.error("exception occurred when handling request", exc_info=True)
+        finally:
+            req.close()
 
 class freethread(handler):
     def __init__(self, *, max=None, timeout=None, **kw):
@@ -120,11 +141,6 @@ class freethread(handler):
             th.start()
             while th.is_alive() and th not in self.current:
                 self.tcond.wait()
-
-    def ckflush(self, req):
-        while len(req.buffer) > 0:
-            rls, wls, els = select.select([], [req], [req])
-            req.flush()
 
     def run(self, req):
         try:
@@ -194,11 +210,6 @@ class threadpool(handler):
             th.start()
             while not th in self.current:
                 self.pcond.wait()
-
-    def ckflush(self, req):
-        while len(req.buffer) > 0:
-            rls, wls, els = select.select([], [req], [req])
-            req.flush()
 
     def _handle(self, req):
         try:
@@ -272,7 +283,8 @@ class threadpool(handler):
                 self.rcond.notify_all()
                 self.pcond.wait(1)
 
-names = {"free": freethread,
+names = {"single": single,
+         "free": freethread,
          "pool": threadpool}
 
 def parsehspec(spec):
