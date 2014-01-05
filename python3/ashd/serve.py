@@ -284,26 +284,43 @@ class threadpool(handler):
                 self.pcond.wait(1)
 
 class resplex(handler):
-    def __init__(self, **kw):
+    def __init__(self, *, max=None, **kw):
         super().__init__(**kw)
         self.current = set()
         self.lk = threading.Lock()
+        self.tcond = threading.Condition(self.lk)
+        self.max = max
         self.cqueue = queue.Queue(5)
         self.cnpipe = os.pipe()
         self.rthread = reqthread(name="Response thread", target=self.handle2)
         self.rthread.start()
 
+    @classmethod
+    def parseargs(cls, *, max=None, **args):
+        ret = super().parseargs(**args)
+        if max:
+            ret["max"] = int(max)
+        return ret
+
     def ckflush(self, req):
         raise Exception("resplex handler does not support the write() function")
 
     def handle(self, req):
-        reqthread(target=self.handle1, args=[req]).start()
+        with self.lk:
+            if self.max is not None:
+                while len(self.current) >= self.max:
+                    self.tcond.wait()
+            th = reqthread(target=self.handle1, args=[req])
+            th.start()
+            while th.is_alive() and th not in self.current:
+                self.tcond.wait()
 
     def handle1(self, req):
         try:
             th = threading.current_thread()
             with self.lk:
                 self.current.add(th)
+                self.tcond.notify_all()
             try:
                 env = req.mkenv()
                 respobj = req.handlewsgi(env, req.startreq)
@@ -318,7 +335,9 @@ class resplex(handler):
                     os.write(self.cnpipe[1], b" ")
                     req = None
             finally:
-                self.current.remove(th)
+                with self.lk:
+                    self.current.remove(th)
+                    self.tcond.notify_all()
         except closed:
             pass
         except:
