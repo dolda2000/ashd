@@ -132,9 +132,12 @@ class request(ashd.serve.wsgirequest):
     def close(self):
         self.sk.close()
 
-while True:
-    nsk, addr = sk.accept()
-    try:
-        reqhandler.handle(request(sk=nsk, handler=reqhandler))
-    finally:
-        nsk.close()
+try:
+    while True:
+        nsk, addr = sk.accept()
+        try:
+            reqhandler.handle(request(sk=nsk, handler=reqhandler))
+        finally:
+            nsk.close()
+finally:
+    reqhandler.close()

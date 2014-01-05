@@ -192,5 +192,7 @@ class request(ashd.serve.wsgirequest):
 def handle(req):
     reqhandler.handle(request(bkreq=req, handler=reqhandler))
 
-ashd.util.serveloop(handle)
-reqhandler.close()
+try:
+    ashd.util.serveloop(handle)
+finally:
+    reqhandler.close()
