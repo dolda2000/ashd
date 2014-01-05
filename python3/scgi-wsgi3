@@ -9,12 +9,13 @@ except:
     pdm = None
 
 def usage(out):
-    out.write("usage: scgi-wsgi3 [-hAL] [-m PDM-SPEC] [-p MODPATH] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: scgi-wsgi3 [-hAL] [-m PDM-SPEC] [-p MODPATH] [-t REQUEST-HANDLER[:PAR[=VAL](,PAR[=VAL])...]] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
 
 sk = None
+hspec = "free", {}
 modwsgi_compat = False
 setlog = True
-opts, args = getopt.getopt(sys.argv[1:], "+hALp:T:m:")
+opts, args = getopt.getopt(sys.argv[1:], "+hALp:t:T:m:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
@@ -40,6 +41,8 @@ for o, a in opts:
     elif o == "-m":
         if pdm is not None:
             pdm.srv.listen(a)
+    elif o == "-t":
+        hspec = ashd.serve.parsehspec(a)
 if len(args) < 1:
     usage(sys.stderr)
     sys.exit(1)
@@ -95,8 +98,6 @@ def recode(thing):
     else:
         return str(thing).encode("latin-1")
 
-reqhandler = ashd.serve.freethread()
-
 class request(ashd.serve.wsgirequest):
     def __init__(self, *, sk, **kw):
         super().__init__(**kw)
@@ -130,6 +131,17 @@ class request(ashd.serve.wsgirequest):
         self.sk.close()
         self.bsk.close()
 
+if hspec[0] not in ashd.serve.names:
+    sys.stderr.write("ashd-wsgi3: no such request handler: %s\n" % hspec[0])
+    sys.exit(1)
+hclass = ashd.serve.names[hspec[0]]
+try:
+    hargs = hclass.parseargs(**hspec[1])
+except ValueError as exc:
+    sys.stderr.write("ashd-wsgi3: %s\n" % exc)
+    sys.exit(1)
+
+reqhandler = hclass(**hargs)
 try:
     while True:
         nsk, addr = sk.accept()

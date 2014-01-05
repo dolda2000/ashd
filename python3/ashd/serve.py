@@ -79,6 +79,12 @@ class handler(object):
     def close(self):
         pass
 
+    @classmethod
+    def parseargs(cls, **args):
+        if len(args) > 0:
+            raise ValueError("unknown handler argument: " + next(iter(args)))
+        return {}
+
 class freethread(handler):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -124,11 +130,11 @@ class freethread(handler):
                 if len(self.current) > 0:
                     th = next(iter(self.current))
                 else:
-                    th = None
+                    return
             th.join()
 
 class threadpool(handler):
-    def __init__(self, *, min=0, max=20, live=10, **kw):
+    def __init__(self, *, min=0, max=20, live=300, **kw):
         super().__init__(**kw)
         self.current = set()
         self.free = set()
@@ -141,6 +147,17 @@ class threadpool(handler):
         self.live = live
         for i in range(self.min):
             self.newthread()
+
+    @classmethod
+    def parseargs(cls, *, min=None, max=None, live=None, **args):
+        ret = super().parseargs(**args)
+        if min:
+            ret["min"] = int(min)
+        if max:
+            ret["max"] = int(max)
+        if live:
+            ret["live"] = int(live)
+        return ret
 
     def newthread(self):
         with self.lk:
@@ -228,3 +245,20 @@ class threadpool(handler):
 
 names = {"free": freethread,
          "pool": threadpool}
+
+def parsehspec(spec):
+    if ":" not in spec:
+        return spec, {}
+    nm, spec = spec.split(":", 1)
+    args = {}
+    while spec:
+        if "," in spec:
+            part, spec = spec.split(",", 1)
+        else:
+            part, spec = spec, None
+        if "=" in part:
+            key, val = part.split("=", 1)
+        else:
+            key, val = part, ""
+        args[key] = val
+    return nm, args
