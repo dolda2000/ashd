@@ -86,24 +86,36 @@ class handler(object):
         return {}
 
 class freethread(handler):
-    def __init__(self, *, max=None, **kw):
+    def __init__(self, *, max=None, timeout=None, **kw):
         super().__init__(**kw)
         self.current = set()
         self.lk = threading.Lock()
         self.tcond = threading.Condition(self.lk)
         self.max = max
+        self.timeout = timeout
 
     @classmethod
-    def parseargs(cls, *, max=None, **args):
+    def parseargs(cls, *, max=None, abort=None, **args):
         ret = super().parseargs(**args)
         if max:
             ret["max"] = int(max)
+        if abort:
+            ret["timeout"] = int(abort)
         return ret
 
     def handle(self, req):
         with self.lk:
-            while self.max is not None and len(self.current) >= self.max:
-                self.tcond.wait()
+            if self.max is not None:
+                if self.timeout is not None:
+                    now = start = time.time()
+                    while len(self.current) >= self.max:
+                        self.tcond.wait(start + self.timeout - now)
+                        now = time.time()
+                        if now - start > self.timeout:
+                            os.abort()
+                else:
+                    while len(self.current) >= self.max:
+                        self.tcond.wait()
             th = reqthread(target=self.run, args=[req])
             th.start()
             while th.is_alive() and th not in self.current:
