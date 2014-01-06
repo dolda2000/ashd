@@ -144,7 +144,7 @@ class freethread(handler):
             th = reqthread(target=self.run, args=[req])
             th.start()
             while th.is_alive() and th not in self.current:
-                self.tcond.wait()
+                self.tcond.wait(1)
 
     def run(self, req):
         try:
@@ -214,7 +214,7 @@ class resplex(handler):
             th = reqthread(target=self.handle1, args=[req])
             th.start()
             while th.is_alive() and th not in self.current:
-                self.tcond.wait()
+                self.tcond.wait(1)
 
     def handle1(self, req):
         try:
