@@ -43,6 +43,7 @@ struct stdchild {
     char **argv;
     char **envp;
     int fd;
+    int agains;
 };
 
 static int parsefile(struct cfstate *s, FILE *in);
@@ -385,15 +386,23 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 		sd->fd = stdmkchild(args, stdinit, idata);
 		freeca(args);
 		if(!sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
-		    return(0);
+		    goto ok;
 		serr = errno;
 	    }
-	    if(serr != EAGAIN) {
+	    if(serr == EAGAIN) {
+		if(sd->agains++ == 0)
+		    flog(LOG_WARNING, "request to child %s denied due to buffer overload", ch->name);
+	    } else {
 		flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(serr));
 		close(sd->fd);
 		sd->fd = -1;
 	    }
 	    return(-1);
+	}
+    ok:
+	if(sd->agains > 0) {
+	    flog(LOG_WARNING, "%i requests to child %s were denied due to buffer overload", sd->agains, ch->name);
+	    sd->agains = 0;
 	}
     } else if(sd->type == CH_FORK) {
 	args = expandargs(sd);
