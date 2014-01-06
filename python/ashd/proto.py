@@ -46,12 +46,14 @@ class req(object):
         self.ver = ver
         self.rest = rest
         self.headers = headers
-        self.sk = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM).makefile('r+')
+        self.bsk = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sk = self.bsk.makefile('r+')
         os.close(fd)
 
     def close(self):
         "Close this request's response socket."
         self.sk.close()
+        self.bsk.close()
 
     def __getitem__(self, header):
         """Find a HTTP header case-insensitively. For example,
@@ -79,7 +81,7 @@ class req(object):
         """Creates a duplicate of this request, referring to a
         duplicate of the response socket.
         """
-        return req(self.method, self.url, self.ver, self.rest, self.headers, os.dup(self.sk.fileno()))
+        return req(self.method, self.url, self.ver, self.rest, self.headers, os.dup(self.bsk.fileno()))
 
     def match(self, match):
         """If the `match' argument matches exactly the leading part of
