@@ -1,20 +1,21 @@
 #!/usr/bin/python
 
-import sys, os, getopt, logging
+import sys, os, getopt, logging, platform
 import socket
-import ashd.scgi, ashd.perf, ashd.serve
+import ashd.scgi, ashd.serve
 try:
     import pdm.srv
 except:
     pdm = None
 
 def usage(out):
-    out.write("usage: scgi-wsgi [-hAL] [-m PDM-SPEC] [-p MODPATH] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: scgi-wsgi [-hAL] [-m PDM-SPEC] [-p MODPATH] [-t REQUEST-HANDLER[:PAR[=VAL](,PAR[=VAL])...]] [-T [HOST:]PORT] HANDLER-MODULE [ARGS...]\n")
 
 sk = None
+hspec = "free", {}
 modwsgi_compat = False
 setlog = True
-opts, args = getopt.getopt(sys.argv[1:], "+hALp:T:m:")
+opts, args = getopt.getopt(sys.argv[1:], "+hALp:t:T:m:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
@@ -40,6 +41,8 @@ for o, a in opts:
     elif o == "-m":
         if pdm is not None:
             pdm.srv.listen(a)
+    elif o == "-t":
+        hspec = ashd.serve.parsehspec(a)
 if len(args) < 1:
     usage(sys.stderr)
     sys.exit(1)
@@ -84,56 +87,68 @@ def mkenv(head, sk):
     env["wsgi.run_once"] = False
     return env
 
-class reqthread(ashd.serve.wsgithread):
-    def __init__(self, sk):
-        super(reqthread, self).__init__()
+class request(ashd.serve.wsgirequest):
+    def __init__(self, sk, **kw):
+        super(request, self).__init__(**kw)
         self.bsk = sk.dup()
         self.sk = self.bsk.makefile("r+")
 
-    def handlewsgi(self):
-        return handler(self.env, self.startreq)
+    def mkenv(self):
+        return mkenv(ashd.scgi.readhead(self.sk), self.sk)
+
+    def handlewsgi(self, env, startreq):
+        return handler(env, startreq)
+
+    _onjython = None
+    @staticmethod
+    def onjython():
+        if request._onjython is None:
+            request._onjython = ("java" in platform.system().lower())
+        return request._onjython
+
+    def fileno(self):
+        if request.onjython():
+            self.bsk.setblocking(False)
+        return self.bsk.fileno()
 
     def writehead(self, status, headers):
+        w = self.buffer.extend
+        w("Status: %s\n" % status)
+        for nm, val in headers:
+            w("%s: %s\n" % (nm, val))
+        w("\n")
+
+    def flush(self):
         try:
-            self.sk.write("Status: %s\n" % status)
-            for nm, val in headers:
-                self.sk.write("%s: %s\n" % (nm, val))
-            self.sk.write("\n")
+            if not request.onjython():
+                ret = self.bsk.send(self.buffer, socket.MSG_DONTWAIT)
+            else:
+                ret = self.bsk.send(self.buffer)
+            self.buffer[:ret] = ""
         except IOError:
             raise ashd.serve.closed()
 
-    def writedata(self, data):
-        try:
-            self.sk.write(data)
-            self.sk.flush()
-        except IOError:
-            raise ashd.serve.closed()
+    def close(self):
+        self.sk.close()
+        self.bsk.close()
 
-    def handle(self):
-        head = ashd.scgi.readhead(self.sk)
-        self.env = mkenv(head, self.sk)
-        reqevent = ashd.perf.request(self.env)
-        exc = (None, None, None)
+if hspec[0] not in ashd.serve.names:
+    sys.stderr.write("scgi-wsgi: no such request handler: %s\n" % hspec[0])
+    sys.exit(1)
+hclass = ashd.serve.names[hspec[0]]
+try:
+    hargs = hclass.parseargs(**hspec[1])
+except ValueError as exc:
+    sys.stderr.write("scgi-wsgi: %s\n" % exc)
+    sys.exit(1)
+
+reqhandler = hclass(**hargs)
+try:
+    while True:
+        nsk, addr = sk.accept()
         try:
-            super(reqthread, self).handle()
-            if self.status:
-                reqevent.response([self.status, self.headers])
-        except:
-            exc = sys.exc_info()
-            raise
+            reqhandler.handle(request(sk=nsk, handler=reqhandler))
         finally:
-            reqevent.__exit__(*exc)
-
-    def run(self):
-        try:
-            super(reqthread, self).run()
-        finally:
-            self.sk.close()
-            self.bsk.close()
-
-while True:
-    nsk, addr = sk.accept()
-    try:
-        reqthread(nsk).start()
-    finally:
-        nsk.close()
+            nsk.close()
+finally:
+    reqhandler.close()

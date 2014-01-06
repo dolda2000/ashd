@@ -1,19 +1,19 @@
 #!/usr/bin/python
 
-import sys, os, getopt, threading, logging, time
-import ashd.proto, ashd.util, ashd.perf, ashd.serve
+import sys, os, getopt, socket, logging, time
+import ashd.util, ashd.serve
 try:
     import pdm.srv
 except:
     pdm = None
 
 def usage(out):
-    out.write("usage: ashd-wsgi [-hAL] [-m PDM-SPEC] [-p MODPATH] [-l REQLIMIT] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: ashd-wsgi [-hAL] [-m PDM-SPEC] [-p MODPATH] [-l REQLIMIT] [-t REQUEST-HANDLER[:PAR[=VAL](,PAR[=VAL])...]] HANDLER-MODULE [ARGS...]\n")
 
-reqlimit = 0
+hspec = "free", {}
 modwsgi_compat = False
 setlog = True
-opts, args = getopt.getopt(sys.argv[1:], "+hAp:l:m:")
+opts, args = getopt.getopt(sys.argv[1:], "+hALp:t:l:m:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
@@ -25,7 +25,9 @@ for o, a in opts:
     elif o == "-A":
         modwsgi_compat = True
     elif o == "-l":
-        reqlimit = int(a)
+        hspec = "free", {"max": a, "abort": "10"}
+    elif o == "-t":
+        hspec = ashd.serve.parsehspec(a)
     elif o == "-m":
         if pdm is not None:
             pdm.srv.listen(a)
@@ -145,56 +147,52 @@ def mkenv(req):
     env["wsgi.run_once"] = False
     return env
 
-if reqlimit != 0:
-    guard = ashd.serve.abortlimiter(reqlimit).call
-else:
-    guard = lambda fun: fun()
+class request(ashd.serve.wsgirequest):
+    def __init__(self, bkreq, **kw):
+        super(request, self).__init__(**kw)
+        self.bkreq = bkreq.dup()
 
-class reqthread(ashd.serve.wsgithread):
-    def __init__(self, req):
-        super(reqthread, self).__init__()
-        self.req = req.dup()
-    
-    def handlewsgi(self):
-        return handler(self.env, self.startreq)
+    def mkenv(self):
+        return mkenv(self.bkreq)
+
+    def handlewsgi(self, env, startreq):
+        return handler(env, startreq)
+
+    def fileno(self):
+        return self.bkreq.bsk.fileno()
 
     def writehead(self, status, headers):
+        w = self.buffer.extend
+        w("HTTP/1.1 %s\n" % status)
+        for nm, val in headers:
+            w("%s: %s\n" % (nm, val))
+        w("\n")
+
+    def flush(self):
         try:
-            self.req.sk.write("HTTP/1.1 %s\n" % status)
-            for nm, val in headers:
-                self.req.sk.write("%s: %s\n" % (nm, val))
-            self.req.sk.write("\n")
+            ret = self.bkreq.bsk.send(self.buffer, socket.MSG_DONTWAIT)
+            self.buffer[:ret] = ""
         except IOError:
             raise ashd.serve.closed()
 
-    def writedata(self, data):
-        try:
-            self.req.sk.write(data)
-            self.req.sk.flush()
-        except IOError:
-            raise ashd.serve.closed()
+    def close(self):
+        self.bkreq.close()
 
-    def handle(self):
-        self.env = mkenv(self.req)
-        reqevent = ashd.perf.request(self.env)
-        exc = (None, None, None)
-        try:
-            super(reqthread, self).handle()
-            if self.status:
-                reqevent.response([self.status, self.headers])
-        except:
-            exc = sys.exc_info()
-            raise
-        finally:
-            reqevent.__exit__(*exc)
-
-    def run(self):
-        try:
-            guard(super(reqthread, self).run)
-        finally:
-            self.req.close()
-    
 def handle(req):
-    reqthread(req).start()
+    reqhandler.handle(request(bkreq=req, handler=reqhandler))
 
-ashd.util.serveloop(handle)
+if hspec[0] not in ashd.serve.names:
+    sys.stderr.write("ashd-wsgi: no such request handler: %s\n" % hspec[0])
+    sys.exit(1)
+hclass = ashd.serve.names[hspec[0]]
+try:
+    hargs = hclass.parseargs(**hspec[1])
+except ValueError as exc:
+    sys.stderr.write("ashd-wsgi: %s\n" % exc)
+    sys.exit(1)
+
+reqhandler = hclass(**hargs)
+try:
+    ashd.util.serveloop(handle)
+finally:
+    reqhandler.close()
