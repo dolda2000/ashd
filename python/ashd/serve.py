@@ -142,15 +142,17 @@ class freethread(handler):
                     while len(self.current) >= self.max:
                         self.tcond.wait()
             th = reqthread(target=self.run, args=[req])
+            th.registered = False
             th.start()
-            while th.is_alive() and th not in self.current:
-                self.tcond.wait(1)
+            while not th.registered:
+                self.tcond.wait()
 
     def run(self, req):
         try:
             th = threading.current_thread()
             with self.lk:
                 self.current.add(th)
+                th.registered = True
                 self.tcond.notify_all()
             try:
                 env = req.mkenv()
@@ -212,15 +214,17 @@ class resplex(handler):
                 while len(self.current) >= self.max:
                     self.tcond.wait()
             th = reqthread(target=self.handle1, args=[req])
+            th.registered = False
             th.start()
-            while th.is_alive() and th not in self.current:
-                self.tcond.wait(1)
+            while not th.registered:
+                self.tcond.wait()
 
     def handle1(self, req):
         try:
             th = threading.current_thread()
             with self.lk:
                 self.current.add(th)
+                th.registered = True
                 self.tcond.notify_all()
             try:
                 env = req.mkenv()
