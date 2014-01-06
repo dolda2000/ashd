@@ -23,7 +23,7 @@ class reqthread(threading.Thread):
         super().__init__(name=name, **kw)
 
 class wsgirequest(object):
-    def __init__(self, handler):
+    def __init__(self, *, handler):
         self.status = None
         self.headers = []
         self.respsent = False

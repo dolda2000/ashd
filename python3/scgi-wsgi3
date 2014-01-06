@@ -2,7 +2,7 @@
 
 import sys, os, getopt, logging, collections
 import socket
-import ashd.scgi, ashd.perf, ashd.serve
+import ashd.scgi, ashd.serve
 try:
     import pdm.srv
 except:
@@ -132,13 +132,13 @@ class request(ashd.serve.wsgirequest):
         self.bsk.close()
 
 if hspec[0] not in ashd.serve.names:
-    sys.stderr.write("ashd-wsgi3: no such request handler: %s\n" % hspec[0])
+    sys.stderr.write("scgi-wsgi3: no such request handler: %s\n" % hspec[0])
     sys.exit(1)
 hclass = ashd.serve.names[hspec[0]]
 try:
     hargs = hclass.parseargs(**hspec[1])
 except ValueError as exc:
-    sys.stderr.write("ashd-wsgi3: %s\n" % exc)
+    sys.stderr.write("scgi-wsgi3: %s\n" % exc)
     sys.exit(1)
 
 reqhandler = hclass(**hargs)

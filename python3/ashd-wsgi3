@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
-import sys, os, getopt, threading, socket, logging, time, locale, collections
-import ashd.proto, ashd.util, ashd.perf, ashd.serve
+import sys, os, getopt, socket, logging, time, locale, collections
+import ashd.util, ashd.serve
 try:
     import pdm.srv
 except:
@@ -25,7 +25,7 @@ for o, a in opts:
     elif o == "-A":
         modwsgi_compat = True
     elif o == "-l":
-        hspec = "free", {"max": int(a), "abort": 10}
+        hspec = "free", {"max": a, "abort": "10"}
     elif o == "-t":
         hspec = ashd.serve.parsehspec(a)
     elif o == "-m":
