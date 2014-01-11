@@ -213,7 +213,7 @@ in the global configuration files are searched in order of their
 *match* stanzas are considered depends on the type of the file being
 matched: if an ordinary file is being matched, only *match* stanzas
 without any 'TYPE' parameter are considered, while if it is a
-directory, only those with type 'TYPE' parameter specified as
+directory, only those with the 'TYPE' parameter specified as
 *directory* are considered. 'TYPE' can also take the value *notfound*,
 described below under 404 RESPONSES.
 
