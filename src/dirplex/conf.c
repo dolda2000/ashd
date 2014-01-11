@@ -266,9 +266,9 @@ struct config *readconfig(char *file)
 	    if(cf->capture != NULL)
 		free(cf->capture);
 	    cf->capture = sstrdup(s->argv[1]);
-	    cf->caproot = 1;
-	    if((s->argc > 2) && strchr(s->argv[2], 'R'))
-		cf->caproot = 0;
+	    cf->caproot = 0;
+	    if((s->argc > 2) && strchr(s->argv[2], 'D'))
+		cf->caproot = 1;
 	} else if(!strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
