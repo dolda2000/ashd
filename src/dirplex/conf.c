@@ -150,6 +150,10 @@ static struct pattern *parsepattern(struct cfstate *s)
     
     if((s->argc > 1) && !strcmp(s->argv[1], "directory"))
 	pat->type = PT_DIR;
+    else if((s->argc > 1) && !strcmp(s->argv[1], "notfound"))
+	pat->type = PT_NOTFOUND;
+    else
+	pat->type = PT_FILE;
     sl = s->lno;
     while(1) {
 	getcfline(s);
@@ -374,7 +378,7 @@ struct child *findchild(char *file, char *name, struct config **cf)
     return(NULL);
 }
 
-struct pattern *findmatch(char *file, int trydefault, int dir)
+struct pattern *findmatch(char *file, int trydefault, int type)
 {
     int i, o, c;
     char *bn, *ln;
@@ -399,9 +403,7 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
 		ln = file;	/* This should only happen in the base directory. */
 	}
 	for(pat = cfs[c]->patterns; pat != NULL; pat = pat->next) {
-	    if(!dir && (pat->type == PT_DIR))
-		continue;
-	    if(dir && (pat->type != PT_DIR))
+	    if(pat->type != type)
 		continue;
 	    for(i = 0; (rule = pat->rules[i]) != NULL; i++) {
 		if(rule->type == PAT_BASENAME) {
@@ -432,7 +434,7 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
 	}
     }
     if(!trydefault)
-	return(findmatch(file, 1, dir));
+	return(findmatch(file, 1, type));
     return(NULL);
 }
 
