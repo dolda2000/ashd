@@ -8,7 +8,7 @@ except:
     pdm = None
 
 def usage(out):
-    out.write("usage: ashd-wsgi [-hAL] [-m PDM-SPEC] [-p MODPATH] [-l REQLIMIT] [-t REQUEST-HANDLER[:PAR[=VAL](,PAR[=VAL])...]] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: ashd-wsgi [-hAL] [-m PDM-SPEC] [-p MODPATH] [-t REQUEST-HANDLER[:PAR[=VAL](,PAR[=VAL])...]] HANDLER-MODULE [ARGS...]\n")
 
 hspec = "free", {}
 modwsgi_compat = False
