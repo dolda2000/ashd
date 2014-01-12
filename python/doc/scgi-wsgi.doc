@@ -7,7 +7,7 @@ scgi-wsgi - WSGI adapter for SCGI
 
 SYNOPSIS
 --------
-*scgi-wsgi* [*-hA*] [*-m* 'PDM-SPEC'] [*-p* 'MODPATH'] [*-T* \[HOST:]'PORT'] 'HANDLER-MODULE' ['ARGS'...]
+*scgi-wsgi* [*-hAL*] [*-m* 'PDM-SPEC'] [*-p* 'MODPATH'] [*-t* 'HANDLING-MODEL'] [*-T* \[HOST:]'PORT'] 'HANDLER-MODULE' ['ARGS'...]
 
 DESCRIPTION
 -----------
@@ -41,10 +41,21 @@ OPTIONS
 	the WSGI application object. See the PROTOCOL section of
 	*ashd-wsgi*(1) for details.
 
+*-L*::
+	By default, *scgi-wsgi* sets up the Python logging with a
+	logging format and for logging to standard error. The *-L*
+	option suppresses that behavior, so that any handler module
+	may set up logging itself.
+
 *-p* 'MODPATH'::
 
 	Prepend 'MODPATH' to Python's `sys.path`; can be given multiple
 	times.
+
+*-t* 'HANDLING-MODEL'::
+
+	Specify the way *scgi-wsgi* handles requests. See the REQUEST
+	HANDLING section of *ashd-wsgi*(1) for details.
 
 *-T* \[HOST:]'PORT'::
 

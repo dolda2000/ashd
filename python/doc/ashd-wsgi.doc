@@ -7,7 +7,7 @@ ashd-wsgi - WSGI adapter for ashd(7)
 
 SYNOPSIS
 --------
-*ashd-wsgi* [*-hA*] [*-m* 'PDM-SPEC'] [*-p* 'MODPATH'] [*-l* 'LIMIT'] 'HANDLER-MODULE' ['ARGS'...]
+*ashd-wsgi* [*-hAL*] [*-m* 'PDM-SPEC'] [*-p* 'MODPATH'] [*-t* 'HANDLING-MODEL'] 'HANDLER-MODULE' ['ARGS'...]
 
 DESCRIPTION
 -----------
@@ -21,7 +21,10 @@ section, below.
 multithreaded dispatching in a single Python interpreter, which means
 that WSGI applications that use it need to be thread-safe, but that
 they can also share all Python data structures and global variables
-between requests.
+between requests. More precisely, *ashd-wsgi* implements a couple of
+slightly different ways to handle requests and threads, which can be
+configured using the *-t* option, as described in the REQUEST HANDLING
+section, below.
 
 The Python module that *ashd-wsgi* comes with also contains a standard
 handler module, `ashd.wsgidir`, which serves individual WSGI
@@ -47,6 +50,12 @@ OPTIONS
 	the WSGI application object. See the PROTOCOL section, below,
 	for details.
 
+*-L*::
+	By default, *ashd-wsgi* sets up the Python logging with a
+	logging format and for logging to standard error. The *-L*
+	option suppresses that behavior, so that any handler module
+	may set up logging itself.
+
 *-p* 'MODPATH'::
 
 	Prepend 'MODPATH' to Python's `sys.path`; can be given multiple
@@ -54,13 +63,10 @@ OPTIONS
 	on Python's module path by default, so if you want to use a
 	module in that directory, you will need to specify "`-p .`".
 
-*-l* 'LIMIT'::
+*-t* 'HANDLING-MODEL'::
 
-	Allow at most 'LIMIT' requests to run concurrently. If a new
-	request is made when 'LIMIT' requests are executing, the new
-	request will wait up to ten seconds for one of them to
-	complete; if none does, *ashd-wsgi* will assume that the
-	process is foobar and *abort*(3).
+	Specify the way *ashd-wsgi* handles requests. See below, under
+	REQUEST HANDLING.
 
 *-m* 'PDM-SPEC'::
 
@@ -80,13 +86,74 @@ named `application` instead of `wmain`, and use that object directly
 as the WSGI application object.
 
 When calling the WSGI application, a new thread is started for each
-request, in which the WSGI application object is called. All requests
-run in the same interpreter, so it is guaranteed that data structures
-and global variables can be shared between requests.
+request, in which the WSGI application object is called (but see
+below, under REQUEST HANDLING, for details). All requests run in the
+same interpreter, so it is guaranteed that data structures and global
+variables can be shared between requests.
 
 The WSGI environment is the standard CGI environment, including the
 `SCRIPT_FILENAME` variable whenever the `X-Ash-File` header was
 included in the request.
+
+REQUEST HANDLING
+----------------
+
+*ashd-wsgi* can be configured to handle requests in various ways,
+using the *-t* command-line option. The argument to the *-t* option
+takes the form 'HANDLER'[*:*'PAR'[*=*'VAL'][(*,*'PAR'[*=*'VAL'])...]],
+in order to specify the handler model, along with parameters to the
+same (using the same syntax as the port specifications of
+*htparser*(1)). The 'HANDLER' can be any of the following:
+
+*free*[*:max=*'MAX-THREADS'*,timeout=*'TIMEOUT']::
+
+	The *free* handler, which is the default, starts a new thread
+	for every incoming request, which runs the whole request in
+	its entirety, from running the WSGI handler function to
+	sending the contents of the response iterator. Optionally,
+	'MAX-THREADS' may be specified to an integer, in which case no
+	more than that many request-handler threads will be allowed to
+	run at any one time (by default, any number of threads are
+	allowed to run, without limit). If further requests come in
+	while 'MAX-THREADS' handlers are running, the request dispatch
+	thread itself will block until one exits, making new requests
+	queue up in the socket over which they arrive, eventually
+	filling up its buffers if no threads exit, in turn making the
+	parent handler either block or receive *EAGAIN* errors. Also,
+	if 'MAX-THREADS' is specified, 'TIMEOUT' may also be
+	specified, to tell the dispatcher thread to never block more
+	than so many seconds for a handler thread to exit. If it is
+	forced to wait longer than 'TIMEOUT' seconds, it will assume
+	the whole process is somehow foobar and will *abort*(3).
+
+*rplex*[*:max=*'MAX-THREADS']::
+
+	The *rplex* handler starts a new thread for every incoming
+	request, but unlike the *free* handler, only the WSGI handler
+	function runs in that thread. Whenever any such thread, then,
+	returns its response iterator, all such iterators will be
+	passed to a single independent thread which sends their
+	contents to the clients, multiplexing between them whenever
+	their respective clients are ready to receive data. Like the
+	*free* handler, a 'MAX-THREADS' argument may be given to
+	specify how many handler threads are allowed to run at the
+	same time. The main advantage, compared to the *free* handler,
+	is that the *rplex* handler allows an arbitrary number of
+	response iterators to run simultaneously without tying up
+	handler threads, therefore not counting towards 'MAX-THREADS',
+	which may be necessary for applications handling large
+	files. However, it must be noted that no response iterators in
+	the application may block on returning data, since that would
+	also block all other running responses. Also, the *rplex*
+	handler does not support the `write` function returned by
+	`start_request`, according to the WSGI specification.
+
+*single*::
+
+	The *single* handler starts no threads at all, running all
+	received requests directly in the main dispatch thread. It is
+	probably not good for much except as the simplest possible
+	example of a request handling model.
 
 EXAMPLES
 --------
@@ -99,6 +166,7 @@ child wsgidir
   exec ashd-wsgi ashd.wsgidir
 match
   filename *.wsgi
+  xset python-handler chain
   handler wsgidir
 --------
 
