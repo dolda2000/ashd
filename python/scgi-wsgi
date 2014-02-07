@@ -121,7 +121,7 @@ class request(ashd.serve.wsgirequest):
     def flush(self):
         try:
             if not request.onjython():
-                ret = self.bsk.send(self.buffer, socket.MSG_DONTWAIT)
+                ret = self.bsk.send(str(self.buffer), socket.MSG_DONTWAIT)
             else:
                 ret = self.bsk.send(self.buffer)
             self.buffer[:ret] = ""
