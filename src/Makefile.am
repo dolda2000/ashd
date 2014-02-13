@@ -2,7 +2,7 @@ SUBDIRS = dirplex
 
 bin_PROGRAMS =	htparser sendfile callcgi patplex userplex htls \
 		callscgi accesslog htextauth callfcgi multifscgi \
-		errlogger httimed psendfile
+		errlogger httimed psendfile httrcall
 
 htparser_SOURCES = htparser.c htparser.h plaintcp.c ssl-gnutls.c
 
