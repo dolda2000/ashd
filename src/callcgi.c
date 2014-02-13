@@ -85,12 +85,13 @@ static char *absolutify(char *file)
     return(sstrdup(file));
 }
 
-static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *url, char *rest, int *infd, int *outfd)
+static pid_t forkchild(int inpath, char **prog, char *file, char *method, char *url, char *rest, int *infd, int *outfd)
 {
     char *qp, **env, *name;
     int inp[2], outp[2];
     pid_t pid;
     char *pi;
+    int (*execfun)(const char *, char *const []);
 
     pipe(inp);
     pipe(outp);
@@ -170,11 +171,10 @@ static pid_t forkchild(int inpath, char *prog, char *file, char *method, char *u
 	 * This is (understandably) missing from the CGI
 	 * specification, but PHP seems to require it.
 	 */
-	putenv(sprintf2("SCRIPT_FILENAME=%s", absolutify(file)));
-	if(inpath)
-	    execlp(prog, prog, file, NULL);
-	else
-	    execl(prog, prog, file, NULL);
+	execfun = inpath?execvp:execv;
+	if(file != NULL)
+	    putenv(sprintf2("SCRIPT_FILENAME=%s", absolutify(file)));
+	execfun(prog[0], prog);
 	exit(127);
     }
     close(inp[0]);
@@ -336,14 +336,15 @@ static void sendheaders(char **headers, FILE *out)
 
 static void usage(void)
 {
-    flog(LOG_ERR, "usage: callcgi [-c] [-p PROGRAM] METHOD URL REST");
+    flog(LOG_ERR, "usage: callcgi [-c] [-p PROGRAM] [-P PROGRAM ARGS... ;] METHOD URL REST");
 }
 
 int main(int argc, char **argv, char **envp)
 {
     int c;
-    char *file, *prog, *sp;
-    int inpath, cd;
+    char *file, *sp;
+    struct charvbuf prog;
+    int inpath, addfile, cd;
     int infd, outfd;
     FILE *in, *out;
     char **headers;
@@ -353,17 +354,39 @@ int main(int argc, char **argv, char **envp)
     environ = envp;
     signal(SIGPIPE, SIG_IGN);
     
-    prog = NULL;
+    bufinit(prog);
     inpath = 0;
+    addfile = 1;
     cd = 0;
-    while((c = getopt(argc, argv, "cp:")) >= 0) {
+    while((c = getopt(argc, argv, "cp:P:")) >= 0) {
 	switch(c) {
 	case 'c':
 	    cd = 1;
 	    break;
 	case 'p':
-	    prog = optarg;
+	    bufadd(prog, optarg);
 	    inpath = 1;
+	    break;
+	case 'P':
+	    prog.d = 0;
+	    bufadd(prog, optarg);
+	    while(1) {
+		if(optind >= argc) {
+		    flog(LOG_ERR, "callcgi: unterminated argument list for -P");
+		    exit(1);
+		}
+		if(!strcmp(argv[optind], ";")) {
+		    optind++;
+		    break;
+		}
+		bufadd(prog, argv[optind++]);
+	    }
+	    if(prog.d == 0) {
+		flog(LOG_ERR, "callcgi: -P option needs at least a program name");
+		exit(1);
+	    }
+	    inpath = 1;
+	    addfile = 0;
 	    break;
 	default:
 	    usage();
@@ -375,7 +398,7 @@ int main(int argc, char **argv, char **envp)
 	usage();
 	exit(1);
     }
-    if((file = getenv("REQ_X_ASH_FILE")) == NULL) {
+    if(((file = getenv("REQ_X_ASH_FILE")) == NULL) && (prog.d == 0)) {
 	flog(LOG_ERR, "callcgi: needs to be called with the X-Ash-File header");
 	exit(1);
     }
@@ -394,9 +417,12 @@ int main(int argc, char **argv, char **envp)
 	}
     }
     
-    if(prog == NULL)
-	prog = file;
-    child = forkchild(inpath, prog, file, argv[optind], argv[optind + 1], argv[optind + 2], &infd, &outfd);
+    if(prog.d == 0)
+	bufadd(prog, file);
+    if(addfile && (file != NULL))
+	bufadd(prog, file);
+    bufadd(prog, NULL);
+    child = forkchild(inpath, prog.b, file, argv[optind], argv[optind + 1], argv[optind + 2], &infd, &outfd);
     in = fdopen(infd, "w");
     passdata(stdin, in);	/* Ignore errors, perhaps? */
     fclose(in);
@@ -412,7 +438,7 @@ int main(int argc, char **argv, char **envp)
 	kill(child, SIGINT);
     if(waitpid(child, &estat, 0) == child) {
 	if(WCOREDUMP(estat))
-	    flog(LOG_WARNING, "CGI handler `%s' dumped core", prog);
+	    flog(LOG_WARNING, "CGI handler `%s' dumped core", prog.b[0]);
 	if(WIFEXITED(estat) && !WEXITSTATUS(estat))
 	    return(0);
 	else
