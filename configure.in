@@ -2,6 +2,7 @@ AC_INIT([ashd], [0.13])
 AC_CONFIG_SRCDIR(src/htparser.c)
 AM_INIT_AUTOMAKE
 AM_CONFIG_HEADER(config.h)
+AC_USE_SYSTEM_EXTENSIONS
 
 AC_PROG_CC
 AM_PROG_CC_C_O
@@ -18,6 +19,18 @@ AC_CHECK_LIB(magic, magic_open, [:], [HAS_MAGIC=no])
 AC_CHECK_HEADER(magic.h, [], [HAS_MAGIC=no])
 if test "$HAS_MAGIC" = no; then
 	AC_MSG_ERROR([*** cannot find libmagic on this system])
+fi
+
+AH_TEMPLATE(HAVE_GLIBC_STDIO, [define to indicate system support for glibc cookie streams])
+
+HAS_FOPENCOOKIE=yes
+AC_CHECK_FUNC(fopencookie, [], [HAS_FOPENCOOKIE=no])
+AC_CHECK_MEMBER([cookie_io_functions_t.read], [], [HAS_FOPENCOOKIE=no])
+
+if test "$HAS_FOPENCOOKIE" = yes; then
+   	AC_DEFINE(HAVE_GLIBC_STDIO)
+else
+   	AC_MSG_ERROR([*** libc support for custom stdio streams is required])
 fi
 
 AH_TEMPLATE(HAVE_VALGRIND, [define to include debugging support for Valgrind])

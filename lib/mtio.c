@@ -16,6 +16,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -24,9 +27,6 @@
 #include <errno.h>
 #include <sys/socket.h>
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
 #include <log.h>
 #include <utils.h>
 #include <mt.h>
@@ -107,6 +107,7 @@ static int mtclose(void *cookie)
     return(0);
 }
 
+#ifdef HAVE_GLIBC_STDIO
 static cookie_io_functions_t iofuns = {
     .read = mtread,
     .write = mtwrite,
@@ -129,3 +130,6 @@ FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
 	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
     return(ret);
 }
+#else
+#error "No stdio implementation for this system"
+#endif
