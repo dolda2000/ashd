@@ -46,8 +46,10 @@ static char *format;
 static struct timeval now;
 static volatile int reopen = 0;
 
-static void qputs(char *s, FILE *o)
+static void qputs(char *sp, FILE *o)
 {
+    unsigned char *s = (unsigned char *)sp;
+    
     for(; *s; s++) {
 	if(*s == '\"') {
 	    fputs("\\\"", o);
@@ -58,7 +60,7 @@ static void qputs(char *s, FILE *o)
 	} else if(*s == '\t') {
 	    fputs("\\t", o);
 	} else if((*s < 32) || (*s >= 128)) {
-	    fprintf(o, "\\x%02x", (int)(unsigned char)*s);
+	    fprintf(o, "\\x%02x", (int)*s);
 	} else {
 	    fputc(*s, o);
 	}
