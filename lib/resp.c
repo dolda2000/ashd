@@ -190,6 +190,22 @@ char *fmthttpdate(time_t time)
     return(sprintf3("%s, %i %s %i %02i:%02i:%02i GMT", days[(tm->tm_wday + 6) % 7], tm->tm_mday, months[tm->tm_mon], tm->tm_year + 1900, tm->tm_hour, tm->tm_min, tm->tm_sec));
 }
 
+static int gtoi(char *bstr, regmatch_t g)
+{
+    int i, n;
+
+    for(i = g.rm_so, n = 0; i < g.rm_eo; i++)
+	n = (n * 10) + (bstr[i] - '0');
+    return(n);
+}
+
+static int gstrcmp(char *bstr, regmatch_t g, char *str)
+{
+    if(g.rm_eo - g.rm_so != strlen(str))
+	return(1);
+    return(strncasecmp(bstr + g.rm_so, str, g.rm_eo - g.rm_so));
+}
+
 time_t parsehttpdate(char *date)
 {
     static regex_t *spec = NULL;
@@ -200,21 +216,6 @@ time_t parsehttpdate(char *date)
     struct tm tm;
     int tz;
     
-    int gtoi(regmatch_t g)
-    {
-	int i, n;
-
-	for(i = g.rm_so, n = 0; i < g.rm_eo; i++)
-	    n = (n * 10) + (date[i] - '0');
-	return(n);
-    }
-    
-    int gstrcmp(regmatch_t g, char *str) {
-	if(g.rm_eo - g.rm_so != strlen(str))
-	    return(1);
-	return(strncasecmp(date + g.rm_so, str, g.rm_eo - g.rm_so));
-    }
-
     if(spec == NULL) {
 	omalloc(spec);
 	if(regcomp(spec, "^[A-Z]{3}, +([0-9]+) +([A-Z]{3}) +([0-9]+) +([0-9]{2}):([0-9]{2}):([0-9]{2}) +(([A-Z]+)|[+-]([0-9]{2})([0-9]{2}))$", REG_EXTENDED | REG_ICASE)) {
@@ -225,15 +226,15 @@ time_t parsehttpdate(char *date)
     }
     if(regexec(spec, date, 11, g, 0))
 	return(0);
-    tm.tm_mday = gtoi(g[1]);
-    tm.tm_year = gtoi(g[3]) - 1900;
-    tm.tm_hour = gtoi(g[4]);
-    tm.tm_min = gtoi(g[5]);
-    tm.tm_sec = gtoi(g[6]);
+    tm.tm_mday = gtoi(date, g[1]);
+    tm.tm_year = gtoi(date, g[3]) - 1900;
+    tm.tm_hour = gtoi(date, g[4]);
+    tm.tm_min = gtoi(date, g[5]);
+    tm.tm_sec = gtoi(date, g[6]);
     
     tm.tm_mon = -1;
     for(i = 0; i < 12; i++) {
-	if(!gstrcmp(g[2], months[i])) {
+	if(!gstrcmp(date, g[2], months[i])) {
 	    tm.tm_mon = i;
 	    break;
 	}
@@ -242,12 +243,12 @@ time_t parsehttpdate(char *date)
 	return(0);
     
     if(g[8].rm_so > 0) {
-	if(!gstrcmp(g[8], "GMT"))
+	if(!gstrcmp(date, g[8], "GMT"))
 	    tz = 0;
 	else
 	    return(0);
     } else if((g[9].rm_so > 0) && (g[10].rm_so > 0)) {
-	tz = gtoi(g[9]) * 3600 + gtoi(g[10]) * 60;
+	tz = gtoi(date, g[9]) * 3600 + gtoi(date, g[10]) * 60;
 	if(date[g[7].rm_so] == '-')
 	    tz = -tz;
     } else {

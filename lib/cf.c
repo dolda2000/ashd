@@ -355,26 +355,35 @@ static char **expandargs(struct stdchild *sd)
     return(ret);
 }
 
-static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
+struct sidata {
+    struct stdchild *sd;
+    void (*sinit)(void *);
+    void *sdata;
+};
+
+static void stdinit(void *data)
+{
+    struct sidata *d = data;
+    int i;
+	
+    for(i = 0; d->sd->envp[i]; i += 2)
+	putenv(sprintf2("%s=%s", d->sd->envp[i], d->sd->envp[i + 1]));
+    if(d->sinit != NULL)
+	d->sinit(d->sdata);
+}
+
+static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *sdata)
 {
     struct stdchild *sd = ch->pdata;
     int serr;
     char **args;
-    
-    void stdinit(void *data)
-    {
-	int i;
-	
-	for(i = 0; sd->envp[i]; i += 2)
-	    putenv(sprintf2("%s=%s", sd->envp[i], sd->envp[i + 1]));
-	if(chinit != NULL)
-	    chinit(data);
-    }
+    struct sidata idat;
     
     if(sd->type == CH_SOCKET) {
+	idat = (struct sidata) {.sd = sd, .sinit = chinit, sdata = sdata};
 	if(sd->fd < 0) {
 	    args = expandargs(sd);
-	    sd->fd = stdmkchild(args, stdinit, idata);
+	    sd->fd = stdmkchild(args, stdinit, &idat);
 	    freeca(args);
 	}
 	if(sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT)) {
@@ -383,7 +392,7 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 		/* Assume that the child has crashed and restart it. */
 		close(sd->fd);
 		args = expandargs(sd);
-		sd->fd = stdmkchild(args, stdinit, idata);
+		sd->fd = stdmkchild(args, stdinit, &idat);
 		freeca(args);
 		if(!sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
 		    goto ok;
@@ -406,7 +415,7 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 	}
     } else if(sd->type == CH_FORK) {
 	args = expandargs(sd);
-	if(stdforkserve(args, req, fd, chinit, idata) < 0) {
+	if(stdforkserve(args, req, fd, chinit, sdata) < 0) {
 	    freeca(args);
 	    return(-1);
 	}
