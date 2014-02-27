@@ -32,7 +32,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <sys/signal.h>
+#include <signal.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
