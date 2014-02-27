@@ -22,15 +22,21 @@ if test "$HAS_MAGIC" = no; then
 fi
 
 AH_TEMPLATE(HAVE_GLIBC_STDIO, [define to indicate system support for glibc cookie streams])
+AH_TEMPLATE(HAVE_BSD_STDIO, [define to indicate system support for BSD-style funopen streams])
 
 HAS_FOPENCOOKIE=yes
 AC_CHECK_FUNC(fopencookie, [], [HAS_FOPENCOOKIE=no])
 AC_CHECK_MEMBER([cookie_io_functions_t.read], [], [HAS_FOPENCOOKIE=no])
 
+HAS_FUNOPEN=yes
+AC_CHECK_FUNC(funopen, [], [HAS_FUNOPEN=no])
+
 if test "$HAS_FOPENCOOKIE" = yes; then
-   	AC_DEFINE(HAVE_GLIBC_STDIO)
+        AC_DEFINE(HAVE_GLIBC_STDIO)
+elif test "$HAS_FUNOPEN" = yes; then
+        AC_DEFINE(HAVE_BSD_STDIO)
 else
-   	AC_MSG_ERROR([*** libc support for custom stdio streams is required])
+        AC_MSG_ERROR([*** libc support for custom stdio streams is required])
 fi
 
 AH_TEMPLATE(HAVE_VALGRIND, [define to include debugging support for Valgrind])

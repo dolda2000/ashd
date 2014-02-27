@@ -107,7 +107,7 @@ static int mtclose(void *cookie)
     return(0);
 }
 
-#ifdef HAVE_GLIBC_STDIO
+#if defined(HAVE_GLIBC_STDIO)
 static cookie_io_functions_t iofuns = {
     .read = mtread,
     .write = mtwrite,
@@ -124,6 +124,43 @@ FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
     d->sock = issock;
     d->timeout = timeout;
     ret = fopencookie(d, mode, iofuns);
+    if(!ret)
+	free(d);
+    else
+	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+    return(ret);
+}
+#elif defined(HAVE_BSD_STDIO)
+static int bsd2mtread(void *cookie, char *buf, int len)
+{
+    return(mtread(cookie, buf, len));
+}
+
+static int bsd2mtwrite(void *cookie, const char *buf, int len)
+{
+    return(mtwrite(cookie, buf, len));
+}
+
+FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
+{
+    struct stdiofd *d;
+    FILE *ret;
+    int r, w;
+    
+    if(!strcmp(mode, "r")) {
+	r = 1; w = 0;
+    } else if(!strcmp(mode, "w")) {
+	r = 0; w = 1;
+    } else if(!strcmp(mode, "r+")) {
+	r = w = 1;
+    } else {
+	return(NULL);
+    }
+    omalloc(d);
+    d->fd = fd;
+    d->sock = issock;
+    d->timeout = timeout;
+    ret = funopen(d, r?bsd2mtread:NULL, w?bsd2mtwrite:NULL, NULL, mtclose);
     if(!ret)
 	free(d);
     else
