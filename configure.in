@@ -43,7 +43,7 @@ AH_TEMPLATE(HAVE_VALGRIND, [define to include debugging support for Valgrind])
 AC_CHECK_HEADER(valgrind/memcheck.h, [AC_DEFINE(HAVE_VALGRIND)], [])
 
 AH_TEMPLATE(HAVE_EPOLL, [define to enable epoll support])
-AC_ARG_WITH(epoll, [  --with-epoll            Enable epoll(2) support])
+AC_ARG_WITH(epoll, AS_HELP_STRING([--with-epoll], [enable epoll(2) support]))
 HAS_EPOLL=""
 if test "$with_epoll" = no; then HAS_EPOLL=no; fi
 if test -z "$HAS_EPOLL"; then
@@ -62,7 +62,7 @@ fi
 AM_CONDITIONAL(USE_EPOLL, [test "$HAS_EPOLL" = yes ])
 
 AH_TEMPLATE(HAVE_XATTR, [define to compile support for filesystem extended attributes])
-AC_ARG_WITH(xattr, [  --with-xattr            Enable XATTR support])
+AC_ARG_WITH(xattr, AS_HELP_STRING([--with-xattr], [enable XATTR support]))
 HAS_XATTR=""
 if test "$with_xattr" = no; then HAS_XATTR=no; fi
 if test -z "$HAS_XATTR"; then
@@ -82,7 +82,7 @@ fi
 AC_SUBST(XATTR_LIBS)
 
 AH_TEMPLATE(HAVE_GNUTLS, [define to use the GnuTLS library for SSL support])
-AC_ARG_WITH(gnutls, [  --with-gnutls           Enable SSL support with the GnuTLS library])
+AC_ARG_WITH(gnutls, AS_HELP_STRING([--with-gnutls], [enable SSL support with the GnuTLS library]))
 HAS_GNUTLS=""
 if test "$with_gnutls" = no; then HAS_GNUTLS=no; fi
 if test -z "$HAS_GNUTLS"; then
