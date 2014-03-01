@@ -1,3 +1,9 @@
+Version 0.13:
+
+	* FreeBSD support.
+	* Improved dirplex/patplex configuration.
+	* Added httrcall.
+
 Version 0.12:
 
 	* Support chunked request-bodies from clients.
