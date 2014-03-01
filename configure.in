@@ -59,7 +59,27 @@ fi
 if test "$HAS_EPOLL" = yes; then
 	AC_DEFINE(HAVE_EPOLL)
 fi
-AM_CONDITIONAL(USE_EPOLL, [test "$HAS_EPOLL" = yes ])
+
+AH_TEMPLATE(HAVE_KQUEUE, [define to enable kqueue support])
+AC_ARG_WITH(kqueue, AS_HELP_STRING([--with-kqueue], [enable kqueue(2) support]))
+HAS_KQUEUE=""
+if test "$with_kqueue" = no; then HAS_QUEUE=no; fi
+if test -z "$HAS_KQUEUE"; then
+        AC_CHECK_FUNC(kqueue, [], [HAS_KQUEUE=no])
+fi
+if test -z "$HAS_KQUEUE"; then
+        AC_CHECK_HEADER(sys/event.h, [], [HAS_KQUEUE=no])
+fi
+if test "$HAS_KQUEUE" != no; then HAS_KQUEUE=yes; fi
+if test "$with_kqueue" = yes -a "$HAS_KQUEUE" = no; then
+        AC_MSG_ERROR([*** cannot find kqueue support on this system])
+fi
+if test "$HAS_KQUEUE" = yes; then
+        AC_DEFINE(HAVE_KQUEUE)
+fi
+
+AM_CONDITIONAL(USE_EPOLL, [test "$HAS_EPOLL" = yes])
+AM_CONDITIONAL(USE_KQUEUE, [test "$HAS_KQUEUE" = yes])
 
 AH_TEMPLATE(HAVE_XATTR, [define to compile support for filesystem extended attributes])
 AC_ARG_WITH(xattr, AS_HELP_STRING([--with-xattr], [enable XATTR support]))
