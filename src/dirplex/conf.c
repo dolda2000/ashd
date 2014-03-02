@@ -255,9 +255,7 @@ struct config *readconfig(char *file)
 	    cf->patterns = pat;
 	} else if(!strcmp(s->argv[0], "index-file")) {
 	    freeca(cf->index);
-	    cf->index = NULL;
-	    if(s->argc > 1)
-		cf->index = cadup(s->argv + 1);
+	    cf->index = cadup(s->argv + 1);
 	} else if(!strcmp(s->argv[0], "capture")) {
 	    if(s->argc < 2) {
 		flog(LOG_WARNING, "%s:%i: missing argument to capture declaration", s->file, s->lno);
