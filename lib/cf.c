@@ -380,7 +380,7 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
     struct sidata idat;
     
     if(sd->type == CH_SOCKET) {
-	idat = (struct sidata) {.sd = sd, .sinit = chinit, sdata = sdata};
+	idat = (struct sidata) {.sd = sd, .sinit = chinit, .sdata = sdata};
 	if(sd->fd < 0) {
 	    args = expandargs(sd);
 	    sd->fd = stdmkchild(args, stdinit, &idat);
