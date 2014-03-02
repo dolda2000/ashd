@@ -1,6 +1,7 @@
 #ifndef _UTILS_H
 #define _UTILS_H
 
+#include <stdio.h>
 #include <stdarg.h>
 #include <sys/types.h>
 
@@ -86,5 +87,10 @@ int bbtreedel(struct btree **tree, void *item, int (*cmp)(void *, void *));
 void freebtree(struct btree **tree, void (*ffunc)(void *));
 int bbtreeput(struct btree **tree, void *item, int (*cmp)(void *, void *));
 void *btreeget(struct btree *tree, void *key, int (*cmp)(void *, void *));
+FILE *funstdio(void *pdata,
+	       ssize_t (*read)(void *pdata, void *buf, size_t len),
+	       ssize_t (*write)(void *pdata, const void *buf, size_t len),
+	       off_t (*seek)(void *pdata, off_t offset, int whence),
+	       int (*close)(void *pdata));
 
 #endif

@@ -38,7 +38,7 @@ struct stdiofd {
     int timeout;
 };
 
-static ssize_t mtread(void *cookie, char *buf, size_t len)
+static ssize_t mtread(void *cookie, void *buf, size_t len)
 {
     struct stdiofd *d = cookie;
     int ev;
@@ -63,7 +63,7 @@ static ssize_t mtread(void *cookie, char *buf, size_t len)
     }
 }
 
-static ssize_t mtwrite(void *cookie, const char *buf, size_t len)
+static ssize_t mtwrite(void *cookie, const void *buf, size_t len)
 {
     struct stdiofd *d = cookie;
     int ev;
@@ -107,40 +107,6 @@ static int mtclose(void *cookie)
     return(0);
 }
 
-#if defined(HAVE_GLIBC_STDIO)
-static cookie_io_functions_t iofuns = {
-    .read = mtread,
-    .write = mtwrite,
-    .close = mtclose,
-};
-
-FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
-{
-    struct stdiofd *d;
-    FILE *ret;
-    
-    omalloc(d);
-    d->fd = fd;
-    d->sock = issock;
-    d->timeout = timeout;
-    ret = fopencookie(d, mode, iofuns);
-    if(!ret)
-	free(d);
-    else
-	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
-    return(ret);
-}
-#elif defined(HAVE_BSD_STDIO)
-static int bsd2mtread(void *cookie, char *buf, int len)
-{
-    return(mtread(cookie, buf, len));
-}
-
-static int bsd2mtwrite(void *cookie, const char *buf, int len)
-{
-    return(mtwrite(cookie, buf, len));
-}
-
 FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
 {
     struct stdiofd *d;
@@ -160,13 +126,10 @@ FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
     d->fd = fd;
     d->sock = issock;
     d->timeout = timeout;
-    ret = funopen(d, r?bsd2mtread:NULL, w?bsd2mtwrite:NULL, NULL, mtclose);
+    ret = funstdio(d, r?mtread:NULL, w?mtwrite:NULL, NULL, mtclose);
     if(!ret)
 	free(d);
     else
 	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
     return(ret);
 }
-#else
-#error "No stdio implementation for this system"
-#endif
