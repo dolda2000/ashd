@@ -518,6 +518,8 @@ static int wrapclose(void *pdata)
     
     if(nf->close != NULL)
 	ret = nf->close(nf->pdata);
+    else
+	ret = 0;
     free(nf);
     return(ret);
 }
@@ -581,6 +583,8 @@ static int wrapclose(void *pdata)
     
     if(nf->close != NULL)
 	ret = nf->close(nf->pdata);
+    else
+	ret = 0;
     free(nf);
     return(ret);
 }
@@ -594,7 +598,8 @@ FILE *funstdio(void *pdata,
     struct stdif *nf;
     
     omalloc(nf);
-    return(funopen(pdata, read?wrapread:NULL, write:wrapwrite:NULL, seek:wrapseek:NULL, wrapclose));
+    *nf = (struct stdif){.read = read, .write = write, .seek = seek, .close = close, .pdata = pdata};
+    return(funopen(nf, read?wrapread:NULL, write?wrapwrite:NULL, seek?wrapseek:NULL, wrapclose));
 }
 #else
 #error "No stdio implementation for this system"
