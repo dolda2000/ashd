@@ -495,8 +495,22 @@ static ssize_t wrapread(void *pdata, char *buf, size_t len)
 static ssize_t wrapwrite(void *pdata, const char *buf, size_t len)
 {
     struct stdif *nf = pdata;
+    size_t off;
+    ssize_t ret;
     
-    return(nf->write(nf->pdata, buf, len));
+    /*
+     * XXX? In seeming violation of its own manual, glibc requires the
+     * cookie-write function to complete writing the entire buffer,
+     * rather than working like write(2).
+     */
+    off = 0;
+    while(off < len) {
+	ret = nf->write(nf->pdata, buf + off, len - off);
+	if(ret < 0)
+	    return(off);
+	off += ret;
+    }
+    return(off);
 }
 
 static int wrapseek(void *pdata, off_t *pos, int whence)

@@ -67,35 +67,26 @@ static ssize_t mtwrite(void *cookie, const void *buf, size_t len)
 {
     struct stdiofd *d = cookie;
     int ev;
-    size_t off;
     ssize_t ret;
     
-    off = 0;
-    while(off < len) {
+    while(1) {
 	if(d->sock)
-	    ret = send(d->fd, buf + off, len - off, MSG_DONTWAIT | MSG_NOSIGNAL);
+	    ret = send(d->fd, buf, len, MSG_DONTWAIT | MSG_NOSIGNAL);
 	else
-	    ret = write(d->fd, buf + off, len - off);
-	if(ret < 0) {
-	    if(errno == EAGAIN) {
-		ev = block(d->fd, EV_WRITE, d->timeout);
-		if(ev < 0) {
-		    /* If we just go on, we should get the real error. */
-		    continue;
-		} else if(ev == 0) {
-		    errno = ETIMEDOUT;
-		    return(off);
-		} else {
-		    continue;
-		}
-	    } else {
-		return(off);
+	    ret = write(d->fd, buf, len);
+	if((ret < 0) && (errno == EAGAIN)) {
+	    ev = block(d->fd, EV_WRITE, d->timeout);
+	    if(ev < 0) {
+		/* If we just go on, we should get the real error. */
+		continue;
+	    } else if(ev == 0) {
+		errno = ETIMEDOUT;
+		return(-1);
 	    }
 	} else {
-	    off += ret;
+	    return(ret);
 	}
     }
-    return(off);
 }
 
 static int mtclose(void *cookie)
@@ -188,39 +179,32 @@ static int piperclose(void *pdata)
 static ssize_t pipewrite(void *pdata, const void *buf, size_t len)
 {
     struct pipe *p = pdata;
-    size_t off, part;
+    ssize_t ret;
     
     if(p->closed & 1) {
 	errno = EPIPE;
 	return(-1);
     }
-    off = 0;
-    while(off < len) {
-	while(p->data.d >= p->bufmax) {
-	    if(p->w) {
-		errno = EBUSY;
-		return(-1);
-	    }
-	    if(p->closed & 1) {
-		if(off == 0) {
-		    errno = EPIPE;
-		    return(-1);
-		}
-		return(off);
-	    }
-	    p->w = current;
-	    yield();
-	    p->w = NULL;
+    while(p->data.d >= p->bufmax) {
+	if(p->w) {
+	    errno = EBUSY;
+	    return(-1);
 	}
-	part = min(len - off, p->bufmax - p->data.d);
-	sizebuf(p->data, p->data.d + part);
-	memcpy(p->data.b + p->data.d, buf + off, part);
-	off += part;
-	p->data.d += part;
-	if(p->r)
-	    resume(p->r, 0);
+	p->w = current;
+	yield();
+	p->w = NULL;
+	if(p->closed & 1) {
+	    errno = EPIPE;
+	    return(-1);
+	}
     }
-    return(off);
+    ret = min(len, p->bufmax - p->data.d);
+    sizebuf(p->data, p->data.d + ret);
+    memcpy(p->data.b + p->data.d, buf, ret);
+    p->data.d += ret;
+    if(p->r)
+	resume(p->r, 0);
+    return(ret);
 }
 
 static int pipewclose(void *pdata)
