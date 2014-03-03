@@ -608,15 +608,6 @@ static int begreq(FILE *out, int rid)
     return(sendrec(out, FCGI_BEGIN_REQUEST, rid, rec, 8));
 }
 
-static void mtiopipe(FILE **read, FILE **write)
-{
-    int fds[2];
-    
-    pipe(fds);
-    *read = mtstdopen(fds[0], 0, 600, "r");
-    *write = mtstdopen(fds[1], 0, 600, "w");
-}
-
 static void outplex(struct muth *muth, va_list args)
 {
     vavar(FILE *, sk);
