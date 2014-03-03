@@ -10,5 +10,6 @@ int block(int fd, int ev, time_t to);
 int ioloop(void);
 void exitioloop(int status);
 FILE *mtstdopen(int fd, int issock, int timeout, char *mode);
+void mtiopipe(FILE **read, FILE **write);
 
 #endif

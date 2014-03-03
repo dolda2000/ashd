@@ -133,3 +133,116 @@ FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
 	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
     return(ret);
 }
+
+struct pipe {
+    struct charbuf data;
+    size_t bufmax;
+    int closed;
+    struct muth *r, *w;
+};
+
+static void freepipe(struct pipe *p)
+{
+    buffree(p->data);
+    free(p);
+}
+
+static ssize_t piperead(void *pdata, void *buf, size_t len)
+{
+    struct pipe *p = pdata;
+    ssize_t ret;
+    
+    while(p->data.d == 0) {
+	if(p->closed & 2)
+	    return(0);
+	if(p->r) {
+	    errno = EBUSY;
+	    return(-1);
+	}
+	p->r = current;
+	yield();
+	p->r = NULL;
+    }
+    ret = min(len, p->data.d);
+    memcpy(buf, p->data.b, ret);
+    memmove(p->data.b, p->data.b + ret, p->data.d -= ret);
+    if(p->w)
+	resume(p->w, 0);
+    return(ret);
+}
+
+static int piperclose(void *pdata)
+{
+    struct pipe *p = pdata;
+    
+    if(p->closed & 2) {
+	freepipe(p);
+    } else {
+	p->closed |= 1;
+	if(p->w)
+	    resume(p->w, 0);
+    }
+    return(0);
+}
+
+static ssize_t pipewrite(void *pdata, const void *buf, size_t len)
+{
+    struct pipe *p = pdata;
+    size_t off, part;
+    
+    if(p->closed & 1) {
+	errno = EPIPE;
+	return(-1);
+    }
+    off = 0;
+    while(off < len) {
+	while(p->data.d >= p->bufmax) {
+	    if(p->w) {
+		errno = EBUSY;
+		return(-1);
+	    }
+	    if(p->closed & 1) {
+		if(off == 0) {
+		    errno = EPIPE;
+		    return(-1);
+		}
+		return(off);
+	    }
+	    p->w = current;
+	    yield();
+	    p->w = NULL;
+	}
+	part = min(len - off, p->bufmax - p->data.d);
+	sizebuf(p->data, p->data.d + part);
+	memcpy(p->data.b + p->data.d, buf + off, part);
+	off += part;
+	p->data.d += part;
+	if(p->r)
+	    resume(p->r, 0);
+    }
+    return(off);
+}
+
+static int pipewclose(void *pdata)
+{
+    struct pipe *p = pdata;
+    
+    if(p->closed & 1) {
+	freepipe(p);
+    } else {
+	p->closed |= 2;
+	if(p->r)
+	    resume(p->r, 0);
+    }
+    return(0);
+}
+
+void mtiopipe(FILE **read, FILE **write)
+{
+    struct pipe *p;
+    
+    omalloc(p);
+    p->bufmax = 4096;
+    *read = funstdio(p, piperead, NULL, NULL, piperclose);
+    *write = funstdio(p, NULL, pipewrite, NULL, pipewclose);
+}
