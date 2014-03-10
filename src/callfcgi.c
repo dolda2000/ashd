@@ -569,34 +569,25 @@ static int sendrec(FILE *out, int type, int rid, char *data, size_t dlen)
     return(0);
 }
 
-#define fgetc2(f) ({int __c__ = fgetc(f); if(__c__ == EOF) return(-1); __c__;})
-
 static int recvrec(FILE *in, int *type, int *rid, char **data, size_t *dlen)
 {
-    int b1, b2, pl;
+    unsigned char header[8];
+    int tl;
     
-    if(fgetc2(in) != 1)
+    if(fread(header, 1, 8, in) != 8)
 	return(-1);
-    *type = fgetc2(in);
-    b1 = fgetc2(in);
-    b2 = fgetc2(in);
-    *rid = (b1 << 8) | b2;
-    b1 = fgetc2(in);
-    b2 = fgetc2(in);
-    *dlen = (b1 << 8) | b2;
-    pl = fgetc2(in);
-    if(fgetc2(in) != 0)
+    if(header[0] != 1)
 	return(-1);
-    *data = smalloc(max(*dlen, 1));
-    if(fread(*data, 1, *dlen, in) != *dlen) {
+    *type = header[1];
+    *rid  = (header[2] << 8) | header[3];
+    *dlen = (header[4] << 8) | header[5];
+    tl = *dlen + header[6];
+    if(header[7] != 0)
+	return(-1);
+    *data = smalloc(max(tl, 1));
+    if(fread(*data, 1, tl, in) != tl) {
 	free(*data);
 	return(-1);
-    }
-    for(; pl > 0; pl--) {
-	if(fgetc(in) == EOF) {
-	    free(*data);
-	    return(-1);
-	}
     }
     return(0);
 }
