@@ -168,20 +168,28 @@ void servetcp(struct muth *muth, va_list args)
 static void listenloop(struct muth *muth, va_list args)
 {
     vavar(struct tcpport *, tcp);
-    int i, ns;
+    int i, ns, n;
     struct sockaddr_storage name;
     socklen_t namelen;
     
+    fcntl(tcp->fd, F_SETFL, fcntl(tcp->fd, F_GETFL) | O_NONBLOCK);
     while(1) {
 	namelen = sizeof(name);
 	if(block(tcp->fd, EV_READ, 0) == 0)
 	    goto out;
-	ns = accept(tcp->fd, (struct sockaddr *)&name, &namelen);
-	if(ns < 0) {
-	    flog(LOG_ERR, "accept: %s", strerror(errno));
-	    goto out;
+	n = 0;
+	while(1) {
+	    ns = accept(tcp->fd, (struct sockaddr *)&name, &namelen);
+	    if(ns < 0) {
+		if(errno == EAGAIN)
+		    break;
+		flog(LOG_ERR, "accept: %s", strerror(errno));
+		goto out;
+	    }
+	    mustart(servetcp, ns, name, tcp);
+	    if(++n >= 100)
+		break;
 	}
-	mustart(servetcp, ns, name, tcp);
     }
     
 out:

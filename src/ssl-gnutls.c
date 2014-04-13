@@ -360,20 +360,28 @@ out:
 static void listenloop(struct muth *muth, va_list args)
 {
     vavar(struct sslport *, pd);
-    int i, ns;
+    int i, ns, n;
     struct sockaddr_storage name;
     socklen_t namelen;
     
+    fcntl(pd->fd, F_SETFL, fcntl(tcp->fd, F_GETFL) | O_NONBLOCK);
     while(1) {
 	namelen = sizeof(name);
 	if(block(pd->fd, EV_READ, 0) == 0)
 	    goto out;
-	ns = accept(pd->fd, (struct sockaddr *)&name, &namelen);
-	if(ns < 0) {
-	    flog(LOG_ERR, "accept: %s", strerror(errno));
-	    goto out;
+	n = 0;
+	while(1) {
+	    ns = accept(pd->fd, (struct sockaddr *)&name, &namelen);
+	    if(ns < 0) {
+		if(errno == EAGAIN)
+		    break;
+		flog(LOG_ERR, "accept: %s", strerror(errno));
+		goto out;
+	    }
+	    mustart(servessl, ns, name, pd);
+	    if(++n >= 100)
+		break;
 	}
-	mustart(servessl, ns, name, pd);
     }
     
 out:
