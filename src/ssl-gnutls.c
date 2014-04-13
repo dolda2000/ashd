@@ -364,7 +364,7 @@ static void listenloop(struct muth *muth, va_list args)
     struct sockaddr_storage name;
     socklen_t namelen;
     
-    fcntl(pd->fd, F_SETFL, fcntl(tcp->fd, F_GETFL) | O_NONBLOCK);
+    fcntl(pd->fd, F_SETFL, fcntl(pd->fd, F_GETFL) | O_NONBLOCK);
     while(1) {
 	namelen = sizeof(name);
 	if(block(pd->fd, EV_READ, 0) == 0)
