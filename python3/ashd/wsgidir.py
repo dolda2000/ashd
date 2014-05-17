@@ -58,6 +58,20 @@ class cachedmod(object):
         self.mod = mod
         self.mtime = mtime
 
+class current(object):
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.current = True
+    def wait(self, timeout=None):
+        with self.cond:
+            self.cond.wait(timeout)
+    def uncurrent(self):
+        with self.cond:
+            self.current = False
+            self.cond.notify_all()
+    def __bool__(self):
+        return self.current
+
 modcache = {}
 cachelock = threading.Lock()
 
@@ -97,8 +111,16 @@ def getmod(path):
             code = compile(text, path, "exec")
             mod = types.ModuleType(mangle(path))
             mod.__file__ = path
-            exec(code, mod.__dict__)
-            entry[1] = cachedmod(mod, sb.st_mtime)
+            mod.__current__ = current()
+            try:
+                exec(code, mod.__dict__)
+            except:
+                mod.__current__.uncurrent()
+                raise
+            else:
+                if entry[1] is not None:
+                    entry[1].mod.__current__.uncurrent()
+                entry[1] = cachedmod(mod, sb.st_mtime)
         return entry[1]
 
 def importlocal(filename):
