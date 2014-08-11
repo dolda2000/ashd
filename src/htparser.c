@@ -280,15 +280,35 @@ static int http10keep(struct hthead *req, struct hthead *resp)
     }
 }
 
+static char *connid(void)
+{
+    static struct charbuf cur;
+    int i;
+    char *ret;
+    
+    for(i = 0; i < cur.d; i++) {
+	if((++cur.b[i]) > 'Z')
+	    cur.b[i] = 'A';
+	else
+	    goto done;
+    }
+    bufadd(cur, 'A');
+done:
+    ret = memcpy(smalloc(cur.d + 1), cur.b, cur.d);
+    ret[cur.d] = 0;
+    return(ret);
+}
+
 void serve(FILE *in, struct conn *conn)
 {
     int pfds[2];
     FILE *out;
     struct hthead *req, *resp;
-    char *hd;
+    char *hd, *id;
     off_t dlen;
     int keep;
     
+    id = connid();
     out = NULL;
     req = resp = NULL;
     while(plex >= 0) {
@@ -297,6 +317,7 @@ void serve(FILE *in, struct conn *conn)
 	if(!canonreq(req))
 	    break;
 	
+	headappheader(req, "X-Ash-Connection-ID", id);
 	if((conn->initreq != NULL) && conn->initreq(conn, req))
 	    break;
 	
@@ -399,6 +420,7 @@ void serve(FILE *in, struct conn *conn)
     if(resp != NULL)
 	freehthead(resp);
     fclose(in);
+    free(id);
 }
 
 static void plexwatch(struct muth *muth, va_list args)
