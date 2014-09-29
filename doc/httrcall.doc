@@ -7,7 +7,7 @@ httrcall - Call transient ashd handlers
 
 SYNOPSIS
 --------
-*httrcall* [*-h*] 'PROGRAM' ['ARGS'...]
+*httrcall* [*-h*] [*-l* 'LIMIT'] 'PROGRAM' ['ARGS'...]
 
 DESCRIPTION
 -----------
@@ -28,6 +28,15 @@ OPTIONS
 *-h*::
 
 	Print a brief help message to standard output and exit.
+
+*-l* 'LIMIT'::
+
+	If specified, only 'LIMIT' copies of the handler program are
+	allowed to run at one time. If furter request are received
+	while 'LIMIT' children are running, *httrcall* will block,
+	waiting for one to exit before forking new ones. If no *-l*
+	option is specified, *httrcall* imposes no limit on the number
+	of children that may run.
 
 AUTHOR
 ------

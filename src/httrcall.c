@@ -33,28 +33,70 @@
 #include <proc.h>
 #include <resp.h>
 
+struct current {
+    struct current *next, *prev;
+    pid_t pid;
+};
+
 static char **prog;
+static struct current *running = NULL;
+static int nrunning = 0, limit = 0;
+static volatile int exited;
+
+static void checkexit(int block)
+{
+    pid_t pid;
+    int st;
+    struct current *rec;
+    
+    exited = 0;
+    while((pid = waitpid(-1, &st, block?0:WNOHANG)) > 0) {
+	if(WCOREDUMP(st))
+	    flog(LOG_WARNING, "child process %i dumped core", pid);
+	for(rec = running; rec != NULL; rec = rec->next) {
+	    if(rec->pid == pid) {
+		if(rec->next)
+		    rec->next->prev = rec->prev;
+		if(rec->prev)
+		    rec->prev->next = rec->next;
+		if(rec == running)
+		    running = rec->next;
+		free(rec);
+		nrunning--;
+		break;
+	    }
+	}
+    }
+}
 
 static void serve(struct hthead *req, int fd)
 {
-    if(stdforkserve(prog, req, fd, NULL, NULL) < 0)
+    pid_t new;
+    struct current *rec;
+    
+    while((limit > 0) && (nrunning >= limit))
+	checkexit(1);
+    if((new = stdforkserve(prog, req, fd, NULL, NULL)) < 0) {
 	simpleerror(fd, 500, "Server Error", "The server appears to be overloaded.");
+	return;
+    }
+    omalloc(rec);
+    rec->pid = new;
+    rec->next = running;
+    if(running != NULL)
+	running->prev = rec;
+    running = rec;
+    nrunning++;
 }
 
 static void chldhandler(int sig)
 {
-    pid_t pid;
-    int st;
-    
-    while((pid = waitpid(-1, &st, WNOHANG)) > 0) {
-	if(WCOREDUMP(st))
-	    flog(LOG_WARNING, "child process %i dumped core", pid);
-    }
+    exited = 1;
 }
 
 static void usage(FILE *out)
 {
-    fprintf(out, "usage: httrcall [-h] PROGRAM [ARGS...]\n");
+    fprintf(out, "usage: httrcall [-h] [-l LIMIT] PROGRAM [ARGS...]\n");
 }
 
 int main(int argc, char **argv)
@@ -63,11 +105,14 @@ int main(int argc, char **argv)
     struct hthead *req;
     int fd;
     
-    while((c = getopt(argc, argv, "+h")) >= 0) {
+    while((c = getopt(argc, argv, "+hl:")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage(stdout);
 	    exit(0);
+	case 'l':
+	    limit = atoi(optarg);
+	    break;
 	default:
 	    usage(stderr);
 	    exit(1);
@@ -78,8 +123,12 @@ int main(int argc, char **argv)
 	exit(1);
     }
     prog = argv + optind;
-    signal(SIGCHLD, chldhandler);
+    sigaction(SIGCHLD, &(struct sigaction) {
+	    .sa_handler = chldhandler,
+        }, NULL);
     while(1) {
+	if(exited)
+	    checkexit(0);
 	if((fd = recvreq(0, &req)) < 0) {
 	    if(errno == EINTR)
 		continue;
