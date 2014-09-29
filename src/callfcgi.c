@@ -758,7 +758,6 @@ static void sigign(int sig)
 static void sigexit(int sig)
 {
     shutdown(0, SHUT_RDWR);
-    exit(0);
 }
 
 static void usage(FILE *out)
