@@ -24,6 +24,7 @@
 #include <glob.h>
 #include <libgen.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -44,6 +45,7 @@ struct stdchild {
     char **envp;
     int fd;
     int agains;
+    time_t lastrep;
 };
 
 static int parsefile(struct cfstate *s, FILE *in);
@@ -399,8 +401,10 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 		serr = errno;
 	    }
 	    if(serr == EAGAIN) {
-		if(sd->agains++ == 0)
+		if(sd->agains++ == 0) {
 		    flog(LOG_WARNING, "request to child %s denied due to buffer overload", ch->name);
+		    sd->lastrep = time(NULL);
+		}
 	    } else {
 		flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(serr));
 		close(sd->fd);
@@ -409,7 +413,7 @@ static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit
 	    return(-1);
 	}
     ok:
-	if(sd->agains > 0) {
+	if((sd->agains > 0) && ((time(NULL) - sd->lastrep) > 10)) {
 	    flog(LOG_WARNING, "%i requests to child %s were denied due to buffer overload", sd->agains, ch->name);
 	    sd->agains = 0;
 	}
