@@ -801,7 +801,7 @@ int main(int argc, char **argv)
     signal(SIGINT, sigexit);
     signal(SIGTERM, sigexit);
     mustart(listenloop, 0);
-    atexit(killcuraddr);
     ioloop();
+    killcuraddr();
     return(0);
 }
