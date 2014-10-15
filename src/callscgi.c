@@ -111,9 +111,16 @@ static char *mkanonid(void)
     return(tmpl);
 }
 
+static void setupchild(void)
+{
+    /* PHP appears to not expect to inherit SIGCHLD set to SIG_IGN, so
+     * reset it for it. */
+    signal(SIGCHLD, SIG_DFL);
+}
+
 static void startlisten(void)
 {
-    int i, fd;
+    int fd;
     struct addrinfo *ai, *cai;
     char *unpath;
     struct sockaddr_un unm;
@@ -191,9 +198,9 @@ static void startlisten(void)
 	exit(1);
     }
     if(child == 0) {
+	setupchild();
 	dup2(fd, 0);
-	for(i = 3; i < FD_SETSIZE; i++)
-	    close(i);
+	close(fd);
 	execvp(*progspec, progspec);
 	flog(LOG_ERR, "callscgi: %s: %s", *progspec, strerror(errno));
 	_exit(127);
@@ -203,15 +210,14 @@ static void startlisten(void)
 
 static void startnolisten(void)
 {
-    int i, fd;
+    int fd;
     
     if((child = fork()) < 0) {
 	flog(LOG_ERR, "could not fork: %s", strerror(errno));
 	exit(1);
     }
     if(child == 0) {
-	for(i = 3; i < FD_SETSIZE; i++)
-	    close(i);
+	setupchild();
 	if((fd = open("/dev/null", O_RDONLY)) < 0) {
 	    flog(LOG_ERR, "/dev/null: %s", strerror(errno));
 	    _exit(127);
