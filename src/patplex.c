@@ -383,12 +383,14 @@ static void qoffsets(char *buf, int *obuf, char *pstr, int unquote)
 	    o++;
 	}
 	buf[o] = 0;
+	obuf[o] = i;
     } else {
 	for(i = 0; pstr[i]; i++) {
 	    buf[i] = pstr[i];
 	    obuf[i] = i;
 	}
 	buf[i] = 0;
+	obuf[i] = i;
     }
 }
 
