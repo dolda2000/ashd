@@ -375,6 +375,8 @@ static void listenloop(struct muth *muth, va_list args)
 	    if(ns < 0) {
 		if(errno == EAGAIN)
 		    break;
+		if(errno == ECONNABORTED)
+		    continue;
 		flog(LOG_ERR, "accept: %s", strerror(errno));
 		goto out;
 	    }
