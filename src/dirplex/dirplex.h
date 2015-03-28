@@ -18,8 +18,8 @@ struct config {
     struct child *children;
     struct pattern *patterns;
     char **index;
-    char *capture;
-    int caproot;
+    char *capture, *reparse;
+    int caproot, parsecomb;
 };
 
 struct rule {

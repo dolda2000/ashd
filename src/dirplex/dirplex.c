@@ -249,9 +249,11 @@ static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *
 
 static int checkdir(struct hthead *req, int fd, char *path, char *rest)
 {
-    char *cpath;
+    char *cpath, *newpath;
     struct config *cf, *ccf;
     struct child *ch;
+    struct stat sb;
+    int rv;
     
     cf = getconfig(path);
     if((cf->capture != NULL) && (cf->caproot || !cf->path || strcmp(cf->path, "."))) {
@@ -269,6 +271,22 @@ static int checkdir(struct hthead *req, int fd, char *path, char *rest)
 	if(childhandle(ch, req, fd, chinit, ccf?ccf->path:NULL))
 	    childerror(req, fd);
 	return(1);
+    }
+    if(cf->reparse != NULL) {
+	newpath = (cf->reparse[0] == '/')?sstrdup(cf->reparse):sprintf2("%s/%s", path, cf->reparse);
+	rv = stat(newpath, &sb);
+	if(!rv && S_ISDIR(sb.st_mode)) {
+	    rv = checkpath(req, fd, newpath, rest, !cf->parsecomb);
+	} else if(!rv && S_ISREG(sb.st_mode)) {
+	    replrest(req, rest);
+	    handlefile(req, fd, newpath);
+	    rv = 1;
+	} else {
+	    rv = !cf->parsecomb;
+	}
+	free(newpath);
+	if(rv)
+	    return(rv);
     }
     return(0);
 }

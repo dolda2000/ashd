@@ -86,6 +86,8 @@ static void freeconfig(struct config *cf)
     freeca(cf->index);
     if(cf->capture != NULL)
 	free(cf->capture);
+    if(cf->reparse != NULL)
+	free(cf->reparse);
     free(cf);
 }
 
@@ -267,6 +269,17 @@ struct config *readconfig(char *file)
 	    cf->caproot = 0;
 	    if((s->argc > 2) && strchr(s->argv[2], 'D'))
 		cf->caproot = 1;
+	} else if(!strcmp(s->argv[0], "reparse")) {
+	    if(s->argc < 2) {
+		flog(LOG_WARNING, "%s:%i: missing argument to reparse declaration", s->file, s->lno);
+		continue;
+	    }
+	    if(cf->reparse != NULL)
+		free(cf->reparse);
+	    cf->reparse = sstrdup(s->argv[1]);
+	    cf->parsecomb = 0;
+	    if((s->argc > 2) && strchr(s->argv[2], 'c'))
+		cf->parsecomb = 1;
 	} else if(!strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
