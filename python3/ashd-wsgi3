@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys, os, getopt, socket, logging, time, locale, collections
+import sys, os, getopt, socket, logging, time, locale, collections, signal
 import ashd.util, ashd.serve
 try:
     import pdm.srv
@@ -196,6 +196,11 @@ try:
 except ValueError as exc:
     sys.stderr.write("ashd-wsgi3: %s\n" % exc)
     sys.exit(1)
+
+def sigterm(sig, frame):
+    socket.fromfd(0, socket.AF_UNIX, socket.SOCK_SEQPACKET).shutdown(socket.SHUT_RDWR) # :P
+for signum in [signal.SIGINT, signal.SIGTERM]:
+    signal.signal(signum, sigterm)
 
 reqhandler = hclass(**hargs)
 try:
