@@ -513,7 +513,7 @@ static ssize_t wrapwrite(void *pdata, const char *buf, size_t len)
     return(off);
 }
 
-static int wrapseek(void *pdata, off_t *pos, int whence)
+static int wrapseek(void *pdata, off64_t *pos, int whence)
 {
     struct stdif *nf = pdata;
     off_t ret;
