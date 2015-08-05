@@ -328,8 +328,10 @@ static char **expandargs(struct stdchild *sd)
 	    for(p2 = sd->argv[i]; p != NULL; p2 = np, p = strchr(np, '$')) {
 		bufcat(exp, p2, p - p2);
 		if(p[1] == '{') {
-		    if((p3 = strchr((p += 2), '}')) == NULL)
+		    if((p3 = strchr((p += 2), '}')) == NULL) {
+			np = p;
 			break;
+		    }
 		    np = p3 + 1;
 		} else {
 		    for(p3 = ++p; *p3; p3++) {
