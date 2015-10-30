@@ -473,8 +473,8 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
 	pi = sprintf2("/%s", tmp = pi);
 	free(tmp);
     }
-    bufaddenv(dst, "PATH_INFO", pi);
-    bufaddenv(dst, "SCRIPT_NAME", url);
+    bufaddenv(dst, "PATH_INFO", "%s", pi);
+    bufaddenv(dst, "SCRIPT_NAME", "%s", url);
     bufaddenv(dst, "QUERY_STRING", "%s", qp?qp:"");
     free(pi);
     free(url);
