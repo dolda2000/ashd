@@ -266,16 +266,12 @@ static int initreq(struct conn *conn, struct hthead *req)
     struct sslconn *ssl = conn->pdata;
     struct sockaddr_storage sa;
     socklen_t salen;
-    char nmbuf[256];
     
     headappheader(req, "X-Ash-Address", formathaddress((struct sockaddr *)&ssl->name, sizeof(sa)));
-    if(ssl->name.ss_family == AF_INET) {
-	headappheader(req, "X-Ash-Address", inet_ntop(AF_INET, &((struct sockaddr_in *)&ssl->name)->sin_addr, nmbuf, sizeof(nmbuf)));
+    if(ssl->name.ss_family == AF_INET)
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in *)&ssl->name)->sin_port)));
-    } else if(ssl->name.ss_family == AF_INET6) {
-	headappheader(req, "X-Ash-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&ssl->name)->sin6_addr, nmbuf, sizeof(nmbuf)));
+    else if(ssl->name.ss_family == AF_INET6)
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&ssl->name)->sin6_port)));
-    }
     salen = sizeof(sa);
     if(!getsockname(ssl->fd, (struct sockaddr *)&sa, &salen))
 	headappheader(req, "X-Ash-Server-Address", formathaddress((struct sockaddr *)&sa, sizeof(sa)));
