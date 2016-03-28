@@ -179,4 +179,4 @@ def sendreq(sock, req):
         data += key + b'\0'
         data += val + b'\0'
     data += b'\0'
-    htlib.sendfd(sock, req.sk.fileno(), data)
+    htlib.sendfd(sock, req.bsk.fileno(), data)
