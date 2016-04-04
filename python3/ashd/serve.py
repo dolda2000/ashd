@@ -204,6 +204,8 @@ class threadpool(handler):
         self.ccond = threading.Condition(self.clk)
         self.queue = collections.deque()
         self.waiting = set()
+        self.waitlimit = 5
+        self.wlstart = 0.0
         self.qlk = threading.Lock()
         self.qcond = threading.Condition(self.qlk)
         self.max = max
@@ -275,9 +277,15 @@ class threadpool(handler):
                 start = now = time.time()
                 with self.qlk:
                     while len(self.queue) < 1:
+                        if len(self.waiting) >= self.waitlimit and now - self.wlstart >= timeout:
+                            return
                         self.waiting.add(th)
-                        self.qcond.wait(start + timeout - now)
-                        self.waiting.remove(th)
+                        try:
+                            if len(self.waiting) == self.waitlimit:
+                                self.wlstart = now
+                            self.qcond.wait(start + timeout - now)
+                        finally:
+                            self.waiting.remove(th)
                         now = time.time()
                         if now - start > timeout:
                             return
@@ -292,7 +300,7 @@ class threadpool(handler):
 
     def close(self):
         while True:
-            with self.lk:
+            with self.clk:
                 if len(self.current) > 0:
                     th = next(iter(self.current))
                 else:
