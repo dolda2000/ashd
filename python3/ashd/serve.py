@@ -224,7 +224,7 @@ class threadpool(handler):
         return ret
 
     def handle(self, req):
-        start = False
+        spawn = False
         with self.qlk:
             if self.timeout is not None:
                 now = start = time.time()
@@ -239,8 +239,8 @@ class threadpool(handler):
             self.queue.append(req)
             self.qcond.notify()
             if len(self.waiting) < 1:
-                start = True
-        if start:
+                spawn = True
+        if spawn:
             with self.clk:
                 if len(self.current) < self.max:
                     th = reqthread(target=self.run)
