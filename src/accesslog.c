@@ -26,7 +26,9 @@
 #include <sys/time.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -35,15 +37,25 @@
 #include <log.h>
 #include <req.h>
 #include <proc.h>
+#include <mt.h>
+#include <mtio.h>
 
 #define DEFFORMAT "%{%Y-%m-%d %H:%M:%S}t %m %u %A \"%G\""
 
-static int ch;
+static struct logdata {
+    struct hthead *req, *resp;
+    struct timeval start, end;
+    off_t bytesin, bytesout;
+} defdata = {
+    .bytesin = -1,
+    .bytesout = -1,
+};
+
+static int ch, filter;
 static char *outname = NULL;
 static FILE *out;
 static int flush = 1, locklog = 1;
 static char *format;
-static struct timeval now;
 static volatile int reopen = 0;
 
 static void qputs(char *sp, FILE *o)
@@ -67,7 +79,7 @@ static void qputs(char *sp, FILE *o)
     }
 }
 
-static void logitem(struct hthead *req, char o, char *d)
+static void logitem(struct logdata *data, char o, char *d)
 {
     char *h, *p;
     char buf[1024];
@@ -77,61 +89,86 @@ static void logitem(struct hthead *req, char o, char *d)
 	putc('%', out);
 	break;
     case 'h':
-	if((h = getheader(req, d)) == NULL) {
+	if((h = getheader(data->req, d)) == NULL) {
 	    putc('-', out);
 	} else {
 	    qputs(h, out);
 	}
 	break;
     case 'u':
-	qputs(req->url, out);
+	qputs(data->req->url, out);
 	break;
     case 'U':
-	strcpy(buf, req->url);
+	strncpy(buf, data->req->url, sizeof(buf));
+	buf[sizeof(buf) - 1] = 0;
 	if((p = strchr(buf, '?')) != NULL)
 	    *p = 0;
 	qputs(buf, out);
 	break;
     case 'm':
-	qputs(req->method, out);
+	qputs(data->req->method, out);
 	break;
     case 'r':
-	qputs(req->rest, out);
+	qputs(data->req->rest, out);
 	break;
     case 'v':
-	qputs(req->ver, out);
+	qputs(data->req->ver, out);
 	break;
     case 't':
 	if(!*d)
 	    d = "%a, %d %b %Y %H:%M:%S %z";
-	strftime(buf, sizeof(buf), d, localtime(&now.tv_sec));
+	strftime(buf, sizeof(buf), d, localtime(&data->start.tv_sec));
 	qputs(buf, out);
 	break;
     case 'T':
 	if(!*d)
 	    d = "%a, %d %b %Y %H:%M:%S %z";
-	strftime(buf, sizeof(buf), d, gmtime(&now.tv_sec));
+	strftime(buf, sizeof(buf), d, gmtime(&data->start.tv_sec));
 	qputs(buf, out);
 	break;
     case 's':
-	fprintf(out, "%06i", (int)now.tv_usec);
+	fprintf(out, "%06i", (int)data->start.tv_usec);
+	break;
+    case 'c':
+	if(!data->resp)
+	    putc('-', out);
+	else
+	    fprintf(out, "%i", data->resp->code);
+	break;
+    case 'i':
+	if(data->bytesin < 0)
+	    putc('-', out);
+	else
+	    fprintf(out, "%ji", (intmax_t)data->bytesin);
+	break;
+    case 'o':
+	if(data->bytesout < 0)
+	    putc('-', out);
+	else
+	    fprintf(out, "%ji", (intmax_t)data->bytesout);
+	break;
+    case 'd':
+	if((data->end.tv_sec == 0) && (data->end.tv_usec == 0))
+	    fputc('-', out);
+	else
+	    fprintf(out, "%.6f", (data->end.tv_sec - data->start.tv_sec) + ((data->end.tv_usec - data->start.tv_usec) / 1000000.0));
 	break;
     case 'A':
-	logitem(req, 'h', "X-Ash-Address");
+	logitem(data, 'h', "X-Ash-Address");
 	break;
     case 'H':
-	logitem(req, 'h', "Host");
+	logitem(data, 'h', "Host");
 	break;
     case 'R':
-	logitem(req, 'h', "Referer");
+	logitem(data, 'h', "Referer");
 	break;
     case 'G':
-	logitem(req, 'h', "User-Agent");
+	logitem(data, 'h', "User-Agent");
 	break;
     }
 }
 
-static void logreq(struct hthead *req)
+static void logreq(struct logdata *data)
 {
     char *p, *p2;
     char d[strlen(format)];
@@ -154,7 +191,7 @@ static void logreq(struct hthead *req)
 	    o = *p++;
 	    if(o == 0)
 		break;
-	    logitem(req, o, d);
+	    logitem(data, o, d);
 	} else {
 	    fputc(*p++, out);
 	}
@@ -166,18 +203,93 @@ static void logreq(struct hthead *req)
 
 static void serve(struct hthead *req, int fd)
 {
-    gettimeofday(&now, NULL);
+    struct logdata data;
+    
+    data = defdata;
+    data.req = req;
+    gettimeofday(&data.start, NULL);
     if(sendreq(ch, req, fd)) {
 	flog(LOG_ERR, "accesslog: could not pass request to child: %s", strerror(errno));
 	exit(1);
     }
-    logreq(req);
+    logreq(&data);
+}
+
+static int passdata(FILE *in, FILE *out, off_t *passed)
+{
+    size_t read;
+    off_t total;
+    char buf[8192];
+    
+    total = 0;
+    while(!feof(in)) {
+	read = fread(buf, 1, sizeof(buf), in);
+	if(ferror(in))
+	    return(-1);
+	if(fwrite(buf, 1, read, out) != read)
+	    return(-1);
+	total += read;
+    }
+    if(passed)
+	*passed = total;
+    return(0);
+}
+
+static void filterreq(struct muth *mt, va_list args)
+{
+    vavar(struct hthead *, req);
+    vavar(int, fd);
+    int pfds[2];
+    struct hthead *resp;
+    FILE *cl, *hd;
+    struct logdata data;
+    
+    hd = NULL;
+    resp = NULL;
+    data = defdata;
+    data.req = req;
+    gettimeofday(&data.start, NULL);
+    cl = mtstdopen(fd, 1, 600, "r+");
+    if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
+	goto out;
+    hd = mtstdopen(pfds[1], 1, 600, "r+");
+    if(sendreq(ch, req, pfds[0])) {
+	close(pfds[0]);
+	goto out;
+    }
+    close(pfds[0]);
+    
+    if(passdata(cl, hd, &data.bytesin))
+	goto out;
+    shutdown(pfds[1], SHUT_WR);
+    if((resp = parseresponse(hd)) == NULL)
+	goto out;
+    data.resp = resp;
+    writeresp(cl, resp);
+    fprintf(cl, "\r\n");
+    if(passdata(hd, cl, &data.bytesout))
+	goto out;
+    gettimeofday(&data.end, NULL);
+    
+out:
+    logreq(&data);
+    
+    freehthead(req);
+    if(resp != NULL)
+	freehthead(resp);
+    fclose(cl);
+    if(hd != NULL)
+	fclose(hd);
 }
 
 static void sighandler(int sig)
 {
-    if(sig == SIGHUP)
-	reopen = 1;
+    if(sig == SIGHUP) {
+	if(filter)
+	    exitioloop(2);
+	else
+	    reopen = 1;
+    }
 }
 
 static int lockfile(FILE *file)
@@ -273,6 +385,85 @@ static void reopenlog(void)
     out = new;
 }
 
+static void listenloop(struct muth *mt, va_list args)
+{
+    vavar(int, lfd);
+    int fd;
+    struct hthead *req;
+    
+    while(1) {
+	block(lfd, EV_READ, 0);
+	if((fd = recvreq(lfd, &req)) < 0) {
+	    if(errno != 0)
+		flog(LOG_ERR, "accesslog: error in recvreq: %s", strerror(errno));
+	    exit(1);
+	}
+	mustart(filterreq, req, fd);
+    }
+}
+
+static void chwatch(struct muth *mt, va_list args)
+{
+    vavar(int, cfd);
+    
+    block(cfd, EV_READ, 0);
+    exitioloop(1);
+}
+
+static void floop(void)
+{
+    mustart(listenloop, 0);
+    mustart(chwatch, ch);
+    while(1) {
+	switch(ioloop()) {
+	case 0:
+	case 1:
+	    return;
+	case 2:
+	    reopenlog();
+	    break;
+	}
+    }
+}
+
+static void sloop(void)
+{
+    int fd, ret;
+    struct hthead *req;
+    struct pollfd pfd[2];
+    
+    while(1) {
+	if(reopen) {
+	    reopenlog();
+	    reopen = 0;
+	}
+	memset(pfd, 0, sizeof(pfd));
+	pfd[0].fd = 0;
+	pfd[0].events = POLLIN;
+	pfd[1].fd = ch;
+	pfd[1].events = POLLHUP;
+	if((ret = poll(pfd, 2, -1)) < 0) {
+	    if(errno != EINTR) {
+		flog(LOG_ERR, "accesslog: error in poll: %s", strerror(errno));
+		exit(1);
+	    }
+	}
+	if(pfd[0].revents) {
+	    if((fd = recvreq(0, &req)) < 0) {
+		if(errno == 0)
+		    return;
+		flog(LOG_ERR, "accesslog: error in recvreq: %s", strerror(errno));
+		exit(1);
+	    }
+	    serve(req, fd);
+	    freehthead(req);
+	    close(fd);
+	}
+	if(pfd[1].revents & POLLHUP)
+	    return;
+    }
+}
+
 static void usage(FILE *out)
 {
     fprintf(out, "usage: accesslog [-hFaL] [-f FORMAT] [-p PIDFILE] OUTFILE CHILD [ARGS...]\n");
@@ -281,15 +472,12 @@ static void usage(FILE *out)
 
 int main(int argc, char **argv)
 {
-    int c, ret;
-    struct hthead *req;
-    int fd;
-    struct pollfd pfd[2];
+    int c;
     char *pidfile;
     FILE *pidout;
     
     pidfile = NULL;
-    while((c = getopt(argc, argv, "+hFaLf:p:P:")) >= 0) {
+    while((c = getopt(argc, argv, "+hFaeLf:p:P:")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage(stdout);
@@ -299,6 +487,9 @@ int main(int argc, char **argv)
 	    break;
 	case 'L':
 	    locklog = 0;
+	    break;
+	case 'e':
+	    filter = 1;
 	    break;
 	case 'f':
 	    format = optarg;
@@ -310,7 +501,7 @@ int main(int argc, char **argv)
 	    pidfile = optarg;
 	    break;
 	case 'a':
-	    format = "%A - - [%{%d/%b/%Y:%H:%M:%S %z}t] \"%m %u %v\" - - \"%R\" \"%G\"";
+	    format = "%A - - [%{%d/%b/%Y:%H:%M:%S %z}t] \"%m %u %v\" %c %o \"%R\" \"%G\"";
 	    break;
 	default:
 	    usage(stderr);
@@ -367,36 +558,10 @@ int main(int argc, char **argv)
 	fprintf(pidout, "%i\n", (int)getpid());
 	fclose(pidout);
     }
-    while(1) {
-	if(reopen) {
-	    reopenlog();
-	    reopen = 0;
-	}
-	memset(pfd, 0, sizeof(pfd));
-	pfd[0].fd = 0;
-	pfd[0].events = POLLIN;
-	pfd[1].fd = ch;
-	pfd[1].events = POLLHUP;
-	if((ret = poll(pfd, 2, -1)) < 0) {
-	    if(errno != EINTR) {
-		flog(LOG_ERR, "accesslog: error in poll: %s", strerror(errno));
-		exit(1);
-	    }
-	}
-	if(pfd[0].revents) {
-	    if((fd = recvreq(0, &req)) < 0) {
-		if(errno == 0)
-		    break;
-		flog(LOG_ERR, "accesslog: error in recvreq: %s", strerror(errno));
-		exit(1);
-	    }
-	    serve(req, fd);
-	    freehthead(req);
-	    close(fd);
-	}
-	if(pfd[1].revents & POLLHUP)
-	    break;
-    }
+    if(filter)
+	floop();
+    else
+	sloop();
     fclose(out);
     if(pidfile != NULL)
 	unlink(pidfile);
