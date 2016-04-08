@@ -261,6 +261,8 @@ static void filterreq(struct muth *mt, va_list args)
     
     if(passdata(cl, hd, &data.bytesin))
 	goto out;
+    if(fflush(hd))
+	goto out;
     shutdown(pfds[1], SHUT_WR);
     if((resp = parseresponse(hd)) == NULL)
 	goto out;
