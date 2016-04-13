@@ -249,10 +249,10 @@ static void filterreq(struct muth *mt, va_list args)
     data = defdata;
     data.req = req;
     gettimeofday(&data.start, NULL);
-    cl = mtstdopen(fd, 1, 600, "r+");
+    cl = mtstdopen(fd, 1, 600, "r+", NULL);
     if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
 	goto out;
-    hd = mtstdopen(pfds[1], 1, 600, "r+");
+    hd = mtstdopen(pfds[1], 1, 600, "r+", NULL);
     if(sendreq(ch, req, pfds[0])) {
 	close(pfds[0]);
 	goto out;

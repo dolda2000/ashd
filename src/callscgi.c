@@ -521,8 +521,8 @@ static void serve(struct muth *muth, va_list args)
     struct hthead *resp;
     
     sfd = reconn();
-    is = mtstdopen(fd, 1, 60, "r+");
-    os = mtstdopen(sfd, 1, 600, "r+");
+    is = mtstdopen(fd, 1, 60, "r+", NULL);
+    os = mtstdopen(sfd, 1, 600, "r+", NULL);
     
     bufinit(head);
     mkcgienv(req, &head);

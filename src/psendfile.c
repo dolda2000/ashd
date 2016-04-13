@@ -227,7 +227,7 @@ static void serve(struct muth *muth, va_list args)
     
     sfile = NULL;
     contype = NULL;
-    out = mtstdopen(fd, 1, 60, "r+");
+    out = mtstdopen(fd, 1, 60, "r+", NULL);
     
     if((file = getheader(req, "X-Ash-File")) == NULL) {
 	flog(LOG_ERR, "psendfile: needs to be called with the X-Ash-File header");
