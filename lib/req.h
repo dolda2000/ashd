@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 
+struct bufio;
+
 struct hthead {
     char *method, *url, *ver, *msg;
     int code;
@@ -23,8 +25,11 @@ int sendreq(int sock, struct hthead *req, int fd);
 int recvreq(int sock, struct hthead **reqp);
 void replrest(struct hthead *head, char *rest);
 int parseheaders(struct hthead *head, FILE *in);
+int parseheadersb(struct hthead *head, struct bufio *in);
 struct hthead *parseresponse(FILE *in);
+struct hthead *parseresponseb(struct bufio *in);
 int writeresp(FILE *out, struct hthead *resp);
+int writerespb(struct bufio *out, struct hthead *resp);
 char *unquoteurl(char *in);
 
 #endif
