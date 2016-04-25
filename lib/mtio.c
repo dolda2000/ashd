@@ -121,6 +121,34 @@ FILE *mtstdopen(int fd, int issock, int timeout, char *mode, struct stdiofd **in
     return(ret);
 }
 
+struct bufio *mtbioopen(int fd, int issock, int timeout, char *mode, struct stdiofd **infop)
+{
+    static struct bufioops ops = {
+	.read = mtread, .write = mtwrite, .close = mtclose,
+    };
+    struct stdiofd *d;
+    struct bufio *ret;
+    
+    if(!strcmp(mode, "r")) {
+    } else if(!strcmp(mode, "w")) {
+    } else if(!strcmp(mode, "r+")) {
+    } else {
+	return(NULL);
+    }
+    omalloc(d);
+    d->fd = fd;
+    d->sock = issock;
+    d->timeout = timeout;
+    if(!(ret = bioopen(d, &ops))) {
+	free(d);
+	return(NULL);
+    }
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+    if(infop)
+	*infop = d;
+    return(ret);
+}
+
 struct pipe {
     struct charbuf data;
     size_t bufmax;

@@ -16,6 +16,7 @@ int block(int fd, int ev, time_t to);
 int ioloop(void);
 void exitioloop(int status);
 FILE *mtstdopen(int fd, int issock, int timeout, char *mode, struct stdiofd **infop);
+struct bufio *mtbioopen(int fd, int issock, int timeout, char *mode, struct stdiofd **infop);
 void mtiopipe(FILE **read, FILE **write);
 
 #endif
