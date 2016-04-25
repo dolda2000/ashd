@@ -39,6 +39,7 @@
 #include <proc.h>
 #include <mt.h>
 #include <mtio.h>
+#include <bufio.h>
 
 #define DEFFORMAT "%{%Y-%m-%d %H:%M:%S}t %m %u %A \"%G\""
 
@@ -215,20 +216,18 @@ static void serve(struct hthead *req, int fd)
     logreq(&data);
 }
 
-static int passdata(FILE *in, FILE *out, off_t *passed)
+static int passdata(struct bufio *in, struct bufio *out, off_t *passed)
 {
-    size_t read;
+    ssize_t read;
     off_t total;
-    char buf[8192];
     
     total = 0;
-    while(!feof(in)) {
-	read = fread(buf, 1, sizeof(buf), in);
-	if(ferror(in))
-	    return(-1);
-	if(fwrite(buf, 1, read, out) != read)
+    while(!bioeof(in)) {
+	if((read = biocopysome(out, in)) < 0)
 	    return(-1);
 	total += read;
+	if(biorspace(in) && (biofillsome(in) < 0))
+	    return(-1);
     }
     if(passed)
 	*passed = total;
@@ -241,7 +240,7 @@ static void filterreq(struct muth *mt, va_list args)
     vavar(int, fd);
     int pfds[2];
     struct hthead *resp;
-    FILE *cl, *hd;
+    struct bufio *cl, *hd;
     struct logdata data;
     
     hd = NULL;
@@ -249,10 +248,10 @@ static void filterreq(struct muth *mt, va_list args)
     data = defdata;
     data.req = req;
     gettimeofday(&data.start, NULL);
-    cl = mtstdopen(fd, 1, 600, "r+", NULL);
+    cl = mtbioopen(fd, 1, 600, "r+", NULL);
     if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
 	goto out;
-    hd = mtstdopen(pfds[1], 1, 600, "r+", NULL);
+    hd = mtbioopen(pfds[1], 1, 600, "r+", NULL);
     if(sendreq(ch, req, pfds[0])) {
 	close(pfds[0]);
 	goto out;
@@ -261,14 +260,14 @@ static void filterreq(struct muth *mt, va_list args)
     
     if(passdata(cl, hd, &data.bytesin))
 	goto out;
-    if(fflush(hd))
+    if(bioflush(hd))
 	goto out;
     shutdown(pfds[1], SHUT_WR);
-    if((resp = parseresponse(hd)) == NULL)
+    if((resp = parseresponseb(hd)) == NULL)
 	goto out;
     data.resp = resp;
-    writeresp(cl, resp);
-    fprintf(cl, "\r\n");
+    writerespb(cl, resp);
+    bioprintf(cl, "\r\n");
     if(passdata(hd, cl, &data.bytesout))
 	goto out;
     gettimeofday(&data.end, NULL);
@@ -279,9 +278,9 @@ out:
     freehthead(req);
     if(resp != NULL)
 	freehthead(resp);
-    fclose(cl);
+    bioclose(cl);
     if(hd != NULL)
-	fclose(hd);
+	bioclose(hd);
 }
 
 static void sighandler(int sig)
