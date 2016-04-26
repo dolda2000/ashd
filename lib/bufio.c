@@ -228,6 +228,7 @@ ssize_t biowrite(struct bufio *bio, const void *data, size_t len)
 	}
 	if(len < bio->wbuf.s - bio->wbuf.d) {
 	    memcpy(bio->wbuf.b + bio->wbuf.d, data, len);
+	    bio->wbuf.d += len;
 	    wb += len;
 	    len = 0;
 	} else {
@@ -247,7 +248,7 @@ ssize_t biowrite(struct bufio *bio, const void *data, size_t len)
 	    data += ret; len -= ret; wb += ret;
 	}
     }
-    return(0);
+    return(wb);
 }
 
 ssize_t biowritesome(struct bufio *bio, const void *data, size_t len)
