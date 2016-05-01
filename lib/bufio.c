@@ -259,8 +259,10 @@ ssize_t biowritesome(struct bufio *bio, const void *data, size_t len)
     if(bio->wh == bio->wbuf.d)
 	bio->wh = bio->wbuf.d = 0;
     if(bio->wbuf.d == bio->wbuf.s) {
-	if(bio->wh > 0)
+	if(bio->wh > 0) {
 	    memmove(bio->wbuf.b, bio->wbuf.b + bio->wh, bio->wbuf.d -= bio->wh);
+	    bio->wh = 0;
+	}
     }
     ret = min(len, bio->wbuf.s - bio->wbuf.d);
     memcpy(bio->wbuf.b + bio->wbuf.d, data, ret);
