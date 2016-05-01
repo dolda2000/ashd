@@ -31,6 +31,7 @@
 #include <utils.h>
 #include <mt.h>
 #include <mtio.h>
+#include <bufio.h>
 
 static ssize_t mtread(void *cookie, void *buf, size_t len)
 {
