@@ -150,13 +150,13 @@ void servetcp(struct muth *muth, va_list args)
     vavar(int, fd);
     vavar(struct sockaddr_storage, name);
     vavar(struct tcpport *, stcp);
-    FILE *in;
+    struct bufio *in;
     struct conn conn;
     struct tcpconn tcp;
     
     memset(&conn, 0, sizeof(conn));
     memset(&tcp, 0, sizeof(tcp));
-    in = mtstdopen(fd, 1, 60, "r+", NULL);
+    in = mtbioopen(fd, 1, 60, "r+", NULL);
     conn.pdata = &tcp;
     conn.initreq = initreq;
     tcp.fd = fd;

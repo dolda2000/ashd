@@ -35,6 +35,7 @@
 #include <log.h>
 #include <req.h>
 #include <proc.h>
+#include <bufio.h>
 
 #include "htparser.h"
 
@@ -60,7 +61,7 @@ static void trimx(struct hthead *req)
     }
 }
 
-static struct hthead *parsereq(FILE *in)
+static struct hthead *parsereq(struct bufio *in)
 {
     struct hthead *req;
     struct charbuf method, url, ver;
@@ -71,7 +72,7 @@ static struct hthead *parsereq(FILE *in)
     bufinit(url);
     bufinit(ver);
     while(1) {
-	c = getc(in);
+	c = biogetc(in);
 	if(c == ' ') {
 	    break;
 	} else if((c == EOF) || (c < 32) || (c >= 128)) {
@@ -83,7 +84,7 @@ static struct hthead *parsereq(FILE *in)
 	}
     }
     while(1) {
-	c = getc(in);
+	c = biogetc(in);
 	if(c == ' ') {
 	    break;
 	} else if((c == EOF) || (c < 32)) {
@@ -95,7 +96,7 @@ static struct hthead *parsereq(FILE *in)
 	}
     }
     while(1) {
-	c = getc(in);
+	c = biogetc(in);
 	if(c == 10) {
 	    break;
 	} else if(c == 13) {
@@ -111,7 +112,7 @@ static struct hthead *parsereq(FILE *in)
     bufadd(url, 0);
     bufadd(ver, 0);
     req = mkreq(method.b, url.b, ver.b);
-    if(parseheaders(req, in))
+    if(parseheadersb(req, in))
 	goto fail;
     trimx(req);
     goto out;
@@ -128,30 +129,29 @@ out:
     return(req);
 }
 
-static off_t passdata(FILE *in, FILE *out, off_t max)
+static off_t passdata(struct bufio *in, struct bufio *out, off_t max)
 {
-    size_t read;
+    ssize_t read;
     off_t total;
-    char buf[8192];
     
     total = 0;
-    while(!feof(in) && ((max < 0) || (total < max))) {
-	read = sizeof(buf);
-	if(max >= 0)
-	    read = min(max - total, read);
-	read = fread(buf, 1, read, in);
-	if(ferror(in))
+    while(!bioeof(in) && ((max < 0) || (total < max))) {
+	if((read = biordata(in)) > 0) {
+	    if(max >= 0)
+		read = min(max - total, read);
+	    if((read = biowritesome(out, in->rbuf.b + in->rh, read)) < 0)
+		return(-1);
+	    in->rh += read;
+	    total += read;
+	}
+	if(biorspace(in) && ((max < 0) || (biordata(in) < max - total)) && (biofillsome(in) < 0))
 	    return(-1);
-	if(fwrite(buf, 1, read, out) != read)
-	    return(-1);
-	total += read;
     }
     return(total);
 }
 
-static int recvchunks(FILE *in, FILE *out)
+static int recvchunks(struct bufio *in, struct bufio *out)
 {
-    char buf[8192];
     size_t read, chlen;
     int c, r;
     
@@ -159,7 +159,7 @@ static int recvchunks(FILE *in, FILE *out)
 	chlen = 0;
 	r = 0;
 	while(1) {
-	    c = getc(in);
+	    c = biogetc(in);
 	    if(c == 10) {
 		if(!r)
 		    return(-1);
@@ -185,37 +185,43 @@ static int recvchunks(FILE *in, FILE *out)
 	if(chlen == 0)
 	    break;
 	while(chlen > 0) {
-	    read = fread(buf, 1, min(sizeof(buf), chlen), in);
-	    if(feof(in) || ferror(in))
+	    if((read = biordata(in)) > 0) {
+		if((read = biowritesome(out, in->rbuf.b + in->rh, min(read, chlen))) < 0)
+		    return(-1);
+		in->rh += read;
+		chlen -= read;
+	    }
+	    if(biorspace(in) && (biordata(in) < chlen) && (biofillsome(in) <= 0))
 		return(-1);
-	    if(fwrite(buf, 1, read, out) != read)
-		return(-1);
-	    chlen -= read;
 	}
-	if((getc(in) != 13) || (getc(in) != 10))
+	if((biogetc(in) != 13) || (biogetc(in) != 10))
 	    return(-1);
     }
     /* XXX: Technically, there may be trailers to be read, but that's
      * just about as likely as chunk extensions. */
-    if((getc(in) != 13) || (getc(in) != 10))
+    if((biogetc(in) != 13) || (biogetc(in) != 10))
 	return(-1);
     return(0);
 }
 
-static int passchunks(FILE *in, FILE *out)
+static int passchunks(struct bufio *in, struct bufio *out)
 {
-    char buf[8192];
     size_t read;
     
-    do {
-	read = fread(buf, 1, sizeof(buf), in);
-	if(ferror(in))
+    while(!bioeof(in)) {
+	if((read = biordata(in)) > 0) {
+	    bioprintf(out, "%zx\r\n", read);
+	    if(biowrite(out, in->rbuf.b + in->rh, read) != read)
+		return(-1);
+	    in->rh += read;
+	    bioprintf(out, "\r\n");
+	    if(bioflush(out) < 0)
+		return(-1);
+	}
+	if(biorspace(in) && (biofillsome(in) < 0))
 	    return(-1);
-	fprintf(out, "%zx\r\n", read);
-	if(fwrite(buf, 1, read, out) != read)
-	    return(-1);
-	fprintf(out, "\r\n");
-    } while(read > 0);
+    }
+    bioprintf(out, "0\r\n\r\n");
     return(0);
 }
 
@@ -299,10 +305,10 @@ done:
     return(ret);
 }
 
-void serve(FILE *in, struct conn *conn)
+void serve(struct bufio *in, struct conn *conn)
 {
     int pfds[2];
-    FILE *out;
+    struct bufio *out;
     struct hthead *req, *resp;
     char *hd, *id;
     off_t dlen;
@@ -312,6 +318,7 @@ void serve(FILE *in, struct conn *conn)
     out = NULL;
     req = resp = NULL;
     while(plex >= 0) {
+	bioflush(in);
 	if((req = parsereq(in)) == NULL)
 	    break;
 	if(!canonreq(req))
@@ -328,7 +335,7 @@ void serve(FILE *in, struct conn *conn)
 	if(sendreq(plex, req, pfds[0]))
 	    break;
 	close(pfds[0]);
-	out = mtstdopen(pfds[1], 1, 600, "r+", NULL);
+	out = mtbioopen(pfds[1], 1, 600, "r+", NULL);
 
 	if(getheader(req, "content-type") != NULL) {
 	    if((hd = getheader(req, "content-length")) != NULL) {
@@ -345,12 +352,12 @@ void serve(FILE *in, struct conn *conn)
 		headrmheader(req, "content-type");
 	    }
 	}
-	if(fflush(out))
+	if(bioflush(out))
 	    break;
 	/* Make sure to send EOF */
 	shutdown(pfds[1], SHUT_WR);
 	
-	if((resp = parseresponse(out)) == NULL)
+	if((resp = parseresponseb(out)) == NULL)
 	    break;
 	replstr(&resp->ver, req->ver);
 	
@@ -360,19 +367,19 @@ void serve(FILE *in, struct conn *conn)
 	if(!strcasecmp(req->ver, "HTTP/1.0")) {
 	    if(!strcasecmp(req->method, "head")) {
 		keep = http10keep(req, resp);
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 	    } else if((hd = getheader(resp, "content-length")) != NULL) {
 		keep = http10keep(req, resp);
 		dlen = atoo(hd);
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		if(passdata(out, in, dlen) != dlen)
 		    break;
 	    } else {
 		headrmheader(resp, "connection");
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		passdata(out, in, -1);
 		break;
 	    }
@@ -380,23 +387,23 @@ void serve(FILE *in, struct conn *conn)
 		break;
 	} else if(!strcasecmp(req->ver, "HTTP/1.1")) {
 	    if(!strcasecmp(req->method, "head")) {
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 	    } else if((hd = getheader(resp, "content-length")) != NULL) {
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		dlen = atoo(hd);
 		if(passdata(out, in, dlen) != dlen)
 		    break;
 	    } else if(!getheader(resp, "transfer-encoding")) {
 		headappheader(resp, "Transfer-Encoding", "chunked");
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		if(passchunks(out, in))
 		    break;
 	    } else {
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		passdata(out, in, -1);
 		break;
 	    }
@@ -406,7 +413,7 @@ void serve(FILE *in, struct conn *conn)
 	    break;
 	}
 
-	fclose(out);
+	bioclose(out);
 	out = NULL;
 	freehthead(req);
 	freehthead(resp);
@@ -414,12 +421,12 @@ void serve(FILE *in, struct conn *conn)
     }
     
     if(out != NULL)
-	fclose(out);
+	bioclose(out);
     if(req != NULL)
 	freehthead(req);
     if(resp != NULL)
 	freehthead(resp);
-    fclose(in);
+    bioclose(in);
     free(id);
 }
 

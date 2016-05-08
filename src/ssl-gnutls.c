@@ -34,6 +34,7 @@
 #include <mtio.h>
 #include <req.h>
 #include <log.h>
+#include <bufio.h>
 
 #include "htparser.h"
 
@@ -188,7 +189,7 @@ static int tlsblock(int fd, gnutls_session_t sess, time_t to)
 	return(block(fd, EV_READ, to));
 }
 
-static ssize_t sslread(void *cookie, char *buf, size_t len)
+static ssize_t sslread(void *cookie, void *buf, size_t len)
 {
     struct sslconn *ssl = cookie;
     ssize_t xf;
@@ -217,7 +218,7 @@ static ssize_t sslread(void *cookie, char *buf, size_t len)
     return(xf);
 }
 
-static ssize_t sslwrite(void *cookie, const char *buf, size_t len)
+static ssize_t sslwrite(void *cookie, const void *buf, size_t len)
 {
     struct sslconn *ssl = cookie;
     int ret;
@@ -255,7 +256,7 @@ static int sslclose(void *cookie)
     return(0);
 }
 
-static cookie_io_functions_t iofuns = {
+static struct bufioops iofuns = {
     .read = sslread,
     .write = sslwrite,
     .close = sslclose,
@@ -289,7 +290,6 @@ static void servessl(struct muth *muth, va_list args)
     struct sslconn ssl;
     gnutls_session_t sess;
     int ret;
-    FILE *in;
     
     int setcreds(gnutls_session_t sess)
     {
@@ -344,8 +344,7 @@ static void servessl(struct muth *muth, va_list args)
     ssl.name = name;
     ssl.sess = sess;
     bufinit(ssl.in);
-    in = fopencookie(&ssl, "r+", iofuns);
-    serve(in, &conn);
+    serve(bioopen(&ssl, &iofuns), &conn);
     
 out:
     gnutls_deinit(sess);
