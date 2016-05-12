@@ -3,6 +3,11 @@ try:
     import pdm.perf
 except:
     pdm = None
+try:
+    import resource
+    ru_thread = resource.RUSAGE_THREAD
+except:
+    ru_thread = None
 
 reqstat = {}
 
@@ -17,13 +22,25 @@ if pdm:
             self.method = env.get("REQUEST_METHOD")
             self.uri = env.get("REQUEST_URI")
             self.host = env.get("HTTP_HOST")
+            self.script_uri = env.get("SCRIPT_NAME")
+            self.script_path = env.get("SCRIPT_FILENAME")
+            self.pathinfo = env.get("PATH_INFO")
+            self.querystring = env.get("QUERY_STRING")
             self.remoteaddr = env.get("REMOTE_ADDR")
             self.remoteport = env.get("REMOTE_PORT")
+            self.scheme = env.get("wsgi.url_scheme")
+            if ru_thread is not None:
+                ru = resource.getrusage(ru_thread)
+                self.icpu = ru.ru_utime + ru.ru_stime
 
     class reqfinish(pdm.perf.finishevent):
         def __init__(self, start, aborted, status):
             super().__init__(start, aborted)
             self.status = status
+            self.cputime = 0
+            if ru_thread is not None:
+                ru = resource.getrusage(ru_thread)
+                self.cputime = ru.ru_utime + ru.ru_stime - start.icpu
 
 class request(object):
     def __init__(self, env):
