@@ -223,9 +223,12 @@ static int passdata(struct bufio *in, struct bufio *out, off_t *passed)
     
     total = 0;
     while(!bioeof(in)) {
-	if((read = biocopysome(out, in)) < 0)
-	    return(-1);
-	total += read;
+	if((read = biordata(in)) > 0) {
+	    if((read = biowritesome(out, in->rbuf.b + in->rh, read)) < 0)
+		return(-1);
+	    in->rh += read;
+	    total += read;
+	}
 	if(biorspace(in) && (biofillsome(in) < 0))
 	    return(-1);
     }
