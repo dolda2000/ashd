@@ -33,6 +33,40 @@
 #include <mtio.h>
 #include <bufio.h>
 
+static ssize_t mtrecv(struct stdiofd *d, void *buf, size_t len)
+{
+    struct msghdr msg;
+    char cbuf[512];
+    struct cmsghdr *cmsg;
+    struct iovec bufvec;
+    socklen_t clen;
+    ssize_t ret;
+    int i, *fds;
+    
+    msg = (struct msghdr){};
+    msg.msg_iov = &bufvec;
+    msg.msg_iovlen = 1;
+    bufvec.iov_base = buf;
+    bufvec.iov_len = len;
+    msg.msg_control = cbuf;
+    msg.msg_controllen = sizeof(cbuf);
+    if((ret = recvmsg(d->fd, &msg, MSG_DONTWAIT)) < 0)
+	return(ret);
+    for(cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+	if((cmsg->cmsg_level == SOL_SOCKET) && (cmsg->cmsg_type == SCM_RIGHTS)) {
+	    fds = (int *)CMSG_DATA(cmsg);
+	    clen = (cmsg->cmsg_len - ((char *)fds - (char *)cmsg)) / sizeof(*fds);
+	    for(i = 0; i < clen; i++) {
+		if(d->rights < 0)
+		    d->rights = fds[i];
+		else
+		    close(fds[i]);
+	    }
+	}
+    }
+    return(ret);
+}
+
 static ssize_t mtread(void *cookie, void *buf, size_t len)
 {
     struct stdiofd *d = cookie;
@@ -40,7 +74,10 @@ static ssize_t mtread(void *cookie, void *buf, size_t len)
     ssize_t ret;
     
     while(1) {
-	ret = read(d->fd, buf, len);
+	if(d->sock)
+	    ret = mtrecv(d, buf, len);
+	else
+	    ret = read(d->fd, buf, len);
 	if((ret < 0) && (errno == EAGAIN)) {
 	    ev = block(d->fd, EV_READ, d->timeout);
 	    if(ev < 0) {
@@ -58,6 +95,39 @@ static ssize_t mtread(void *cookie, void *buf, size_t len)
     }
 }
 
+static ssize_t mtsend(struct stdiofd *d, const void *buf, size_t len)
+{
+    struct msghdr msg;
+    struct cmsghdr *cmsg;
+    char cbuf[CMSG_SPACE(sizeof(int))];
+    struct iovec bufvec;
+    ssize_t ret;
+    int cr;
+    
+    msg = (struct msghdr){};
+    msg.msg_iov = &bufvec;
+    msg.msg_iovlen = 1;
+    bufvec.iov_base = (void *)buf;
+    bufvec.iov_len = len;
+    cr = -1;
+    if(d->sendrights >= 0) {
+	msg.msg_control = cbuf;
+	msg.msg_controllen = sizeof(cbuf);
+	cmsg = CMSG_FIRSTHDR(&msg);
+	cmsg->cmsg_level = SOL_SOCKET;
+	cmsg->cmsg_type = SCM_RIGHTS;
+	cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+	*((int *)CMSG_DATA(cmsg)) = d->sendrights;
+	cr = d->sendrights;
+	d->sendrights = -1;
+	msg.msg_controllen = cmsg->cmsg_len;
+    }
+    ret = sendmsg(d->fd, &msg, MSG_DONTWAIT | MSG_NOSIGNAL);
+    if(cr >= 0)
+	close(cr);
+    return(ret);
+}
+
 static ssize_t mtwrite(void *cookie, const void *buf, size_t len)
 {
     struct stdiofd *d = cookie;
@@ -66,7 +136,7 @@ static ssize_t mtwrite(void *cookie, const void *buf, size_t len)
     
     while(1) {
 	if(d->sock)
-	    ret = send(d->fd, buf, len, MSG_DONTWAIT | MSG_NOSIGNAL);
+	    ret = mtsend(d, buf, len);
 	else
 	    ret = write(d->fd, buf, len);
 	if((ret < 0) && (errno == EAGAIN)) {
@@ -89,6 +159,10 @@ static int mtclose(void *cookie)
     struct stdiofd *d = cookie;
     
     close(d->fd);
+    if(d->rights >= 0)
+	close(d->rights);
+    if(d->sendrights >= 0)
+	close(d->sendrights);
     free(d);
     return(0);
 }
@@ -112,6 +186,7 @@ FILE *mtstdopen(int fd, int issock, int timeout, char *mode, struct stdiofd **in
     d->fd = fd;
     d->sock = issock;
     d->timeout = timeout;
+    d->rights = d->sendrights = -1;
     if(!(ret = funstdio(d, r?mtread:NULL, w?mtwrite:NULL, NULL, mtclose))) {
 	free(d);
 	return(NULL);
@@ -140,6 +215,7 @@ struct bufio *mtbioopen(int fd, int issock, int timeout, char *mode, struct stdi
     d->fd = fd;
     d->sock = issock;
     d->timeout = timeout;
+    d->rights = d->sendrights = -1;
     if(!(ret = bioopen(d, &ops))) {
 	free(d);
 	return(NULL);

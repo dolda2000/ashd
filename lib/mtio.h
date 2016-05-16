@@ -10,6 +10,7 @@ struct stdiofd {
     int fd;
     int sock;
     int timeout;
+    int rights, sendrights;
 };
 
 int block(int fd, int ev, time_t to);
