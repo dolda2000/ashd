@@ -36,5 +36,6 @@ ssize_t biowrite(struct bufio *bio, const void *data, size_t len);
 ssize_t biowritesome(struct bufio *bio, const void *data, size_t len);
 int bioprintf(struct bufio *bio, const char *format, ...);
 ssize_t biocopysome(struct bufio *dst, struct bufio *src);
+ssize_t biocopybuf(struct bufio *dst, struct bufio *src);
 
 #endif

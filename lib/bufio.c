@@ -309,3 +309,21 @@ ssize_t biocopysome(struct bufio *dst, struct bufio *src)
     src->rh += ret;
     return(ret);
 }
+
+ssize_t biocopybuf(struct bufio *dst, struct bufio *src)
+{
+    ssize_t ret;
+    
+    sizebuf(dst->wbuf, dst->bufhint);
+    if(dst->wbuf.d == dst->wbuf.s) {
+	if(dst->wh > 0) {
+	    memmove(dst->wbuf.b, dst->wbuf.b + dst->wh, dst->wbuf.d -= dst->wh);
+	    dst->wh = 0;
+	}
+    }
+    ret = min(src->rbuf.d - src->rh, dst->wbuf.s - dst->wbuf.d);
+    memcpy(dst->wbuf.b + dst->wbuf.d, src->rbuf.b + src->rh, ret);
+    src->rh += ret;
+    dst->wbuf.d += ret;
+    return(ret);
+}
