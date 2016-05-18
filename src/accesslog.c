@@ -244,6 +244,7 @@ static void filterreq(struct muth *mt, va_list args)
     int pfds[2];
     struct hthead *resp;
     struct bufio *cl, *hd;
+    struct stdiofd *cli, *hdi;
     struct logdata data;
     
     hd = NULL;
@@ -251,10 +252,10 @@ static void filterreq(struct muth *mt, va_list args)
     data = defdata;
     data.req = req;
     gettimeofday(&data.start, NULL);
-    cl = mtbioopen(fd, 1, 600, "r+", NULL);
+    cl = mtbioopen(fd, 1, 600, "r+", &cli);
     if(socketpair(PF_UNIX, SOCK_STREAM, 0, pfds))
 	goto out;
-    hd = mtbioopen(pfds[1], 1, 600, "r+", NULL);
+    hd = mtbioopen(pfds[1], 1, 600, "r+", &hdi);
     if(sendreq(ch, req, pfds[0])) {
 	close(pfds[0]);
 	goto out;
@@ -268,6 +269,8 @@ static void filterreq(struct muth *mt, va_list args)
     shutdown(pfds[1], SHUT_WR);
     if((resp = parseresponseb(hd)) == NULL)
 	goto out;
+    cli->sendrights = hdi->rights;
+    hdi->rights = -1;
     data.resp = resp;
     writerespb(cl, resp);
     bioprintf(cl, "\r\n");
