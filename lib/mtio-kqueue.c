@@ -37,7 +37,7 @@ static struct blocker *blockers;
 struct blocker {
     struct blocker *n, *p, *n2, *p2;
     int fd, reg;
-    int ev;
+    int ev, rev, id;
     time_t to;
     struct muth *th;
 };
@@ -137,26 +137,19 @@ static void remfd(struct blocker *bl)
     bl->reg = 0;
 }
 
-int block(int fd, int ev, time_t to)
+static int addblock(struct blocker *bl)
 {
-    struct blocker *bl;
-    int rv;
-    
-    omalloc(bl);
-    bl->fd = fd;
-    bl->ev = ev;
-    if(to > 0)
-	bl->to = time(NULL) + to;
-    bl->th = current;
-    if((qfd >= 0) && regfd(bl)) {
-	free(bl);
+    if((qfd >= 0) && regfd(bl))
 	return(-1);
-    }
     bl->n = blockers;
     if(blockers)
 	blockers->p = bl;
     blockers = bl;
-    rv = yield();
+    return(0);
+}
+
+static void remblock(struct blocker *bl)
+{
     if(bl->n)
 	bl->n->p = bl->p;
     if(bl->p)
@@ -164,7 +157,51 @@ int block(int fd, int ev, time_t to)
     if(bl == blockers)
 	blockers = bl->n;
     remfd(bl);
-    free(bl);
+}
+
+struct selected mblock(time_t to, int n, struct selected *spec)
+{
+    int i, id;
+    struct blocker bls[n];
+    
+    to = (to > 0)?(time(NULL) + to):0;
+    for(i = 0; i < n; i++) {
+	bls[i] = (struct blocker) {
+	    .fd = spec[i].fd,
+	    .ev = spec[i].ev,
+	    .id = i,
+	    .to = to,
+	    .th = current,
+	};
+	if(addblock(&bls[i])) {
+	    for(i--; i >= 0; i--)
+		remblock(&bls[i]);
+	    return((struct selected){.fd = -1, .ev = -1});
+	}
+    }
+    id = yield();
+    for(i = 0; i < n; i++)
+	remblock(&bls[i]);
+    if(id < 0)
+	return((struct selected){.fd = -1, .ev = -1});
+    return((struct selected){.fd = bls[id].fd, .ev = bls[id].rev});
+}
+
+int block(int fd, int ev, time_t to)
+{
+    struct blocker bl;
+    int rv;
+    
+    bl = (struct blocker) {
+	.fd = fd,
+	.ev = ev,
+	.id = -1,
+	.to = (to > 0)?(time(NULL) + to):0,
+	.th = current,
+    };
+    addblock(&bl);
+    rv = yield();
+    remblock(&bl);
     return(rv);
 }
 
@@ -214,15 +251,27 @@ int ioloop(void)
 	    ev = (evs[i].filter == EVFILT_READ)?EV_READ:EV_WRITE;
 	    for(bl = fdlist[fd]; bl; bl = nbl) {
 		nbl = bl->n2;
-		if(ev & bl->ev)
-		    resume(bl->th, ev);
+		if(ev & bl->ev) {
+		    if(bl->id < 0) {
+			resume(bl->th, ev);
+		    } else {
+			bl->rev = ev;
+			resume(bl->th, bl->id);
+		    }
+		}
 	    }
 	}
 	now = time(NULL);
 	for(bl = blockers; bl; bl = nbl) {
 	    nbl = bl->n;
-	    if((bl->to != 0) && (bl->to <= now))
-		resume(bl->th, 0);
+	    if((bl->to != 0) && (bl->to <= now)) {
+		if(bl->id < 0) {
+		    resume(bl->th, 0);
+		} else {
+		    bl->rev = 0;
+		    resume(bl->th, bl->id);
+		}
+	    }
 	}
     }
     for(bl = blockers; bl; bl = bl->n)
