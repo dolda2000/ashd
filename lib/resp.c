@@ -53,7 +53,7 @@ char *urlquote(char *text)
     bufinit(buf);
     for(; *text; text++) {
 	c = *text;
-	if(!c < 128 && safechars[(int)c])
+	if((c < 128) && safechars[(int)c])
 	    bufadd(buf, *text);
 	else
 	    bprintf(&buf, "%%%02X", (int)c);
