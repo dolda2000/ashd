@@ -162,7 +162,7 @@ void servetcp(struct muth *muth, va_list args)
     tcp.fd = fd;
     tcp.name = name;
     tcp.port = stcp;
-    serve(in, &conn);
+    serve(in, fd, &conn);
 }
 
 static void listenloop(struct muth *muth, va_list args)

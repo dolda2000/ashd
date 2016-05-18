@@ -305,14 +305,57 @@ done:
     return(ret);
 }
 
-void serve(struct bufio *in, struct conn *conn)
+static void passduplex(struct bufio *a, int afd, struct bufio *b, int bfd)
+{
+    struct selected pfd[4], sel;
+    struct bufio *sio;
+    int n, ev;
+    
+    while(!bioeof(a) && !bioeof(b)) {
+	biocopybuf(b, a);
+	biocopybuf(a, b);
+	n = 0;
+	if(!a->eof) {
+	    ev = 0;
+	    if(biorspace(a))
+		ev |= EV_READ;
+	    if(biowdata(a))
+		ev |= EV_WRITE;
+	    if(ev)
+		pfd[n++] = (struct selected){.fd = afd, .ev = ev};
+	}
+	if(!b->eof) {
+	    ev = 0;
+	    if(!b->eof && biorspace(b))
+		ev |= EV_READ;
+	    if(biowdata(b))
+		ev |= EV_WRITE;
+	    if(ev)
+		pfd[n++] = (struct selected){.fd = bfd, .ev = ev};
+	}
+	sel = mblock(600, n, pfd);
+	if(sel.fd == afd)
+	    sio = a;
+	else if(sel.fd == bfd)
+	    sio = b;
+	else
+	    break;
+	if((sel.ev & EV_READ) && (biofillsome(sio) < 0))
+	    break;
+	if((sel.ev & EV_WRITE) && (bioflushsome(sio) < 0))
+	    break;
+    }
+}
+
+void serve(struct bufio *in, int infd, struct conn *conn)
 {
     int pfds[2];
-    struct bufio *out;
+    struct bufio *out, *dout;
+    struct stdiofd *outi;
     struct hthead *req, *resp;
     char *hd, *id;
     off_t dlen;
-    int keep;
+    int keep, duplex;
     
     id = connid();
     out = NULL;
@@ -335,7 +378,7 @@ void serve(struct bufio *in, struct conn *conn)
 	if(sendreq(plex, req, pfds[0]))
 	    break;
 	close(pfds[0]);
-	out = mtbioopen(pfds[1], 1, 600, "r+", NULL);
+	out = mtbioopen(pfds[1], 1, 600, "r+", &outi);
 
 	if(getheader(req, "content-type") != NULL) {
 	    if((hd = getheader(req, "content-length")) != NULL) {
@@ -363,8 +406,20 @@ void serve(struct bufio *in, struct conn *conn)
 	
 	if(!getheader(resp, "server"))
 	    headappheader(resp, "Server", sprintf3("ashd/%s", VERSION));
+	duplex = hasheader(resp, "x-ash-switch", "duplex");
+	trimx(resp);
 
-	if(!strcasecmp(req->ver, "HTTP/1.0")) {
+	if(duplex) {
+	    if(outi->rights < 0)
+		break;
+	    writerespb(in, resp);
+	    bioprintf(in, "\r\n");
+	    dout = mtbioopen(outi->rights, 1, 600, "r+", NULL);
+	    passduplex(in, infd, dout, outi->rights);
+	    outi->rights = -1;
+	    bioclose(dout);
+	    break;
+	} else if(!strcasecmp(req->ver, "HTTP/1.0")) {
 	    if(!strcasecmp(req->method, "head")) {
 		keep = http10keep(req, resp);
 		writerespb(in, resp);

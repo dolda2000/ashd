@@ -344,7 +344,7 @@ static void servessl(struct muth *muth, va_list args)
     ssl.name = name;
     ssl.sess = sess;
     bufinit(ssl.in);
-    serve(bioopen(&ssl, &iofuns), &conn);
+    serve(bioopen(&ssl, &iofuns), fd, &conn);
     
 out:
     gnutls_deinit(sess);
