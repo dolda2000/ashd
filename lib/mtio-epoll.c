@@ -166,7 +166,7 @@ struct selected mblock(time_t to, int n, struct selected *spec)
 	    .th = current,
 	};
 	if(addblock(&bls[i])) {
-	    for(i--; i >= 0; i++)
+	    for(i--; i >= 0; i--)
 		remblock(&bls[i]);
 	    return((struct selected){.fd = -1, .ev = -1});
 	}
