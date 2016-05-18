@@ -152,7 +152,7 @@ static off_t passdata(struct bufio *in, struct bufio *out, off_t max)
 
 static int recvchunks(struct bufio *in, struct bufio *out)
 {
-    size_t read, chlen;
+    ssize_t read, chlen;
     int c, r;
     
     while(1) {
