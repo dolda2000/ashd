@@ -32,12 +32,6 @@
 #include <mt.h>
 #include <mtio.h>
 
-struct stdiofd {
-    int fd;
-    int sock;
-    int timeout;
-};
-
 static ssize_t mtread(void *cookie, void *buf, size_t len)
 {
     struct stdiofd *d = cookie;
@@ -98,7 +92,7 @@ static int mtclose(void *cookie)
     return(0);
 }
 
-FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
+FILE *mtstdopen(int fd, int issock, int timeout, char *mode, struct stdiofd **infop)
 {
     struct stdiofd *d;
     FILE *ret;
@@ -117,11 +111,13 @@ FILE *mtstdopen(int fd, int issock, int timeout, char *mode)
     d->fd = fd;
     d->sock = issock;
     d->timeout = timeout;
-    ret = funstdio(d, r?mtread:NULL, w?mtwrite:NULL, NULL, mtclose);
-    if(!ret)
+    if(!(ret = funstdio(d, r?mtread:NULL, w?mtwrite:NULL, NULL, mtclose))) {
 	free(d);
-    else
-	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+	return(NULL);
+    }
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+    if(infop)
+	*infop = d;
     return(ret);
 }
 

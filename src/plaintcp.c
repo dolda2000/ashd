@@ -156,7 +156,7 @@ void servetcp(struct muth *muth, va_list args)
     
     memset(&conn, 0, sizeof(conn));
     memset(&tcp, 0, sizeof(tcp));
-    in = mtstdopen(fd, 1, 60, "r+");
+    in = mtstdopen(fd, 1, 60, "r+", NULL);
     conn.pdata = &tcp;
     conn.initreq = initreq;
     tcp.fd = fd;

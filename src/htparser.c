@@ -328,7 +328,7 @@ void serve(FILE *in, struct conn *conn)
 	if(sendreq(plex, req, pfds[0]))
 	    break;
 	close(pfds[0]);
-	out = mtstdopen(pfds[1], 1, 600, "r+");
+	out = mtstdopen(pfds[1], 1, 600, "r+", NULL);
 
 	if(getheader(req, "content-type") != NULL) {
 	    if((hd = getheader(req, "content-length")) != NULL) {

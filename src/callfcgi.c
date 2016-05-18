@@ -690,12 +690,12 @@ static void serve(struct muth *muth, va_list args)
     char buf[8192];
     
     sfd = reconn();
-    is = mtstdopen(fd, 1, 60, "r+");
-    os = mtstdopen(sfd, 1, 600, "r+");
+    is = mtstdopen(fd, 1, 60, "r+", NULL);
+    os = mtstdopen(sfd, 1, 600, "r+", NULL);
     
     outi = NULL;
     mtiopipe(&outi, &outo); mtiopipe(&erri, &erro);
-    mustart(outplex, mtstdopen(dup(sfd), 1, 600, "r+"), outo, FCGI_STDOUT, erro, FCGI_STDERR, NULL);
+    mustart(outplex, mtstdopen(dup(sfd), 1, 600, "r+", NULL), outo, FCGI_STDOUT, erro, FCGI_STDERR, NULL);
     mustart(errhandler, erri);
     
     if(begreq(os, 1))
