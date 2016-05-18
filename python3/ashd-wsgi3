@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import sys, os, getopt, socket, logging, time, locale, collections, signal
-import ashd.util, ashd.serve
+import ashd.util, ashd.serve, ashd.htlib
 try:
     import pdm.srv
 except:
@@ -157,6 +157,7 @@ class request(ashd.serve.wsgirequest):
     def __init__(self, *, bkreq, **kw):
         super().__init__(**kw)
         self.bkreq = bkreq.dup()
+        self.sendrights = None
 
     def mkenv(self):
         return mkenv(self.bkreq)
@@ -168,6 +169,13 @@ class request(ashd.serve.wsgirequest):
         return self.bkreq.bsk.fileno()
 
     def writehead(self, status, headers):
+        headers = list(headers)
+        for header in headers:
+            nm, val = header
+            if nm.lower() == "x-ash-send-rights":
+                self.sendrights = val
+                headers.remove(header)
+                break
         w = self.buffer.extend
         w(b"HTTP/1.1 " + recode(status) + b"\n")
         for nm, val in headers:
@@ -176,13 +184,22 @@ class request(ashd.serve.wsgirequest):
 
     def flush(self):
         try:
-            ret = self.bkreq.bsk.send(self.buffer, socket.MSG_DONTWAIT)
+            if self.sendrights is not None:
+                ret = ashd.htlib.sendfd(self.bkreq.bsk.fileno(), self.sendrights.fileno(), self.buffer)
+                self.sendrights.close()
+                self.sendrights = None
+            else:
+                ret = self.bkreq.bsk.send(self.buffer, socket.MSG_DONTWAIT)
             self.buffer[:ret] = b""
         except IOError:
             raise ashd.serve.closed()
 
     def close(self):
-        self.bkreq.close()
+        try:
+            self.bkreq.close()
+        finally:
+            if self.sendrights is not None:
+                self.sendrights.close()
 
 def handle(req):
     reqhandler.handle(request(bkreq=req, handler=reqhandler))
