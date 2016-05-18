@@ -13,6 +13,11 @@ struct stdiofd {
     int rights, sendrights;
 };
 
+struct selected {
+    int fd, ev;
+};
+
+struct selected mblock(time_t to, int n, struct selected *spec);
 int block(int fd, int ev, time_t to);
 int ioloop(void);
 void exitioloop(int status);
