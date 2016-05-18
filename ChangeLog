@@ -1,8 +1,12 @@
 Version 0.13:
 
 	* FreeBSD support.
-	* Improved dirplex/patplex configuration.
+	* Support upgrading connections to full-duplex, for eg. websockets.
+	* More useful dirplex/patplex configuration options.
+	* Improved behavior under overload conditions.
+	* Expanded accesslog's logging capabilities.
 	* Added httrcall.
+	* Quite a slew of random bugfixes and implementation improvements.
 
 Version 0.12:
 
