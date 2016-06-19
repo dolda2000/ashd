@@ -333,7 +333,8 @@ static void passduplex(struct bufio *a, int afd, struct bufio *b, int bfd)
 	    if(ev)
 		pfd[n++] = (struct selected){.fd = bfd, .ev = ev};
 	}
-	sel = mblock(600, n, pfd);
+	if((sel = mblock(600, n, pfd)).ev == 0)
+	    break;
 	if(sel.fd == afd)
 	    sio = a;
 	else if(sel.fd == bfd)
