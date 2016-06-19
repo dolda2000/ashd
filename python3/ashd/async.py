@@ -165,12 +165,25 @@ class epoller(object):
 def watcher():
     return epoller()
 
-class sockbuffer(object):
-    def __init__(self, sk):
-        self.sk = sk
+class channel(object):
+    readable = False
+    writable = False
+
+    def __init__(self):
+        self.watcher = None
+
+    def fileno(self):
+        raise NotImplementedError("fileno()")
+
+    def close(self):
+        pass
+
+class sockbuffer(channel):
+    def __init__(self, socket, **kwargs):
+        super().__init__(**kwargs)
+        self.sk = socket
         self.eof = False
         self.obuf = bytearray()
-        self.watcher = None
 
     def fileno(self):
         return self.sk.fileno()
@@ -211,8 +224,9 @@ class sockbuffer(object):
             self.obuf[:] = b""
             self.eof = True
 
-class callbuffer(object):
-    def __init__(self):
+class callbuffer(channel):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.queue = []
         self.rp, self.wp = os.pipe()
         self.lock = threading.Lock()
