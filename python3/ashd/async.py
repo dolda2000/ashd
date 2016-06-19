@@ -26,7 +26,7 @@ class epoller(object):
     def exception(self, ch, *exc):
         self.remove(ch)
         if self.exc_handler is None:
-            traceback.print_exception(exc)
+            traceback.print_exception(*exc)
         else:
             self.exc_handler(ch, *exc)
 
