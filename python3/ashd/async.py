@@ -3,12 +3,15 @@ import sys, os, errno, threading, select, traceback
 class epoller(object):
     exc_handler = None
 
-    def __init__(self):
+    def __init__(self, check=None):
         self.registered = {}
         self.lock = threading.RLock()
         self.ep = None
         self.th = None
         self.stopped = False
+        self.loopcheck = set()
+        if check is not None:
+            self.loopcheck.add(check)
         self._daemon = True
 
     @staticmethod
@@ -56,6 +59,8 @@ class epoller(object):
                 self.ep = ep
 
             while self.registered:
+                for ck in self.loopcheck:
+                    ck(self)
                 if self.stopped:
                     self._closeall()
                     break
@@ -278,8 +283,7 @@ class callbuffer(channel):
                 self.wp = -1
 
 def currentwatcher(io, current):
-    def run():
-        while current:
-            current.wait()
-        io.stop()
-    threading.Thread(target=run, name="Current watcher").start()
+    def check(io):
+        if not current:
+            io.stop()
+    io.loopcheck.add(check)
