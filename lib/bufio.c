@@ -289,11 +289,11 @@ int bioprintf(struct bufio *bio, const char *format, ...)
 	va_start(args, format);
 	ret = vsnprintf(bio->wbuf.b + bio->wbuf.d, bio->wbuf.s - bio->wbuf.d, format, args);
 	va_end(args);
-	if(ret <= bio->wbuf.s - bio->wbuf.d) {
+	if(ret < bio->wbuf.s - bio->wbuf.d) {
 	    bio->wbuf.d += ret;
 	    return(0);
 	}
-	if(biowensure(bio, ret) < 0)
+	if(biowensure(bio, ret + 1) < 0)
 	    return(-1);
     }
 }
