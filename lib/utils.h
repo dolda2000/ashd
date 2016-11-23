@@ -8,8 +8,8 @@
 #define max(a, b) (((b) > (a))?(b):(a))
 #define min(a, b) (((b) < (a))?(b):(a))
 
-#define smalloc(size) ({void *__result__; ((__result__ = malloc(size)) == NULL)?({exit(-1); (void *)0;}):__result__;})
-#define srealloc(ptr, size) ({void *__result__; ((__result__ = realloc((ptr), (size))) == NULL)?({exit(-1); (void *)0;}):__result__;})
+#define smalloc(size) ({void *__result__; ((__result__ = malloc(size)) == NULL)?({abort(); (void *)0;}):__result__;})
+#define srealloc(ptr, size) ({void *__result__; ((__result__ = realloc((ptr), (size))) == NULL)?({abort(); (void *)0;}):__result__;})
 #define szmalloc(size) memset(smalloc(size), 0, size)
 #define sstrdup(str) ({const char *__strbuf__ = (str); strcpy(smalloc(strlen(__strbuf__) + 1), __strbuf__);})
 #define omalloc(o) ((o) = szmalloc(sizeof(*(o))))
