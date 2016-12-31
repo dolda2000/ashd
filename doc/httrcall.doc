@@ -1,0 +1,47 @@
+httrcall(1)
+==========
+
+NAME
+----
+httrcall - Call transient ashd handlers
+
+SYNOPSIS
+--------
+*httrcall* [*-h*] [*-l* 'LIMIT'] 'PROGRAM' ['ARGS'...]
+
+DESCRIPTION
+-----------
+
+*httrcall* is a persistent handler, as defined in *ashd*(7), but works
+by starting a specified transient handler for every incoming
+request. Thus, it can be used to run transient handlers where normally
+only persistent handlers are accepted, such as for the program
+specified to *accesslog*(1), *htextauth*(1) or even *htparser*(1).
+
+The transient handler to call is specified by the 'PROGRAM'
+argument. Any 'ARGS' given are prepended to the usual arguments for
+transient handlers, as described in *ashd*(7).
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-l* 'LIMIT'::
+
+	If specified, only 'LIMIT' copies of the handler program are
+	allowed to run at one time. If furter request are received
+	while 'LIMIT' children are running, *httrcall* will block,
+	waiting for one to exit before processing further requests. If
+	no *-l* option is specified, *httrcall* imposes no limit on
+	the number of children that may run.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*ashd*(7)

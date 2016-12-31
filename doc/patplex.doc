@@ -35,12 +35,16 @@ CONFIGURATION
 
 In addition to the 'CONFIGFILE' specified on the command-line,
 *patplex* also attempts to find and read a global configuration file
-called `patplex.rc`, unless the *-N* option is given. It looks in all
-directories named by the *PATH* environment variable, appended with
-`../etc`. For example, then, if *PATH* is
-`/usr/local/bin:/bin:/usr/bin`, the directories `/usr/local/etc`,
-`/etc` and `/usr/etc` are searched for `patplex.rc`, in that
-order. Only the first file found is used, should there exist several.
+called `patplex.rc`, unless the *-N* option is given. It looks in
+`$HOME/.ashd/etc`, and then in all directories named by the *PATH*
+environment variable, appended with `../etc/ashd`. For example, then,
+if *PATH* is `/usr/local/bin:/bin:/usr/bin`, the directories
+`$HOME/.ashd/etc`, `/usr/local/etc/ashd`, `/etc/ashd` and
+`/usr/etc/ashd` are searched for `patplex.rc`, in that order. Only the
+first file found is used, should there exist several. If the given
+'CONFIGFILE' contains any slashes, it is opened by that exact
+name. Otherwise, it is searched for in the same manner as the global
+configuration file.
 
 Should the global and the given configuration files conflict, the
 directives from the given file take precedence.
@@ -63,14 +67,15 @@ rules are recognized:
 	matched case-independently. If the *match* stanza as a whole
 	matches and contains no *restpat* line (as described below),
 	the rest string of the request is replaced by the remainder of
-	the rest string after the portion that was matched by 'REGEX'.
+	the rest string after the portion that was matched by
+	'REGEX'. See also URL UNQUOTING, below.
 
 *url* 'REGEX' 'FLAGS'::
 
 	'REGEX' must be an extended regular expression. The rule is
 	considered to match if 'REGEX' matches the raw URL of the
 	request. If 'FLAGS' contain the character `i`, 'REGEX' is
-	matched case-independently.
+	matched case-independently. See also URL UNQUOTING, below.
 
 *method* 'REGEX' 'FLAGS'::
 
@@ -150,6 +155,20 @@ optional lines:
 
 If no *match* stanza matches, a 404 response is returned to the
 client.
+
+URL UNQUOTING
+-------------
+
+If the 'FLAGS' of a *point* or *url* rule contain the character `q`,
+then the rule's pattern will be matched against a copy of the input
+string where URL percent-escapes have been decoded so that, for
+example, the regular expression `^~` will match an input string that
+begins with either `~`, `%7E` or `%7e`.
+
+Even if such percent-escapes were decoded, however, the original
+version of the string will be used for any *restpat* expansion,
+regardlessly of whether the escapes were unquoted inside or outside
+the matched part of the string.
 
 SIGNALS
 -------

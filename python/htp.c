@@ -32,18 +32,25 @@ static PyObject *p_recvfd(PyObject *self, PyObject *args)
     fd = 0;
     if(!PyArg_ParseTuple(args, "|i", &fd))
 	return(NULL);
-    Py_BEGIN_ALLOW_THREADS;
-    ret = recvfd(fd, &data, &dlen);
-    Py_END_ALLOW_THREADS;
-    if(ret < 0) {
-	if(errno == 0)
-	    return(Py_BuildValue("OO", Py_None, Py_None));
-	PyErr_SetFromErrno(PyExc_OSError);
-	return(NULL);
+    while(1) {
+	Py_BEGIN_ALLOW_THREADS;
+	ret = recvfd(fd, &data, &dlen);
+	Py_END_ALLOW_THREADS;
+	if(ret < 0) {
+	    if(errno == 0)
+		return(Py_BuildValue("OO", Py_None, Py_None));
+	    if(errno == EINTR) {
+		if(PyErr_CheckSignals())
+		    return(NULL);
+		continue;
+	    }
+	    PyErr_SetFromErrno(PyExc_OSError);
+	    return(NULL);
+	}
+	ro = Py_BuildValue("Ni", PyString_FromStringAndSize(data, dlen), ret);
+	free(data);
+	return(ro);
     }
-    ro = Py_BuildValue("Ni", PyString_FromStringAndSize(data, dlen), ret);
-    free(data);
-    return(ro);
 }
 
 static PyObject *p_sendfd(PyObject *self, PyObject *args)
@@ -57,14 +64,21 @@ static PyObject *p_sendfd(PyObject *self, PyObject *args)
 	PyErr_SetString(PyExc_TypeError, "datagram must be a string");
 	return(NULL);
     }
-    Py_BEGIN_ALLOW_THREADS;
-    ret = sendfd(sock, fd, PyString_AsString(data), PyString_Size(data));
-    Py_END_ALLOW_THREADS;
-    if(ret < 0) {
-	PyErr_SetFromErrno(PyExc_OSError);
-	return(NULL);
+    while(1) {
+	Py_BEGIN_ALLOW_THREADS;
+	ret = sendfd(sock, fd, PyString_AsString(data), PyString_Size(data));
+	Py_END_ALLOW_THREADS;
+	if(ret < 0) {
+	    if(errno == EINTR) {
+		if(PyErr_CheckSignals())
+		    return(NULL);
+		continue;
+	    }
+	    PyErr_SetFromErrno(PyExc_OSError);
+	    return(NULL);
+	}
+	Py_RETURN_NONE;
     }
-    Py_RETURN_NONE;
 }
 
 static PyMethodDef methods[] = {

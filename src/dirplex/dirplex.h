@@ -9,6 +9,7 @@
 
 #define PT_FILE 0
 #define PT_DIR 1
+#define PT_NOTFOUND 2
 
 struct config {
     struct config *next, *prev;
@@ -17,8 +18,8 @@ struct config {
     struct child *children;
     struct pattern *patterns;
     char **index;
-    char *capture;
-    int caproot;
+    char *capture, *reparse;
+    int caproot, parsecomb;
 };
 
 struct rule {
@@ -45,7 +46,7 @@ struct config *readconfig(char *file);
 struct config *getconfig(char *path);
 struct config **getconfigs(char *file);
 struct child *findchild(char *file, char *name, struct config **cf);
-struct pattern *findmatch(char *file, int trydefault, int dir);
+struct pattern *findmatch(char *file, int trydefault, int type);
 void modheaders(struct hthead *req, struct pattern *pat);
 
 extern time_t now;

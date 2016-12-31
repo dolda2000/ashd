@@ -37,7 +37,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <sys/signal.h>
+#include <signal.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -45,6 +45,7 @@
 #endif
 #include <utils.h>
 #include <req.h>
+#include <resp.h>
 #include <log.h>
 #include <mt.h>
 #include <mtio.h>
@@ -123,9 +124,16 @@ static char *mkanonid(void)
     return(tmpl);
 }
 
+static void setupchild(void)
+{
+    /* PHP appears to not expect to inherit SIGCHLD set to SIG_IGN, so
+     * reset it for it. */
+    signal(SIGCHLD, SIG_DFL);
+}
+
 static void startlisten(void)
 {
-    int i, fd;
+    int fd;
     struct addrinfo *ai, *cai;
     char *unpath;
     struct sockaddr_un unm;
@@ -203,9 +211,9 @@ static void startlisten(void)
 	exit(1);
     }
     if(child == 0) {
+	setupchild();
 	dup2(fd, 0);
-	for(i = 3; i < FD_SETSIZE; i++)
-	    close(i);
+	close(fd);
 	execvp(*progspec, progspec);
 	flog(LOG_ERR, "callfcgi: %s: %s", *progspec, strerror(errno));
 	_exit(127);
@@ -215,15 +223,14 @@ static void startlisten(void)
 
 static void startnolisten(void)
 {
-    int i, fd;
+    int fd;
     
     if((child = fork()) < 0) {
 	flog(LOG_ERR, "could not fork: %s", strerror(errno));
 	exit(1);
     }
     if(child == 0) {
-	for(i = 3; i < FD_SETSIZE; i++)
-	    close(i);
+	setupchild();
 	if((fd = open("/dev/null", O_RDONLY)) < 0) {
 	    flog(LOG_ERR, "/dev/null: %s", strerror(errno));
 	    _exit(127);
@@ -466,8 +473,8 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
 	pi = sprintf2("/%s", tmp = pi);
 	free(tmp);
     }
-    bufaddenv(dst, "PATH_INFO", pi);
-    bufaddenv(dst, "SCRIPT_NAME", url);
+    bufaddenv(dst, "PATH_INFO", "%s", pi);
+    bufaddenv(dst, "SCRIPT_NAME", "%s", url);
     bufaddenv(dst, "QUERY_STRING", "%s", qp?qp:"");
     free(pi);
     free(url);
@@ -509,46 +516,6 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
     }
 }
 
-static char *defstatus(int code)
-{
-    if(code == 200)
-	return("OK");
-    else if(code == 201)
-	return("Created");
-    else if(code == 202)
-	return("Accepted");
-    else if(code == 204)
-	return("No Content");
-    else if(code == 300)
-	return("Multiple Choices");
-    else if(code == 301)
-	return("Moved Permanently");
-    else if(code == 302)
-	return("Found");
-    else if(code == 303)
-	return("See Other");
-    else if(code == 304)
-	return("Not Modified");
-    else if(code == 307)
-	return("Moved Temporarily");
-    else if(code == 400)
-	return("Bad Request");
-    else if(code == 401)
-	return("Unauthorized");
-    else if(code == 403)
-	return("Forbidden");
-    else if(code == 404)
-	return("Not Found");
-    else if(code == 500)
-	return("Internal Server Error");
-    else if(code == 501)
-	return("Not Implemented");
-    else if(code == 503)
-	return("Service Unavailable");
-    else
-	return("Unknown status");
-}
-
 static struct hthead *parseresp(FILE *in)
 {
     struct hthead *resp;
@@ -567,7 +534,7 @@ static struct hthead *parseresp(FILE *in)
 	    resp->msg = sstrdup(p);
 	} else {
 	    resp->code = atoi(st);
-	    resp->msg = sstrdup(defstatus(resp->code));
+	    resp->msg = sstrdup(httpdefstatus(resp->code));
 	}
 	headrmheader(resp, "Status");
     } else if(getheader(resp, "Location")) {
@@ -608,34 +575,25 @@ static int sendrec(FILE *out, int type, int rid, char *data, size_t dlen)
     return(0);
 }
 
-#define fgetc2(f) ({int __c__ = fgetc(f); if(__c__ == EOF) return(-1); __c__;})
-
 static int recvrec(FILE *in, int *type, int *rid, char **data, size_t *dlen)
 {
-    int b1, b2, pl;
+    unsigned char header[8];
+    int tl;
     
-    if(fgetc2(in) != 1)
+    if(fread(header, 1, 8, in) != 8)
 	return(-1);
-    *type = fgetc2(in);
-    b1 = fgetc2(in);
-    b2 = fgetc2(in);
-    *rid = (b1 << 8) | b2;
-    b1 = fgetc2(in);
-    b2 = fgetc2(in);
-    *dlen = (b1 << 8) | b2;
-    pl = fgetc2(in);
-    if(fgetc2(in) != 0)
+    if(header[0] != 1)
 	return(-1);
-    *data = smalloc(max(*dlen, 1));
-    if(fread(*data, 1, *dlen, in) != *dlen) {
+    *type = header[1];
+    *rid  = (header[2] << 8) | header[3];
+    *dlen = (header[4] << 8) | header[5];
+    tl = *dlen + header[6];
+    if(header[7] != 0)
+	return(-1);
+    *data = smalloc(max(tl, 1));
+    if(fread(*data, 1, tl, in) != tl) {
 	free(*data);
 	return(-1);
-    }
-    for(; pl > 0; pl--) {
-	if(fgetc(in) == EOF) {
-	    free(*data);
-	    return(-1);
-	}
     }
     return(0);
 }
@@ -645,15 +603,6 @@ static int begreq(FILE *out, int rid)
     char rec[] = {0, 1, 0, 0, 0, 0, 0, 0};
     
     return(sendrec(out, FCGI_BEGIN_REQUEST, rid, rec, 8));
-}
-
-static void mtiopipe(FILE **read, FILE **write)
-{
-    int fds[2];
-    
-    pipe(fds);
-    *read = mtstdopen(fds[0], 0, 600, "r");
-    *write = mtstdopen(fds[1], 0, 600, "w");
 }
 
 static void outplex(struct muth *muth, va_list args)
@@ -741,12 +690,12 @@ static void serve(struct muth *muth, va_list args)
     char buf[8192];
     
     sfd = reconn();
-    is = mtstdopen(fd, 1, 60, "r+");
-    os = mtstdopen(sfd, 1, 600, "r+");
+    is = mtstdopen(fd, 1, 60, "r+", NULL);
+    os = mtstdopen(sfd, 1, 600, "r+", NULL);
     
     outi = NULL;
     mtiopipe(&outi, &outo); mtiopipe(&erri, &erro);
-    mustart(outplex, mtstdopen(dup(sfd), 1, 600, "r+"), outo, FCGI_STDOUT, erro, FCGI_STDERR, NULL);
+    mustart(outplex, mtstdopen(dup(sfd), 1, 600, "r+", NULL), outo, FCGI_STDOUT, erro, FCGI_STDERR, NULL);
     mustart(errhandler, erri);
     
     if(begreq(os, 1))
@@ -815,7 +764,6 @@ static void sigign(int sig)
 static void sigexit(int sig)
 {
     shutdown(0, SHUT_RDWR);
-    exit(0);
 }
 
 static void usage(FILE *out)
@@ -859,7 +807,7 @@ int main(int argc, char **argv)
     signal(SIGINT, sigexit);
     signal(SIGTERM, sigexit);
     mustart(listenloop, 0);
-    atexit(killcuraddr);
     ioloop();
+    killcuraddr();
     return(0);
 }

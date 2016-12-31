@@ -6,9 +6,23 @@
 #define EV_READ 1
 #define EV_WRITE 2
 
+struct stdiofd {
+    int fd;
+    int sock;
+    int timeout;
+    int rights, sendrights;
+};
+
+struct selected {
+    int fd, ev;
+};
+
+struct selected mblock(time_t to, int n, struct selected *spec);
 int block(int fd, int ev, time_t to);
 int ioloop(void);
 void exitioloop(int status);
-FILE *mtstdopen(int fd, int issock, int timeout, char *mode);
+FILE *mtstdopen(int fd, int issock, int timeout, char *mode, struct stdiofd **infop);
+struct bufio *mtbioopen(int fd, int issock, int timeout, char *mode, struct stdiofd **infop);
+void mtiopipe(FILE **read, FILE **write);
 
 #endif

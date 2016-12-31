@@ -21,7 +21,7 @@
 #include <time.h>
 #include <fcntl.h>
 #include <string.h>
-#include <sys/epoll.h>
+#include <sys/event.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -38,33 +38,20 @@ struct blocker {
     struct blocker *n, *p, *n2, *p2;
     int fd, reg;
     int ev, rev, id;
-    int thpos;
     time_t to;
     struct muth *th;
 };
 
-struct timeentry {
-    time_t to;
-    struct blocker *bl;
-};
-
-static int epfd = -1, fdln = 0;
+static int qfd = -1, fdln = 0;
 static int exitstatus;
 static struct blocker **fdlist;
-static typedbuf(struct timeentry) timeheap;
 
 static int regfd(struct blocker *bl)
 {
     struct blocker *o;
-    struct epoll_event evd;
+    int prev;
+    struct kevent evd;
     
-    memset(&evd, 0, sizeof(evd));
-    evd.events = 0;
-    if(bl->ev & EV_READ)
-	evd.events |= EPOLLIN;
-    if(bl->ev & EV_WRITE)
-	evd.events |= EPOLLOUT;
-    evd.data.fd = bl->fd;
     if(bl->fd >= fdln) {
 	if(fdlist) {
 	    fdlist = srealloc(fdlist, sizeof(*fdlist) * (bl->fd + 1));
@@ -74,22 +61,29 @@ static int regfd(struct blocker *bl)
 	    fdlist = szmalloc(sizeof(*fdlist) * (fdln = (bl->fd + 1)));
 	}
     }
-    if(fdlist[bl->fd] == NULL) {
-	if(epoll_ctl(epfd, EPOLL_CTL_ADD, bl->fd, &evd)) {
+    for(prev = 0, o = fdlist[bl->fd]; o; o = o->n2)
+	prev |= o->ev;
+    if((bl->ev & EV_READ) && !(prev & EV_READ)) {
+	evd = (struct kevent) {
+	    .flags = EV_ADD,
+	    .ident = bl->fd,
+	    .filter = EVFILT_READ,
+	};
+	if(kevent(qfd, &evd, 1, NULL, 0, NULL) < 0) {
 	    /* XXX?! Whatever to do, really? */
-	    flog(LOG_ERR, "epoll_add on fd %i: %s", bl->fd, strerror(errno));
+	    flog(LOG_ERR, "kevent(EV_ADD, EVFILT_READ) on fd %i: %s", bl->fd, strerror(errno));
 	    return(-1);
 	}
-    } else {
-	for(o = fdlist[bl->fd]; o; o = o->n2) {
-	    if(o->ev & EV_READ)
-		evd.events |= EPOLLIN;
-	    if(o->ev & EV_WRITE)
-		evd.events |= EPOLLOUT;
-	}
-	if(epoll_ctl(epfd, EPOLL_CTL_MOD, bl->fd, &evd)) {
+    }
+    if((bl->ev & EV_WRITE) && !(prev & EV_WRITE)) {
+	evd = (struct kevent) {
+	    .flags = EV_ADD,
+	    .ident = bl->fd,
+	    .filter = EVFILT_WRITE,
+	};
+	if(kevent(qfd, &evd, 1, NULL, 0, NULL) < 0) {
 	    /* XXX?! Whatever to do, really? */
-	    flog(LOG_ERR, "epoll_mod on fd %i: %s", bl->fd, strerror(errno));
+	    flog(LOG_ERR, "kevent(EV_ADD, EVFILT_WRITE) on fd %i: %s", bl->fd, strerror(errno));
 	    return(-1);
 	}
     }
@@ -105,7 +99,8 @@ static int regfd(struct blocker *bl)
 static void remfd(struct blocker *bl)
 {
     struct blocker *o;
-    struct epoll_event evd;
+    struct kevent evd;
+    int left;
     
     if(!bl->reg)
 	return;
@@ -115,108 +110,51 @@ static void remfd(struct blocker *bl)
 	bl->p2->n2 = bl->n2;
     if(bl == fdlist[bl->fd])
 	fdlist[bl->fd] = bl->n2;
-    if(fdlist[bl->fd] == NULL) {
-	if(epoll_ctl(epfd, EPOLL_CTL_DEL, bl->fd, NULL))
-	    flog(LOG_ERR, "epoll_del on fd %i: %s", bl->fd, strerror(errno));
-    } else {
-	memset(&evd, 0, sizeof(evd));
-	evd.events = 0;
-	evd.data.fd = bl->fd;
-	for(o = fdlist[bl->fd]; o; o = o->n2) {
-	    if(o->ev & EV_READ)
-		evd.events |= EPOLLIN;
-	    if(o->ev & EV_WRITE)
-		evd.events |= EPOLLOUT;
-	}
-	if(epoll_ctl(epfd, EPOLL_CTL_MOD, bl->fd, &evd)) {
+    for(left = 0, o = fdlist[bl->fd]; o; o = o->n2)
+	left |= o->ev;
+    if((bl->ev & EV_READ) && !(left & EV_READ)) {
+	evd = (struct kevent) {
+	    .flags = EV_DELETE,
+	    .ident = bl->fd,
+	    .filter = EVFILT_READ,
+	};
+	if(kevent(qfd, &evd, 1, NULL, 0, NULL) < 0) {
 	    /* XXX?! Whatever to do, really? */
-	    flog(LOG_ERR, "epoll_mod on fd %i: %s", bl->fd, strerror(errno));
+	    flog(LOG_ERR, "kevent(EV_DELETE, EVFILT_READ) on fd %i: %s", bl->fd, strerror(errno));
+	}
+    }
+    if((bl->ev & EV_WRITE) && !(left & EV_WRITE)) {
+	evd = (struct kevent) {
+	    .flags = EV_DELETE,
+	    .ident = bl->fd,
+	    .filter = EVFILT_WRITE,
+	};
+	if(kevent(qfd, &evd, 1, NULL, 0, NULL) < 0) {
+	    /* XXX?! Whatever to do, really? */
+	    flog(LOG_ERR, "kevent(EV_DELETE, EVFILT_WRITE) on fd %i: %s", bl->fd, strerror(errno));
 	}
     }
     bl->reg = 0;
 }
 
-static void thraise(struct timeentry ent, int n)
-{
-    int p;
-    
-    while(n > 0) {
-	p = (n - 1) >> 1;
-	if(timeheap.b[p].to <= ent.to)
-	    break;
-	timeheap.b[n] = timeheap.b[p];
-	timeheap.b[n].bl->thpos = n;
-	n = p;
-    }
-    timeheap.b[n] = ent;
-    ent.bl->thpos = n;
-}
-
-static void thlower(struct timeentry ent, int n)
-{
-    int c;
-    
-    while(1) {
-	c = (n << 1) + 1;
-	if(c >= timeheap.d)
-	    break;
-	if((c + 1 < timeheap.d) && (timeheap.b[c + 1].to < timeheap.b[c].to))
-	    c = c + 1;
-	if(timeheap.b[c].to > ent.to)
-	    break;
-	timeheap.b[n] = timeheap.b[c];
-	timeheap.b[n].bl->thpos = n;
-	n = c;
-    }
-    timeheap.b[n] = ent;
-    ent.bl->thpos = n;
-}
-
-static void addtimeout(struct blocker *bl, time_t to)
-{
-    sizebuf(timeheap, ++timeheap.d);
-    thraise((struct timeentry){.to = to, .bl = bl}, timeheap.d - 1);
-}
-
-static void deltimeout(struct blocker *bl)
-{
-    struct timeentry ent;
-    int n;
-    
-    if(bl->thpos == timeheap.d - 1) {
-	timeheap.d--;
-	return;
-    }
-    n = bl->thpos;
-    ent = timeheap.b[--timeheap.d];
-    if((n > 0) && (timeheap.b[(n - 1) >> 1].to > ent.to))
-	thraise(ent, n);
-    else
-	thlower(ent, n);
-}
-
 static int addblock(struct blocker *bl)
 {
-    if((epfd >= 0) && regfd(bl))
+    if((qfd >= 0) && regfd(bl))
 	return(-1);
     bl->n = blockers;
     if(blockers)
 	blockers->p = bl;
     blockers = bl;
-    if(bl->to > 0)
-	addtimeout(bl, bl->to);
     return(0);
 }
 
 static void remblock(struct blocker *bl)
 {
-    if(bl->to > 0)
-	deltimeout(bl);
     if(bl->n)
 	bl->n->p = bl->p;
     if(bl->p)
 	bl->p->n = bl->n;
-    if(blockers == bl)
+    if(bl == blockers)
 	blockers = bl->n;
     remfd(bl);
 }
@@ -261,8 +199,7 @@ int block(int fd, int ev, time_t to)
 	.to = (to > 0)?(time(NULL) + to):0,
 	.th = current,
     };
-    if(addblock(&bl))
-	return(-1);
+    addblock(&bl);
     rv = yield();
     remblock(&bl);
     return(rv);
@@ -271,33 +208,38 @@ int block(int fd, int ev, time_t to)
 int ioloop(void)
 {
     struct blocker *bl, *nbl;
-    struct epoll_event evr[16];
-    int i, fd, nev, ev, toval;
-    time_t now;
+    struct kevent evs[16];
+    int i, fd, nev, ev;
+    time_t now, timeout;
+    struct timespec *toval;
     
     exitstatus = 0;
-    epfd = epoll_create(128);
-    fcntl(epfd, F_SETFD, FD_CLOEXEC);
-    bufinit(timeheap);
+    qfd = kqueue();
+    fcntl(qfd, F_SETFD, FD_CLOEXEC);
     for(bl = blockers; bl; bl = nbl) {
 	nbl = bl->n;
 	if(regfd(bl))
 	    resume(bl->th, -1);
     }
     while(blockers != NULL) {
+	timeout = 0;
+	for(bl = blockers; bl; bl = bl->n) {
+	    if((bl->to != 0) && ((timeout == 0) || (timeout > bl->to)))
+		timeout = bl->to;
+	}
 	now = time(NULL);
-	if(timeheap.d == 0)
-	    toval = -1;
-	else if(timeheap.b[0].to > now)
-	    toval = (timeheap.b[0].to - now) * 1000;
+	if(timeout == 0)
+	    toval  = NULL;
+	else if(timeout > now)
+	    toval = &(struct timespec){.tv_sec = timeout - now};
 	else
-	    toval = 1000;
+	    toval = &(struct timespec){.tv_sec = 1};
 	if(exitstatus)
 	    break;
-	nev = epoll_wait(epfd, evr, sizeof(evr) / sizeof(*evr), toval);
+	nev = kevent(qfd, NULL, 0, evs, sizeof(evs) / sizeof(*evs), toval);
 	if(nev < 0) {
 	    if(errno != EINTR) {
-		flog(LOG_CRIT, "ioloop: epoll_wait errored out: %s", strerror(errno));
+		flog(LOG_CRIT, "ioloop: kevent errored out: %s", strerror(errno));
 		/* To avoid CPU hogging in case it's bad, which it
 		 * probably is. */
 		sleep(1);
@@ -305,17 +247,11 @@ int ioloop(void)
 	    continue;
 	}
 	for(i = 0; i < nev; i++) {
-	    fd = evr[i].data.fd;
-	    ev = 0;
-	    if(evr[i].events & EPOLLIN)
-		ev |= EV_READ;
-	    if(evr[i].events & EPOLLOUT)
-		ev |= EV_WRITE;
-	    if(evr[i].events & ~(EPOLLIN | EPOLLOUT))
-		ev = -1;
+	    fd = (int)evs[i].ident;
+	    ev = (evs[i].filter == EVFILT_READ)?EV_READ:EV_WRITE;
 	    for(bl = fdlist[fd]; bl; bl = nbl) {
 		nbl = bl->n2;
-		if((ev < 0) || (ev & bl->ev)) {
+		if(ev & bl->ev) {
 		    if(bl->id < 0) {
 			resume(bl->th, ev);
 		    } else {
@@ -326,20 +262,22 @@ int ioloop(void)
 	    }
 	}
 	now = time(NULL);
-	while((timeheap.d > 0) && (timeheap.b[0].to <= now)) {
-	    if(bl->id < 0) {
-		resume(timeheap.b[0].bl->th, 0);
-	    } else {
-		bl->rev = 0;
-		resume(bl->th, bl->id);
+	for(bl = blockers; bl; bl = nbl) {
+	    nbl = bl->n;
+	    if((bl->to != 0) && (bl->to <= now)) {
+		if(bl->id < 0) {
+		    resume(bl->th, 0);
+		} else {
+		    bl->rev = 0;
+		    resume(bl->th, bl->id);
+		}
 	    }
 	}
     }
     for(bl = blockers; bl; bl = bl->n)
 	remfd(bl);
-    buffree(timeheap);
-    close(epfd);
-    epfd = -1;
+    close(qfd);
+    qfd = -1;
     return(exitstatus);
 }
 

@@ -11,7 +11,7 @@ struct mtbuf {
     size_t s, d;
 };
 
-void serve(FILE *in, struct conn *conn);
+void serve(struct bufio *in, int infd, struct conn *conn);
 
 int listensock4(int port);
 int listensock6(int port);

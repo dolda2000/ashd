@@ -36,15 +36,67 @@ static int exitstatus;
 
 struct blocker {
     struct blocker *n, *p;
+    struct iterator *it;
     int fd;
-    int ev;
+    int ev, rev, id;
     time_t to;
     struct muth *th;
 };
 
+struct iterator {
+    struct blocker *bl;
+};
+
+static void addblock(struct blocker *bl)
+{
+    bl->n = blockers;
+    if(blockers)
+	blockers->p = bl;
+    blockers = bl;
+}
+
+static void remblock(struct blocker *bl)
+{
+    if(bl->n)
+	bl->n->p = bl->p;
+    if(bl->p)
+	bl->p->n = bl->n;
+    if(bl == blockers)
+	blockers = bl->n;
+    if(bl->it) {
+	if((bl->it->bl = bl->n) != NULL)
+	    bl->it->bl->it = bl->it;
+	bl->it = NULL;
+    }
+}
+
+struct selected mblock(time_t to, int n, struct selected *spec)
+{
+    int i, id;
+    struct blocker bls[n];
+    
+    to = (to > 0)?(time(NULL) + to):0;
+    for(i = 0; i < n; i++) {
+	bls[i] = (struct blocker){
+	    .fd = spec[i].fd,
+	    .ev = spec[i].ev,
+	    .id = i,
+	    .to = to,
+	    .th = current,
+	};
+	addblock(&bls[i]);
+    }
+    id = yield();
+    for(i = 0; i < n; i++)
+	remblock(&bls[i]);
+    if(id < 0)
+	return((struct selected){.fd = -1, .ev = -1});
+    return((struct selected){.fd = bls[id].fd, .ev = bls[id].rev});
+}
+
 int block(int fd, int ev, time_t to)
 {
-    struct blocker *bl;
+    struct blocker bl;
     int rv;
     
     if(fd >= FD_SETSIZE) {
@@ -52,24 +104,16 @@ int block(int fd, int ev, time_t to)
 	errno = EMFILE;
 	return(-1);
     }
-    omalloc(bl);
-    bl->fd = fd;
-    bl->ev = ev;
-    if(to > 0)
-	bl->to = time(NULL) + to;
-    bl->th = current;
-    bl->n = blockers;
-    if(blockers)
-	blockers->p = bl;
-    blockers = bl;
+    bl = (struct blocker) {
+	.fd = fd,
+	.ev = ev,
+	.id = -1,
+	.to = (to > 0)?(time(NULL) + to):0,
+	.th = current,
+    };
+    addblock(&bl);
     rv = yield();
-    if(bl->n)
-	bl->n->p = bl->p;
-    if(bl->p)
-	bl->p->n = bl->n;
-    if(bl == blockers)
-	blockers = bl->n;
-    free(bl);
+    remblock(&bl);
     return(rv);
 }
 
@@ -77,7 +121,8 @@ int ioloop(void)
 {
     int ret;
     fd_set rfds, wfds, efds;
-    struct blocker *bl, *nbl;
+    struct blocker *bl;
+    struct iterator it;
     struct timeval toval;
     time_t now, timeout;
     int maxfd;
@@ -116,8 +161,9 @@ int ioloop(void)
 	    }
 	} else {
 	    now = time(NULL);
-	    for(bl = blockers; bl; bl = nbl) {
-		nbl = bl->n;
+	    for(bl = it.bl = blockers; bl; bl = it.bl) {
+		if((it.bl = bl->n) != NULL)
+		    it.bl->it = &it;
 		ev = 0;
 		if(FD_ISSET(bl->fd, &rfds))
 		    ev |= EV_READ;
@@ -125,10 +171,23 @@ int ioloop(void)
 		    ev |= EV_WRITE;
 		if(FD_ISSET(bl->fd, &efds))
 		    ev = -1;
-		if((ev < 0) || (ev & bl->ev))
-		    resume(bl->th, ev);
-		else if((bl->to != 0) && (bl->to <= now))
-		    resume(bl->th, 0);
+		if((ev < 0) || (ev & bl->ev)) {
+		    if(bl->id < 0) {
+			resume(bl->th, ev);
+		    } else {
+			bl->rev = ev;
+			resume(bl->th, bl->id);
+		    }
+		} else if((bl->to != 0) && (bl->to <= now)) {
+		    if(bl->id < 0) {
+			resume(bl->th, 0);
+		    } else {
+			bl->rev = 0;
+			resume(bl->th, bl->id);
+		    }
+		}
+		if(it.bl)
+		    it.bl->it = NULL;
 	    }
 	}
     }

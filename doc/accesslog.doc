@@ -7,7 +7,7 @@ accesslog - Access logger for ashd(7)
 
 SYNOPSIS
 --------
-*accesslog* [*-hFaL*] [*-f* 'FORMAT'] [*-p* 'PIDFILE'] 'OUTFILE' 'CHILD' ['ARGS'...]
+*accesslog* [*-hFaeL*] [*-f* 'FORMAT'] [*-p* 'PIDFILE'] 'OUTFILE' 'CHILD' ['ARGS'...]
 
 *accesslog* *-P* 'LOGFILE'
 
@@ -51,7 +51,7 @@ OPTIONS
 
 	Use the specified 'FORMAT' string instead of the default log
 	record format. See the FORMAT section, below, for a
-	description of the 'FORMAT' string.
+	description of the 'FORMAT' string. See also the *-e* option.
 
 *-p* 'PIDFILE'::
 
@@ -68,8 +68,17 @@ OPTIONS
 	is used:
 
 --------
-%A - - [%{%d/%b/%Y:%H:%M:%S %z}t] "%m %u %v" - - "%R" "%G"
+%A - - [%{%d/%b/%Y:%H:%M:%S %z}t] "%m %u %v" %c %o "%R" "%G"
 --------
+
+*-e*::
+
+	Make extended log data available. This option makes
+	*accesslog* run in a different mode where it looks at not only
+	the request, but also the (entire) response, which requires
+	quite a bit more CPU time per request. However, some log items
+	are only available in this mode; these have been marked as
+	such under the FORMAT section, below.
 
 *-L*::
 
@@ -163,6 +172,32 @@ The following log items are currently specified:
 *%G*::
 
 	Expands into the `User-Agent` header.
+
+The following log items are only available when running in extended
+mode, requested by the *-e* option, as described above. If unavailable
+due to not running in extended mode, each of the log items below will
+instead expand into a dash.
+
+*%c*::
+
+	Expands into the HTTP status code of the response.
+
+*%i*::
+
+	Expands into the number of bytes sent by the client as a
+	request-body. HTTP headers are not counted.
+
+*%o*::
+
+	Expands into the number of bytes sent back by the handler, to
+	the client, as the response-body. HTTP headers are not
+	counted, and neither are overhead as part of any required
+	transfer-encoding, such as chunking.
+
+*%d*::
+
+	Expands into the time it took for the handler to complete the
+	response, expressed as seconds with 6 decimals precision.
 
 In any expanded field, any "unsafe" characters are escaped. Currently,
 this means that double-quotes and backslashes are prepended with a

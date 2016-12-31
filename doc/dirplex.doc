@@ -85,12 +85,13 @@ CONFIGURATION
 
 Configuration in *dirplex* comes from several sources. When *dirplex*
 starts, unless the *-N* option is given, it tries to find a global
-configuration file named `dirplex.rc`. It looks in all directories
-named by the *PATH* environment variable, appended with
-`../etc/ashd`. For example, then, if *PATH* is
-`/usr/local/bin:/bin:/usr/bin`, the directories `/usr/local/etc/ashd`,
-`/etc/ashd` and `/usr/etc/ashd` are searched for `dirplex.rc`, in that
-order. Only the first file found is used, should there exist several.
+configuration file named `dirplex.rc`. It looks in `$HOME/.ashd/etc`,
+and then in all directories named by the *PATH* environment variable,
+appended with `../etc/ashd`. For example, then, if *PATH* is
+`/usr/local/bin:/bin:/usr/bin`, the directories `$HOME/.ashd/etc`,
+`/usr/local/etc/ashd`, `/etc/ashd` and `/usr/etc/ashd` are searched
+for `dirplex.rc`, in that order. Only the first file found is used,
+should there exist several.
 
 If the *-c* option is given to *dirplex*, it too specifies a
 configuration file to load. If the name given contains any slashes, it
@@ -176,7 +177,7 @@ The following configuration directives are recognized:
 	program will be started in the same directory as the `.htrc`
 	file itself.
 
-*match* [*directory*]::
+*match* ['TYPE']::
 
 	Specifies a filename pattern-matching rule. The
 	pattern-matching procedure and the follow-up lines accepted by
@@ -192,9 +193,10 @@ The following configuration directives are recognized:
 	be a named request handler specified either in the same
 	`.htrc` file or elsewhere. The *capture* directive accepts no
 	follow-up lines. Note that the `X-Ash-File` header is not
-	added to requests passed via *capture* directives.  If 'FLAGS'
-	contain the character `R`, this *capture* directive will be
-	ignored if it is in the root directory that *dirplex* serves.
+	added to requests passed via *capture* directives. Normally,
+	*capture* directives will be ignored if they appear in the
+	root directory that *dirplex* serves, but not if 'FLAGS'
+	contain the character `D`.
 
 MATCHING
 --------
@@ -208,10 +210,13 @@ ignored.
 
 To match a file, any *match* stanzas specified by any `.htrc` file or
 in the global configuration files are searched in order of their
-"distance" (see CONFIGURATION above) from the actual file. If it is a
-directory which is being considered, only *match* stanzas with the
-*directory* parameter are considered; otherwise, if it is a file, only
-*match* stanzas without the *directory* parameter are considered.
+"distance" (see CONFIGURATION above) from the actual file. Which
+*match* stanzas are considered depends on the type of the file being
+matched: if an ordinary file is being matched, only *match* stanzas
+without any 'TYPE' parameter are considered, while if it is a
+directory, only those with the 'TYPE' parameter specified as
+*directory* are considered. 'TYPE' can also take the value *notfound*,
+described below under 404 RESPONSES.
 
 A *match* stanza must contain at least one follow-up line specifying
 match rules. All rules must match for the stanza as a whole to match.
@@ -295,11 +300,23 @@ A HTTP 404 response is sent to the client if
  * The mapping procedure results in a file which is not matched by any
    *match* stanza.
 
-By default, *dirplex* will send a built-in 404 response, but any
-`.htrc` file or global configuration may define a request handler
-named `.notfound` to customize the behavior. Note that, unlike
-successful requests, such a handler will not be passed the
-`X-Ash-File` header.
+By default, *dirplex* will send a built-in 404 response, but there are
+two ways to customize the response:
+
+First, *match* stanzas with the type *notfound* will be matched
+against any request that would result in a 404 error. The filename for
+such matching is that of the last succesfully found component, which
+may be a directory, for example in case a name component could not be
+found in the real filesystem; or a file, for example in case a file
+was found, but not matched by any *match* stanzas.
+
+Otherwise, any request that would result in a 404 response but is
+matched by no *notfound* stanza is instead passed to a default handler
+named `.notfound`, which is handled internally in *dirplex* by
+default, but may be overridden just as any other handler may be in a
+`.htrc` file or by global configuration. Note, however, that any
+request not matched by a *notfound* stanza will not have the
+`X-Ash-File` header added to it.
 
 The built-in `.notfound` handler can also be used in *match* or
 *capture* stanzas (for example, to restrict access to certain files or

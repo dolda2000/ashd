@@ -227,7 +227,7 @@ static void serve(struct muth *muth, va_list args)
     
     sfile = NULL;
     contype = NULL;
-    out = mtstdopen(fd, 1, 60, "r+");
+    out = mtstdopen(fd, 1, 60, "r+", NULL);
     
     if((file = getheader(req, "X-Ash-File")) == NULL) {
 	flog(LOG_ERR, "psendfile: needs to be called with the X-Ash-File header");
@@ -238,7 +238,7 @@ static void serve(struct muth *muth, va_list args)
 	simpleerror2(out, 404, "Not Found", "The requested URL has no corresponding resource.");
 	goto out;
     }
-    if(((sfile = fopen(file, "r")) < 0) || fstat(fileno(sfile), &sb)) {
+    if(((sfile = fopen(file, "r")) == NULL) || fstat(fileno(sfile), &sb)) {
 	flog(LOG_ERR, "psendfile: could not stat input file %s: %s", file, strerror(errno));
 	simpleerror2(out, 500, "Internal Error", "The server could not access its own data.");
 	goto out;

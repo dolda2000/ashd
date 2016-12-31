@@ -150,38 +150,48 @@ void servetcp(struct muth *muth, va_list args)
     vavar(int, fd);
     vavar(struct sockaddr_storage, name);
     vavar(struct tcpport *, stcp);
-    FILE *in;
+    struct bufio *in;
     struct conn conn;
     struct tcpconn tcp;
     
     memset(&conn, 0, sizeof(conn));
     memset(&tcp, 0, sizeof(tcp));
-    in = mtstdopen(fd, 1, 60, "r+");
+    in = mtbioopen(fd, 1, 60, "r+", NULL);
     conn.pdata = &tcp;
     conn.initreq = initreq;
     tcp.fd = fd;
     tcp.name = name;
     tcp.port = stcp;
-    serve(in, &conn);
+    serve(in, fd, &conn);
 }
 
 static void listenloop(struct muth *muth, va_list args)
 {
     vavar(struct tcpport *, tcp);
-    int i, ns;
+    int i, ns, n;
     struct sockaddr_storage name;
     socklen_t namelen;
     
+    fcntl(tcp->fd, F_SETFL, fcntl(tcp->fd, F_GETFL) | O_NONBLOCK);
     while(1) {
 	namelen = sizeof(name);
 	if(block(tcp->fd, EV_READ, 0) == 0)
 	    goto out;
-	ns = accept(tcp->fd, (struct sockaddr *)&name, &namelen);
-	if(ns < 0) {
-	    flog(LOG_ERR, "accept: %s", strerror(errno));
-	    goto out;
+	n = 0;
+	while(1) {
+	    ns = accept(tcp->fd, (struct sockaddr *)&name, &namelen);
+	    if(ns < 0) {
+		if(errno == EAGAIN)
+		    break;
+		if(errno == ECONNABORTED)
+		    continue;
+		flog(LOG_ERR, "accept: %s", strerror(errno));
+		goto out;
+	    }
+	    mustart(servetcp, ns, name, tcp);
+	    if(++n >= 100)
+		break;
 	}
-	mustart(servetcp, ns, name, tcp);
     }
     
 out:

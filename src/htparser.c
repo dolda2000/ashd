@@ -35,6 +35,7 @@
 #include <log.h>
 #include <req.h>
 #include <proc.h>
+#include <bufio.h>
 
 #include "htparser.h"
 
@@ -60,7 +61,7 @@ static void trimx(struct hthead *req)
     }
 }
 
-static struct hthead *parsereq(FILE *in)
+static struct hthead *parsereq(struct bufio *in)
 {
     struct hthead *req;
     struct charbuf method, url, ver;
@@ -71,7 +72,7 @@ static struct hthead *parsereq(FILE *in)
     bufinit(url);
     bufinit(ver);
     while(1) {
-	c = getc(in);
+	c = biogetc(in);
 	if(c == ' ') {
 	    break;
 	} else if((c == EOF) || (c < 32) || (c >= 128)) {
@@ -83,7 +84,7 @@ static struct hthead *parsereq(FILE *in)
 	}
     }
     while(1) {
-	c = getc(in);
+	c = biogetc(in);
 	if(c == ' ') {
 	    break;
 	} else if((c == EOF) || (c < 32)) {
@@ -95,7 +96,7 @@ static struct hthead *parsereq(FILE *in)
 	}
     }
     while(1) {
-	c = getc(in);
+	c = biogetc(in);
 	if(c == 10) {
 	    break;
 	} else if(c == 13) {
@@ -111,7 +112,7 @@ static struct hthead *parsereq(FILE *in)
     bufadd(url, 0);
     bufadd(ver, 0);
     req = mkreq(method.b, url.b, ver.b);
-    if(parseheaders(req, in))
+    if(parseheadersb(req, in))
 	goto fail;
     trimx(req);
     goto out;
@@ -128,38 +129,37 @@ out:
     return(req);
 }
 
-static off_t passdata(FILE *in, FILE *out, off_t max)
+static off_t passdata(struct bufio *in, struct bufio *out, off_t max)
 {
-    size_t read;
+    ssize_t read;
     off_t total;
-    char buf[8192];
     
     total = 0;
-    while(!feof(in) && ((max < 0) || (total < max))) {
-	read = sizeof(buf);
-	if(max >= 0)
-	    read = min(max - total, read);
-	read = fread(buf, 1, read, in);
-	if(ferror(in))
+    while(!bioeof(in) && ((max < 0) || (total < max))) {
+	if((read = biordata(in)) > 0) {
+	    if(max >= 0)
+		read = min(max - total, read);
+	    if((read = biowritesome(out, in->rbuf.b + in->rh, read)) < 0)
+		return(-1);
+	    in->rh += read;
+	    total += read;
+	}
+	if(biorspace(in) && ((max < 0) || (biordata(in) < max - total)) && (biofillsome(in) < 0))
 	    return(-1);
-	if(fwrite(buf, 1, read, out) != read)
-	    return(-1);
-	total += read;
     }
     return(total);
 }
 
-static int recvchunks(FILE *in, FILE *out)
+static int recvchunks(struct bufio *in, struct bufio *out)
 {
-    char buf[8192];
-    size_t read, chlen;
+    ssize_t read, chlen;
     int c, r;
     
     while(1) {
 	chlen = 0;
 	r = 0;
 	while(1) {
-	    c = getc(in);
+	    c = biogetc(in);
 	    if(c == 10) {
 		if(!r)
 		    return(-1);
@@ -185,37 +185,43 @@ static int recvchunks(FILE *in, FILE *out)
 	if(chlen == 0)
 	    break;
 	while(chlen > 0) {
-	    read = fread(buf, 1, min(sizeof(buf), chlen), in);
-	    if(feof(in) || ferror(in))
+	    if((read = biordata(in)) > 0) {
+		if((read = biowritesome(out, in->rbuf.b + in->rh, min(read, chlen))) < 0)
+		    return(-1);
+		in->rh += read;
+		chlen -= read;
+	    }
+	    if(biorspace(in) && (biordata(in) < chlen) && (biofillsome(in) <= 0))
 		return(-1);
-	    if(fwrite(buf, 1, read, out) != read)
-		return(-1);
-	    chlen -= read;
 	}
-	if((getc(in) != 13) || (getc(in) != 10))
+	if((biogetc(in) != 13) || (biogetc(in) != 10))
 	    return(-1);
     }
     /* XXX: Technically, there may be trailers to be read, but that's
      * just about as likely as chunk extensions. */
-    if((getc(in) != 13) || (getc(in) != 10))
+    if((biogetc(in) != 13) || (biogetc(in) != 10))
 	return(-1);
     return(0);
 }
 
-static int passchunks(FILE *in, FILE *out)
+static int passchunks(struct bufio *in, struct bufio *out)
 {
-    char buf[8192];
     size_t read;
     
-    do {
-	read = fread(buf, 1, sizeof(buf), in);
-	if(ferror(in))
+    while(!bioeof(in)) {
+	if((read = biordata(in)) > 0) {
+	    bioprintf(out, "%zx\r\n", read);
+	    if(biowrite(out, in->rbuf.b + in->rh, read) != read)
+		return(-1);
+	    in->rh += read;
+	    bioprintf(out, "\r\n");
+	    if(bioflush(out) < 0)
+		return(-1);
+	}
+	if(biorspace(in) && (biofillsome(in) < 0))
 	    return(-1);
-	fprintf(out, "%zx\r\n", read);
-	if(fwrite(buf, 1, read, out) != read)
-	    return(-1);
-	fprintf(out, "\r\n");
-    } while(read > 0);
+    }
+    bioprintf(out, "0\r\n\r\n");
     return(0);
 }
 
@@ -280,23 +286,89 @@ static int http10keep(struct hthead *req, struct hthead *resp)
     }
 }
 
-void serve(FILE *in, struct conn *conn)
+static char *connid(void)
+{
+    static struct charbuf cur;
+    int i;
+    char *ret;
+    
+    for(i = 0; i < cur.d; i++) {
+	if((++cur.b[i]) > 'Z')
+	    cur.b[i] = 'A';
+	else
+	    goto done;
+    }
+    bufadd(cur, 'A');
+done:
+    ret = memcpy(smalloc(cur.d + 1), cur.b, cur.d);
+    ret[cur.d] = 0;
+    return(ret);
+}
+
+static void passduplex(struct bufio *a, int afd, struct bufio *b, int bfd)
+{
+    struct selected pfd[4], sel;
+    struct bufio *sio;
+    int n, ev;
+    
+    while(!bioeof(a) && !bioeof(b)) {
+	biocopybuf(b, a);
+	biocopybuf(a, b);
+	n = 0;
+	if(!a->eof) {
+	    ev = 0;
+	    if(biorspace(a))
+		ev |= EV_READ;
+	    if(biowdata(a))
+		ev |= EV_WRITE;
+	    if(ev)
+		pfd[n++] = (struct selected){.fd = afd, .ev = ev};
+	}
+	if(!b->eof) {
+	    ev = 0;
+	    if(!b->eof && biorspace(b))
+		ev |= EV_READ;
+	    if(biowdata(b))
+		ev |= EV_WRITE;
+	    if(ev)
+		pfd[n++] = (struct selected){.fd = bfd, .ev = ev};
+	}
+	if((sel = mblock(600, n, pfd)).ev == 0)
+	    break;
+	if(sel.fd == afd)
+	    sio = a;
+	else if(sel.fd == bfd)
+	    sio = b;
+	else
+	    break;
+	if((sel.ev & EV_READ) && (biofillsome(sio) < 0))
+	    break;
+	if((sel.ev & EV_WRITE) && (bioflushsome(sio) < 0))
+	    break;
+    }
+}
+
+void serve(struct bufio *in, int infd, struct conn *conn)
 {
     int pfds[2];
-    FILE *out;
+    struct bufio *out, *dout;
+    struct stdiofd *outi;
     struct hthead *req, *resp;
-    char *hd;
+    char *hd, *id;
     off_t dlen;
-    int keep;
+    int keep, duplex;
     
+    id = connid();
     out = NULL;
     req = resp = NULL;
     while(plex >= 0) {
+	bioflush(in);
 	if((req = parsereq(in)) == NULL)
 	    break;
 	if(!canonreq(req))
 	    break;
 	
+	headappheader(req, "X-Ash-Connection-ID", id);
 	if((conn->initreq != NULL) && conn->initreq(conn, req))
 	    break;
 	
@@ -307,7 +379,7 @@ void serve(FILE *in, struct conn *conn)
 	if(sendreq(plex, req, pfds[0]))
 	    break;
 	close(pfds[0]);
-	out = mtstdopen(pfds[1], 1, 600, "r+");
+	out = mtbioopen(pfds[1], 1, 600, "r+", &outi);
 
 	if(getheader(req, "content-type") != NULL) {
 	    if((hd = getheader(req, "content-length")) != NULL) {
@@ -324,34 +396,46 @@ void serve(FILE *in, struct conn *conn)
 		headrmheader(req, "content-type");
 	    }
 	}
-	if(fflush(out))
+	if(bioflush(out))
 	    break;
 	/* Make sure to send EOF */
 	shutdown(pfds[1], SHUT_WR);
 	
-	if((resp = parseresponse(out)) == NULL)
+	if((resp = parseresponseb(out)) == NULL)
 	    break;
 	replstr(&resp->ver, req->ver);
 	
 	if(!getheader(resp, "server"))
 	    headappheader(resp, "Server", sprintf3("ashd/%s", VERSION));
+	duplex = hasheader(resp, "x-ash-switch", "duplex");
+	trimx(resp);
 
-	if(!strcasecmp(req->ver, "HTTP/1.0")) {
+	if(duplex) {
+	    if(outi->rights < 0)
+		break;
+	    writerespb(in, resp);
+	    bioprintf(in, "\r\n");
+	    dout = mtbioopen(outi->rights, 1, 600, "r+", NULL);
+	    passduplex(in, infd, dout, outi->rights);
+	    outi->rights = -1;
+	    bioclose(dout);
+	    break;
+	} else if(!strcasecmp(req->ver, "HTTP/1.0")) {
 	    if(!strcasecmp(req->method, "head")) {
 		keep = http10keep(req, resp);
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 	    } else if((hd = getheader(resp, "content-length")) != NULL) {
 		keep = http10keep(req, resp);
 		dlen = atoo(hd);
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		if(passdata(out, in, dlen) != dlen)
 		    break;
 	    } else {
 		headrmheader(resp, "connection");
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		passdata(out, in, -1);
 		break;
 	    }
@@ -359,23 +443,23 @@ void serve(FILE *in, struct conn *conn)
 		break;
 	} else if(!strcasecmp(req->ver, "HTTP/1.1")) {
 	    if(!strcasecmp(req->method, "head")) {
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 	    } else if((hd = getheader(resp, "content-length")) != NULL) {
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		dlen = atoo(hd);
 		if(passdata(out, in, dlen) != dlen)
 		    break;
 	    } else if(!getheader(resp, "transfer-encoding")) {
 		headappheader(resp, "Transfer-Encoding", "chunked");
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		if(passchunks(out, in))
 		    break;
 	    } else {
-		writeresp(in, resp);
-		fprintf(in, "\r\n");
+		writerespb(in, resp);
+		bioprintf(in, "\r\n");
 		passdata(out, in, -1);
 		break;
 	    }
@@ -385,7 +469,7 @@ void serve(FILE *in, struct conn *conn)
 	    break;
 	}
 
-	fclose(out);
+	bioclose(out);
 	out = NULL;
 	freehthead(req);
 	freehthead(resp);
@@ -393,20 +477,22 @@ void serve(FILE *in, struct conn *conn)
     }
     
     if(out != NULL)
-	fclose(out);
+	bioclose(out);
     if(req != NULL)
 	freehthead(req);
     if(resp != NULL)
 	freehthead(resp);
-    fclose(in);
+    bioclose(in);
+    free(id);
 }
 
 static void plexwatch(struct muth *muth, va_list args)
 {
     vavar(int, fd);
     char *buf;
-    int i, ret;
+    int i, s, ret;
     
+    s = 0;
     while(1) {
 	if(block(fd, EV_READ, 0) == 0)
 	    break;
@@ -416,6 +502,7 @@ static void plexwatch(struct muth *muth, va_list args)
 	    flog(LOG_WARNING, "received error on rootplex read channel: %s", strerror(errno));
 	    exit(1);
 	} else if(ret == 0) {
+	    s = 1;
 	    free(buf);
 	    break;
 	}
@@ -423,15 +510,16 @@ static void plexwatch(struct muth *muth, va_list args)
 	 * some day... */
 	free(buf);
     }
-    close(plex);
-    plex = -1;
+    shutdown(plex, SHUT_RDWR);
     for(i = 0; i < listeners.d; i++) {
 	if(listeners.b[i] == muth)
 	    bufdel(listeners, i);
     }
-    flog(LOG_INFO, "root handler exited, so shutting down listening...");
-    while(listeners.d > 0)
-	resume(listeners.b[0], 0);
+    if(s) {
+	flog(LOG_INFO, "root handler exited, so shutting down listening...");
+	while(listeners.d > 0)
+	    resume(listeners.b[0], 0);
+    }
 }
 
 static void initroot(void *uu)

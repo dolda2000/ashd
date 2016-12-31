@@ -52,7 +52,7 @@ OPTIONS
 
 *-c* 'CONTENT-TYPE'::
 
-	Sends 'CONTENT-TYPE' as the file's MIME-type instead of trying
+	Send 'CONTENT-TYPE' as the file's MIME-type instead of trying
 	to auto-detect the file type.
 
 *-f* 'FILE'::
@@ -66,4 +66,4 @@ Fredrik Tolf <fredrik@dolda2000.com>
 
 SEE ALSO
 --------
-*dirplex*(1), *ashd*(7)
+*dirplex*(1), *psendfile*(1), *ashd*(7)

@@ -16,14 +16,15 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
 #include <utils.h>
 
 static char *base64set = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -307,6 +308,14 @@ char *base64decode(char *data, size_t *datalen)
     return(buf.b);
 }
 
+int hexdigit(char c)
+{
+    if((c >= '0') && (c <= '9'))      return(c - '0');
+    else if((c >= 'a') && (c <= 'f')) return(c - 'a' + 10);
+    else if((c >= 'A') && (c <= 'F')) return(c - 'A' + 10);
+    return(-1);
+}
+
 static int btheight(struct btree *tree)
 {
     if(tree == NULL)
@@ -466,3 +475,146 @@ void *btreeget(struct btree *tree, void *key, int (*cmp)(void *, void *))
 	    return(tree->d);
     }
 }
+
+struct stdif {
+    ssize_t (*read)(void *pdata, void *buf, size_t len);
+    ssize_t (*write)(void *pdata, const void *buf, size_t len);
+    off_t (*seek)(void *pdata, off_t offset, int whence);
+    int (*close)(void *pdata);
+    void *pdata;
+};
+
+#if defined(HAVE_GLIBC_STDIO)
+static ssize_t wrapread(void *pdata, char *buf, size_t len)
+{
+    struct stdif *nf = pdata;
+    
+    return(nf->read(nf->pdata, buf, len));
+}
+
+static ssize_t wrapwrite(void *pdata, const char *buf, size_t len)
+{
+    struct stdif *nf = pdata;
+    size_t off;
+    ssize_t ret;
+    
+    /*
+     * XXX? In seeming violation of its own manual, glibc requires the
+     * cookie-write function to complete writing the entire buffer,
+     * rather than working like write(2).
+     */
+    off = 0;
+    while(off < len) {
+	ret = nf->write(nf->pdata, buf + off, len - off);
+	if(ret < 0)
+	    return(off);
+	off += ret;
+    }
+    return(off);
+}
+
+static int wrapseek(void *pdata, off64_t *pos, int whence)
+{
+    struct stdif *nf = pdata;
+    off_t ret;
+    
+    ret = nf->seek(nf->pdata, *pos, whence);
+    if(ret < 0)
+	return(-1);
+    *pos = ret;
+    return(0);
+}
+
+static int wrapclose(void *pdata)
+{
+    struct stdif *nf = pdata;
+    int ret;
+    
+    if(nf->close != NULL)
+	ret = nf->close(nf->pdata);
+    else
+	ret = 0;
+    free(nf);
+    return(ret);
+}
+
+FILE *funstdio(void *pdata,
+	       ssize_t (*read)(void *pdata, void *buf, size_t len),
+	       ssize_t (*write)(void *pdata, const void *buf, size_t len),
+	       off_t (*seek)(void *pdata, off_t offset, int whence),
+	       int (*close)(void *pdata))
+{
+    struct stdif *nf;
+    cookie_io_functions_t io;
+    char *mode;
+    
+    if(read && write) {
+	mode = "r+";
+    } else if(read) {
+	mode = "r";
+    } else if(write) {
+	mode = "w";
+    } else {
+	errno = EINVAL;
+	return(NULL);
+    }
+    omalloc(nf);
+    *nf = (struct stdif){.read = read, .write = write, .seek = seek, .close = close, .pdata = pdata};
+    io = (cookie_io_functions_t) {
+	.read = read?wrapread:NULL,
+	.write = write?wrapwrite:NULL,
+	.seek = seek?wrapseek:NULL,
+	.close = wrapclose,
+    };
+    return(fopencookie(nf, mode, io));
+}
+#elif defined(HAVE_BSD_STDIO)
+static int wrapread(void *pdata, char *buf, int len)
+{
+    struct stdif *nf = pdata;
+    
+    return(nf->read(nf->pdata, buf, len));
+}
+
+static int wrapwrite(void *pdata, const char *buf, int len)
+{
+    struct stdif *nf = pdata;
+    
+    return(nf->write(nf->pdata, buf, len));
+}
+
+static fpos_t wrapseek(void *pdata, fpos_t pos, int whence)
+{
+    struct stdif *nf = pdata;
+    
+    return(nf->seek(nf->pdata, pos, whence));
+}
+
+static int wrapclose(void *pdata)
+{
+    struct stdif *nf = pdata;
+    int ret;
+    
+    if(nf->close != NULL)
+	ret = nf->close(nf->pdata);
+    else
+	ret = 0;
+    free(nf);
+    return(ret);
+}
+
+FILE *funstdio(void *pdata,
+	       ssize_t (*read)(void *pdata, void *buf, size_t len),
+	       ssize_t (*write)(void *pdata, const void *buf, size_t len),
+	       off_t (*seek)(void *pdata, off_t offset, int whence),
+	       int (*close)(void *pdata))
+{
+    struct stdif *nf;
+    
+    omalloc(nf);
+    *nf = (struct stdif){.read = read, .write = write, .seek = seek, .close = close, .pdata = pdata};
+    return(funopen(nf, read?wrapread:NULL, write?wrapwrite:NULL, seek?wrapseek:NULL, wrapclose));
+}
+#else
+#error "No stdio implementation for this system"
+#endif

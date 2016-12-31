@@ -1,14 +1,15 @@
 #ifndef _UTILS_H
 #define _UTILS_H
 
+#include <stdio.h>
 #include <stdarg.h>
 #include <sys/types.h>
 
 #define max(a, b) (((b) > (a))?(b):(a))
 #define min(a, b) (((b) < (a))?(b):(a))
 
-#define smalloc(size) ({void *__result__; ((__result__ = malloc(size)) == NULL)?({exit(-1); (void *)0;}):__result__;})
-#define srealloc(ptr, size) ({void *__result__; ((__result__ = realloc((ptr), (size))) == NULL)?({exit(-1); (void *)0;}):__result__;})
+#define smalloc(size) ({void *__result__; ((__result__ = malloc(size)) == NULL)?({abort(); (void *)0;}):__result__;})
+#define srealloc(ptr, size) ({void *__result__; ((__result__ = realloc((ptr), (size))) == NULL)?({abort(); (void *)0;}):__result__;})
 #define szmalloc(size) memset(smalloc(size), 0, size)
 #define sstrdup(str) ({const char *__strbuf__ = (str); strcpy(smalloc(strlen(__strbuf__) + 1), __strbuf__);})
 #define omalloc(o) ((o) = szmalloc(sizeof(*(o))))
@@ -81,9 +82,15 @@ void bprintf(struct charbuf *buf, char *format, ...);
 void replstr(char **p, char *n);
 char *base64encode(char *data, size_t datalen);
 char *base64decode(char *data, size_t *datalen);
+int hexdigit(char c);
 int bbtreedel(struct btree **tree, void *item, int (*cmp)(void *, void *));
 void freebtree(struct btree **tree, void (*ffunc)(void *));
 int bbtreeput(struct btree **tree, void *item, int (*cmp)(void *, void *));
 void *btreeget(struct btree *tree, void *key, int (*cmp)(void *, void *));
+FILE *funstdio(void *pdata,
+	       ssize_t (*read)(void *pdata, void *buf, size_t len),
+	       ssize_t (*write)(void *pdata, const void *buf, size_t len),
+	       off_t (*seek)(void *pdata, off_t offset, int whence),
+	       int (*close)(void *pdata));
 
 #endif

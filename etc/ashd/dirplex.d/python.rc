@@ -1,0 +1,18 @@
+child wsgidir
+  exec ashd-wsgi ashd.wsgidir
+child wsgidir3
+  exec ashd-wsgi3 ashd.wsgidir
+
+match
+  filename *.wsgi
+  xset python-handler chain
+  handler wsgidir
+match
+  filename *.wsgi2
+  xset python-handler chain
+  handler wsgidir
+
+match
+  filename *.wsgi3
+  xset python-handler chain
+  handler wsgidir3

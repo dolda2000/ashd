@@ -32,7 +32,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include <sys/signal.h>
+#include <signal.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -40,6 +40,7 @@
 #endif
 #include <utils.h>
 #include <req.h>
+#include <resp.h>
 #include <log.h>
 #include <mt.h>
 #include <mtio.h>
@@ -110,9 +111,16 @@ static char *mkanonid(void)
     return(tmpl);
 }
 
+static void setupchild(void)
+{
+    /* PHP appears to not expect to inherit SIGCHLD set to SIG_IGN, so
+     * reset it for it. */
+    signal(SIGCHLD, SIG_DFL);
+}
+
 static void startlisten(void)
 {
-    int i, fd;
+    int fd;
     struct addrinfo *ai, *cai;
     char *unpath;
     struct sockaddr_un unm;
@@ -190,9 +198,9 @@ static void startlisten(void)
 	exit(1);
     }
     if(child == 0) {
+	setupchild();
 	dup2(fd, 0);
-	for(i = 3; i < FD_SETSIZE; i++)
-	    close(i);
+	close(fd);
 	execvp(*progspec, progspec);
 	flog(LOG_ERR, "callscgi: %s: %s", *progspec, strerror(errno));
 	_exit(127);
@@ -202,15 +210,14 @@ static void startlisten(void)
 
 static void startnolisten(void)
 {
-    int i, fd;
+    int fd;
     
     if((child = fork()) < 0) {
 	flog(LOG_ERR, "could not fork: %s", strerror(errno));
 	exit(1);
     }
     if(child == 0) {
-	for(i = 3; i < FD_SETSIZE; i++)
-	    close(i);
+	setupchild();
 	if((fd = open("/dev/null", O_RDONLY)) < 0) {
 	    flog(LOG_ERR, "/dev/null: %s", strerror(errno));
 	    _exit(127);
@@ -429,8 +436,8 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
 	pi = sprintf2("/%s", tmp = pi);
 	free(tmp);
     }
-    bufaddenv(dst, "PATH_INFO", pi);
-    bufaddenv(dst, "SCRIPT_NAME", url);
+    bufaddenv(dst, "PATH_INFO", "%s", pi);
+    bufaddenv(dst, "SCRIPT_NAME", "%s", url);
     bufaddenv(dst, "QUERY_STRING", "%s", qp?qp:"");
     free(pi);
     free(url);
@@ -473,46 +480,6 @@ static void mkcgienv(struct hthead *req, struct charbuf *dst)
     }
 }
 
-static char *defstatus(int code)
-{
-    if(code == 200)
-	return("OK");
-    else if(code == 201)
-	return("Created");
-    else if(code == 202)
-	return("Accepted");
-    else if(code == 204)
-	return("No Content");
-    else if(code == 300)
-	return("Multiple Choices");
-    else if(code == 301)
-	return("Moved Permanently");
-    else if(code == 302)
-	return("Found");
-    else if(code == 303)
-	return("See Other");
-    else if(code == 304)
-	return("Not Modified");
-    else if(code == 307)
-	return("Moved Temporarily");
-    else if(code == 400)
-	return("Bad Request");
-    else if(code == 401)
-	return("Unauthorized");
-    else if(code == 403)
-	return("Forbidden");
-    else if(code == 404)
-	return("Not Found");
-    else if(code == 500)
-	return("Internal Server Error");
-    else if(code == 501)
-	return("Not Implemented");
-    else if(code == 503)
-	return("Service Unavailable");
-    else
-	return("Unknown status");
-}
-
 static struct hthead *parseresp(FILE *in)
 {
     struct hthead *resp;
@@ -531,7 +498,7 @@ static struct hthead *parseresp(FILE *in)
 	    resp->msg = sstrdup(p);
 	} else {
 	    resp->code = atoi(st);
-	    resp->msg = sstrdup(defstatus(resp->code));
+	    resp->msg = sstrdup(httpdefstatus(resp->code));
 	}
 	headrmheader(resp, "Status");
     } else if(getheader(resp, "Location")) {
@@ -554,8 +521,8 @@ static void serve(struct muth *muth, va_list args)
     struct hthead *resp;
     
     sfd = reconn();
-    is = mtstdopen(fd, 1, 60, "r+");
-    os = mtstdopen(sfd, 1, 600, "r+");
+    is = mtstdopen(fd, 1, 60, "r+", NULL);
+    os = mtstdopen(sfd, 1, 600, "r+", NULL);
     
     bufinit(head);
     mkcgienv(req, &head);
@@ -604,7 +571,6 @@ static void sigign(int sig)
 static void sigexit(int sig)
 {
     shutdown(0, SHUT_RDWR);
-    exit(0);
 }
 
 static void usage(FILE *out)
@@ -648,7 +614,7 @@ int main(int argc, char **argv)
     signal(SIGINT, sigexit);
     signal(SIGTERM, sigexit);
     mustart(listenloop, 0);
-    atexit(killcuraddr);
     ioloop();
+    killcuraddr();
     return(0);
 }

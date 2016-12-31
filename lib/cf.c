@@ -23,6 +23,8 @@
 #include <ctype.h>
 #include <glob.h>
 #include <libgen.h>
+#include <sys/socket.h>
+#include <time.h>
 #include <errno.h>
 
 #ifdef HAVE_CONFIG_H
@@ -40,7 +42,10 @@
 struct stdchild {
     int type;
     char **argv;
+    char **envp;
     int fd;
+    int agains;
+    time_t lastrep;
 };
 
 static int parsefile(struct cfstate *s, FILE *in);
@@ -232,22 +237,27 @@ void freecfparser(struct cfstate *s)
 
 char *findstdconf(char *name)
 {
-    char *path, *p, *p2, *t;
+    char *home, *path, *p, *p2, *t;
     
-    if((path = getenv("PATH")) == NULL)
-	return(NULL);
-    path = sstrdup(path);
-    for(p = strtok(path, ":"); p != NULL; p = strtok(NULL, ":")) {
-	if((p2 = strrchr(p, '/')) == NULL)
-	    continue;
-	*p2 = 0;
-	if(!access(t = sprintf2("%s/etc/%s", p, name), R_OK)) {
-	    free(path);
+    if((home = getenv("HOME")) != NULL) {
+	if(!access(t = sprintf2("%s/.ashd/etc/%s", home, name), R_OK))
 	    return(t);
-	}
 	free(t);
     }
-    free(path);
+    if((path = getenv("PATH")) != NULL) {
+	path = sstrdup(path);
+	for(p = strtok(path, ":"); p != NULL; p = strtok(NULL, ":")) {
+	    if((p2 = strrchr(p, '/')) == NULL)
+		continue;
+	    *p2 = 0;
+	    if(!access(t = sprintf2("%s/etc/%s", p, name), R_OK)) {
+		free(path);
+		return(t);
+	    }
+	    free(t);
+	}
+	free(path);
+    }
     return(NULL);
 }
 
@@ -302,29 +312,120 @@ static struct chandler stdhandler = {
     .destroy = stddestroy,
 };
 
-static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *idata)
+static char **expandargs(struct stdchild *sd)
 {
-    struct stdchild *i = ch->pdata;
+    int i;
+    char **ret, *p, *p2, *p3, *np, *env;
+    struct charbuf exp;
     
-    if(i->type == CH_SOCKET) {
-	if(i->fd < 0)
-	    i->fd = stdmkchild(i->argv, chinit, idata);
-	if(sendreq(i->fd, req, fd)) {
-	    if((errno == EPIPE) || (errno == ECONNRESET)) {
-		/* Assume that the child has crashed and restart it. */
-		close(i->fd);
-		i->fd = stdmkchild(i->argv, chinit, idata);
-		if(!sendreq(i->fd, req, fd))
-		    return(0);
+    ret = szmalloc(sizeof(*ret) * (calen(sd->argv) + 1));
+    bufinit(exp);
+    for(i = 0; sd->argv[i] != NULL; i++) {
+	if((p = strchr(sd->argv[i], '$')) == NULL) {
+	    ret[i] = sstrdup(sd->argv[i]);
+	} else {
+	    exp.d = 0;
+	    for(p2 = sd->argv[i]; p != NULL; p2 = np, p = strchr(np, '$')) {
+		bufcat(exp, p2, p - p2);
+		if(p[1] == '{') {
+		    if((p3 = strchr((p += 2), '}')) == NULL) {
+			np = p;
+			break;
+		    }
+		    np = p3 + 1;
+		} else {
+		    for(p3 = ++p; *p3; p3++) {
+			if(!(((*p3 >= 'a') && (*p3 <= 'z')) ||
+			     ((*p3 >= 'A') && (*p3 <= 'Z')) ||
+			     ((*p3 >= '0') && (*p3 <= '9')) ||
+			     (*p3 == '_'))) {
+			    break;
+			}
+		    }
+		    np = p3;
+		}
+		char temp[(p3 - p) + 1];
+		memcpy(temp, p, p3 - p);
+		temp[p3 - p] = 0;
+		if((env = getenv(temp)) != NULL)
+		    bufcatstr(exp, env);
 	    }
-	    flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(errno));
-	    close(i->fd);
-	    i->fd = -1;
+	    bufcatstr2(exp, np);
+	    ret[i] = sstrdup(exp.b);
+	}
+    }
+    ret[i] = NULL;
+    buffree(exp);
+    return(ret);
+}
+
+struct sidata {
+    struct stdchild *sd;
+    void (*sinit)(void *);
+    void *sdata;
+};
+
+static void stdinit(void *data)
+{
+    struct sidata *d = data;
+    int i;
+	
+    for(i = 0; d->sd->envp[i]; i += 2)
+	putenv(sprintf2("%s=%s", d->sd->envp[i], d->sd->envp[i + 1]));
+    if(d->sinit != NULL)
+	d->sinit(d->sdata);
+}
+
+static int stdhandle(struct child *ch, struct hthead *req, int fd, void (*chinit)(void *), void *sdata)
+{
+    struct stdchild *sd = ch->pdata;
+    int serr;
+    char **args;
+    struct sidata idat;
+    
+    if(sd->type == CH_SOCKET) {
+	idat = (struct sidata) {.sd = sd, .sinit = chinit, .sdata = sdata};
+	if(sd->fd < 0) {
+	    args = expandargs(sd);
+	    sd->fd = stdmkchild(args, stdinit, &idat);
+	    freeca(args);
+	}
+	if(sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT)) {
+	    serr = errno;
+	    if((serr == EPIPE) || (serr == ECONNRESET)) {
+		/* Assume that the child has crashed and restart it. */
+		close(sd->fd);
+		args = expandargs(sd);
+		sd->fd = stdmkchild(args, stdinit, &idat);
+		freeca(args);
+		if(!sendreq2(sd->fd, req, fd, MSG_NOSIGNAL | MSG_DONTWAIT))
+		    goto ok;
+		serr = errno;
+	    }
+	    if(serr == EAGAIN) {
+		if(sd->agains++ == 0) {
+		    flog(LOG_WARNING, "request to child %s denied due to buffer overload", ch->name);
+		    sd->lastrep = time(NULL);
+		}
+	    } else {
+		flog(LOG_ERR, "could not pass on request to child %s: %s", ch->name, strerror(serr));
+		close(sd->fd);
+		sd->fd = -1;
+	    }
 	    return(-1);
 	}
-    } else if(i->type == CH_FORK) {
-	if(stdforkserve(i->argv, req, fd, chinit, idata) < 0)
+    ok:
+	if((sd->agains > 0) && ((time(NULL) - sd->lastrep) > 10)) {
+	    flog(LOG_WARNING, "%i requests to child %s were denied due to buffer overload", sd->agains, ch->name);
+	    sd->agains = 0;
+	}
+    } else if(sd->type == CH_FORK) {
+	args = expandargs(sd);
+	if(stdforkserve(args, req, fd, chinit, sdata) < 0) {
+	    freeca(args);
 	    return(-1);
+	}
+	freeca(args);
     }
     return(0);
 }
@@ -349,6 +450,8 @@ static void stddestroy(struct child *ch)
 	close(d->fd);
     if(d->argv)
 	freeca(d->argv);
+    if(d->envp)
+	freeca(d->envp);
     free(d);
 }
 
@@ -356,6 +459,7 @@ struct child *parsechild(struct cfstate *s)
 {
     struct child *ch;
     struct stdchild *d;
+    struct charvbuf envbuf;
     int i;
     int sl;
     
@@ -383,6 +487,7 @@ struct child *parsechild(struct cfstate *s)
     }
     d->fd = -1;
     
+    bufinit(envbuf);
     while(1) {
 	getcfline(s);
 	if(!strcmp(s->argv[0], "exec")) {
@@ -393,12 +498,21 @@ struct child *parsechild(struct cfstate *s)
 	    d->argv = szmalloc(sizeof(*d->argv) * s->argc);
 	    for(i = 0; i < s->argc - 1; i++)
 		d->argv[i] = sstrdup(s->argv[i + 1]);
+	} else if(!strcmp(s->argv[0], "env")) {
+	    if(s->argc < 3) {
+		flog(LOG_WARNING, "%s:%i: too few parameters to `env'", s->file, s->lno);
+		continue;
+	    }
+	    bufadd(envbuf, sstrdup(s->argv[1]));
+	    bufadd(envbuf, sstrdup(s->argv[2]));
 	} else if(!strcmp(s->argv[0], "end") || !strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
 	    flog(LOG_WARNING, "%s:%i: unknown directive `%s' in child declaration", s->file, s->lno, s->argv[0]);
 	}
     }
+    bufadd(envbuf, NULL);
+    d->envp = envbuf.b;
     if(d->argv == NULL) {
 	flog(LOG_WARNING, "%s:%i: missing `exec' in child declaration %s", s->file, sl, ch->name);
 	freechild(ch);

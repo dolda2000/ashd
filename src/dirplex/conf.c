@@ -86,6 +86,8 @@ static void freeconfig(struct config *cf)
     freeca(cf->index);
     if(cf->capture != NULL)
 	free(cf->capture);
+    if(cf->reparse != NULL)
+	free(cf->reparse);
     free(cf);
 }
 
@@ -150,6 +152,10 @@ static struct pattern *parsepattern(struct cfstate *s)
     
     if((s->argc > 1) && !strcmp(s->argv[1], "directory"))
 	pat->type = PT_DIR;
+    else if((s->argc > 1) && !strcmp(s->argv[1], "notfound"))
+	pat->type = PT_NOTFOUND;
+    else
+	pat->type = PT_FILE;
     sl = s->lno;
     while(1) {
 	getcfline(s);
@@ -251,9 +257,7 @@ struct config *readconfig(char *file)
 	    cf->patterns = pat;
 	} else if(!strcmp(s->argv[0], "index-file")) {
 	    freeca(cf->index);
-	    cf->index = NULL;
-	    if(s->argc > 1)
-		cf->index = cadup(s->argv + 1);
+	    cf->index = cadup(s->argv + 1);
 	} else if(!strcmp(s->argv[0], "capture")) {
 	    if(s->argc < 2) {
 		flog(LOG_WARNING, "%s:%i: missing argument to capture declaration", s->file, s->lno);
@@ -262,9 +266,20 @@ struct config *readconfig(char *file)
 	    if(cf->capture != NULL)
 		free(cf->capture);
 	    cf->capture = sstrdup(s->argv[1]);
-	    cf->caproot = 1;
-	    if((s->argc > 2) && strchr(s->argv[2], 'R'))
-		cf->caproot = 0;
+	    cf->caproot = 0;
+	    if((s->argc > 2) && strchr(s->argv[2], 'D'))
+		cf->caproot = 1;
+	} else if(!strcmp(s->argv[0], "reparse")) {
+	    if(s->argc < 2) {
+		flog(LOG_WARNING, "%s:%i: missing argument to reparse declaration", s->file, s->lno);
+		continue;
+	    }
+	    if(cf->reparse != NULL)
+		free(cf->reparse);
+	    cf->reparse = sstrdup(s->argv[1]);
+	    cf->parsecomb = 0;
+	    if((s->argc > 2) && strchr(s->argv[2], 'c'))
+		cf->parsecomb = 1;
 	} else if(!strcmp(s->argv[0], "eof")) {
 	    break;
 	} else {
@@ -374,7 +389,7 @@ struct child *findchild(char *file, char *name, struct config **cf)
     return(NULL);
 }
 
-struct pattern *findmatch(char *file, int trydefault, int dir)
+struct pattern *findmatch(char *file, int trydefault, int type)
 {
     int i, o, c;
     char *bn, *ln;
@@ -399,9 +414,7 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
 		ln = file;	/* This should only happen in the base directory. */
 	}
 	for(pat = cfs[c]->patterns; pat != NULL; pat = pat->next) {
-	    if(!dir && (pat->type == PT_DIR))
-		continue;
-	    if(dir && (pat->type != PT_DIR))
+	    if(pat->type != type)
 		continue;
 	    for(i = 0; (rule = pat->rules[i]) != NULL; i++) {
 		if(rule->type == PAT_BASENAME) {
@@ -432,7 +445,7 @@ struct pattern *findmatch(char *file, int trydefault, int dir)
 	}
     }
     if(!trydefault)
-	return(findmatch(file, 1, dir));
+	return(findmatch(file, 1, type));
     return(NULL);
 }
 

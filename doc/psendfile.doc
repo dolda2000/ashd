@@ -1,0 +1,43 @@
+psendfile(1)
+============
+
+NAME
+----
+psendfile - Persistent static file handler for ashd(7)
+
+SYNOPSIS
+--------
+*psendfile* [*-h*]
+
+DESCRIPTION
+-----------
+
+*psendfile* is a variant of *sendfile*(1) that runs as a persistent
+handler. Except those actions of *sendfile* explicitly triggered by
+command-line options, *psendfile* does the exact same things as
+*sendfile*, the only difference being that it runs persistently and
+handles all requests in the same process, instead of spawning a
+process per request. In doing so, it uses more persistent resources in
+order to use less resources per request. As such, *psendfile* is more
+suitable for a system under heavier load, while *sendfile* is more
+suitable for a system under light load.
+
+Accordingly, *psendfile* is a persistent handler, as defined in
+*ashd*(7). See the *sendfile*(1) manpage for all the details of its
+operations, as it mirrors that program exactly except in the special
+options it accepts.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*sendfile*(1), *dirplex*(1), *ashd*(7)

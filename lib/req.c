@@ -32,6 +32,7 @@
 #include <log.h>
 #include <req.h>
 #include <proc.h>
+#include <bufio.h>
 
 struct hthead *mkreq(char *method, char *url, char *ver)
 {
@@ -164,6 +165,68 @@ fail:
     return(-1);
 }
 
+int parseheadersb(struct hthead *head, struct bufio *in)
+{
+    int c, state;
+    struct charbuf name, val;
+    size_t tsz;
+    
+    bufinit(name);
+    bufinit(val);
+    state = 0;
+    tsz = 0;
+    while(1) {
+	c = biogetc(in);
+	if(++tsz >= 65536)
+	    goto fail;
+    again:
+	if(state == 0) {
+	    if(c == '\r') {
+	    } else if(c == '\n') {
+		break;
+	    } else if(c == EOF) {
+		goto fail;
+	    } else {
+		state = 1;
+		goto again;
+	    }
+	} else if(state == 1) {
+	    if(c == ':') {
+		trim(&name);
+		bufadd(name, 0);
+		state = 2;
+	    } else if(c == '\r') {
+	    } else if(c == '\n') {
+		goto fail;
+	    } else if(c == EOF) {
+		goto fail;
+	    } else {
+		bufadd(name, c);
+	    }
+	} else if(state == 2) {
+	    if(c == '\r') {
+	    } else if(c == '\n') {
+		trim(&val);
+		bufadd(val, 0);
+		headappheader(head, name.b, val.b);
+		buffree(name);
+		buffree(val);
+		state = 0;
+	    } else if(c == EOF) {
+		goto fail;
+	    } else {
+		bufadd(val, c);
+	    }
+	}
+    }
+    return(0);
+    
+fail:
+    buffree(name);
+    buffree(val);
+    return(-1);
+}
+
 struct hthead *parseresponse(FILE *in)
 {
     struct hthead *req;
@@ -216,6 +279,72 @@ struct hthead *parseresponse(FILE *in)
     bufadd(ver, 0);
     req = mkresp(code, msg.b, ver.b);
     if(parseheaders(req, in))
+	goto fail;
+    goto out;
+    
+fail:
+    if(req != NULL) {
+	freehthead(req);
+	req = NULL;
+    }
+out:
+    buffree(msg);
+    buffree(ver);
+    return(req);
+}
+
+struct hthead *parseresponseb(struct bufio *in)
+{
+    struct hthead *req;
+    int code;
+    struct charbuf ver, msg;
+    int c;
+    
+    req = NULL;
+    bufinit(ver);
+    bufinit(msg);
+    code = 0;
+    while(1) {
+	c = biogetc(in);
+	if(c == ' ') {
+	    break;
+	} else if((c == EOF) || (c < 32) || (c >= 128)) {
+	    goto fail;
+	} else {
+	    bufadd(ver, c);
+	    if(ver.d >= 128)
+		goto fail;
+	}
+    }
+    while(1) {
+	c = biogetc(in);
+	if(c == ' ') {
+	    break;
+	} else if((c == EOF) || (c < '0') || (c > '9')) {
+	    goto fail;
+	} else {
+	    code = (code * 10) + (c - '0');
+	    if(code >= 10000)
+		goto fail;
+	}
+    }
+    while(1) {
+	c = biogetc(in);
+	if(c == 10) {
+	    break;
+	} else if(c == 13) {
+	} else if((c == EOF) || (c < 32)) {
+	    goto fail;
+	} else {
+	    bufadd(msg, c);
+	    if(msg.d >= 512)
+		goto fail;
+	}
+    }
+    bufadd(msg, 0);
+    bufadd(ver, 0);
+    req = mkresp(code, msg.b, ver.b);
+    if(parseheadersb(req, in))
 	goto fail;
     goto out;
     
@@ -290,7 +419,20 @@ int writeresp(FILE *out, struct hthead *resp)
     return(0);
 }
 
-int sendreq(int sock, struct hthead *req, int fd)
+int writerespb(struct bufio *out, struct hthead *resp)
+{
+    int i;
+    
+    if(bioprintf(out, "%s %i %s\r\n", resp->ver, resp->code, resp->msg) < 0)
+	return(-1);
+    for(i = 0; i < resp->noheaders; i++) {
+	if(bioprintf(out, "%s: %s\r\n", resp->headers[i][0], resp->headers[i][1]) < 0)
+	    return(-1);
+    }
+    return(0);
+}
+
+int sendreq2(int sock, struct hthead *req, int fd, int flags)
 {
     int ret, i;
     struct charbuf buf;
@@ -305,12 +447,17 @@ int sendreq(int sock, struct hthead *req, int fd)
 	bufcatstr2(buf, req->headers[i][1]);
     }
     bufcatstr2(buf, "");
-    ret = sendfd(sock, fd, buf.b, buf.d);
+    ret = sendfd2(sock, fd, buf.b, buf.d, flags);
     buffree(buf);
     if(ret < 0)
 	return(-1);
     else
 	return(0);
+}
+
+int sendreq(int sock, struct hthead *req, int fd)
+{
+    return(sendreq2(sock, req, fd, MSG_NOSIGNAL));
 }
 
 int recvreq(int sock, struct hthead **reqp)

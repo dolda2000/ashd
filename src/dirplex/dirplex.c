@@ -55,6 +55,14 @@ static void chinit(void *idata)
     }
 }
 
+static void childerror(struct hthead *req, int fd)
+{
+    if(errno == EAGAIN)
+	simpleerror(fd, 500, "Server Error", "The request handler is overloaded.");
+    else
+	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+}
+
 static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
 {
     struct child *ch;
@@ -91,7 +99,7 @@ static void handle(struct hthead *req, int fd, char *path, struct pattern *pat)
 	}
 	headappheader(req, "X-Ash-File", path);
 	if(childhandle(ch, req, fd, chinit, twd))
-	    simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+	    childerror(req, fd);
     }
 }
 
@@ -99,20 +107,24 @@ static void handle404(struct hthead *req, int fd, char *path)
 {
     struct child *ch;
     struct config *ccf;
-    char *tmp;
+    struct pattern *pat;
     
-    tmp = sstrdup(path);
-    ch = findchild(tmp, ".notfound", &ccf);
-    if(childhandle(ch, req, fd, chinit, ccf?ccf->path:NULL))
-	simpleerror(fd, 500, "Server Error", "The request handler crashed.");
-    free(tmp);
+    char tmp[strlen(path) + 1];
+    strcpy(tmp, path);
+    if((pat = findmatch(tmp, 0, PT_NOTFOUND)) != NULL) {
+	handle(req, fd, tmp, pat);
+    } else {
+	ch = findchild(tmp, ".notfound", &ccf);
+	if(childhandle(ch, req, fd, chinit, ccf?ccf->path:NULL))
+	    childerror(req, fd);
+    }
 }
 
 static void handlefile(struct hthead *req, int fd, char *path)
 {
     struct pattern *pat;
 
-    if((pat = findmatch(path, 0, 0)) == NULL) {
+    if((pat = findmatch(path, 0, PT_FILE)) == NULL) {
 	handle404(req, fd, path);
 	return;
     }
@@ -186,7 +198,7 @@ static void handledir(struct hthead *req, int fd, char *path)
 	    break;
 	}
     }
-    if((pat = findmatch(cpath, 0, 1)) != NULL) {
+    if((pat = findmatch(cpath, 0, PT_DIR)) != NULL) {
 	handle(req, fd, cpath, pat);
 	goto out;
     }
@@ -196,18 +208,16 @@ out:
     free(cpath);
 }
 
-static int checkpath(struct hthead *req, int fd, char *path, char *rest);
+static int checkpath(struct hthead *req, int fd, char *path, char *rest, int final);
 
-static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *el)
+static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *el, int final)
 {
     struct stat sb;
     char *newpath;
     int rv;
     
-    if(*el == '.') {
-	handle404(req, fd, sprintf3("%s/", path));
-	return(1);
-    }
+    if(*el == '.')
+	return(0);
     if(!stat(sprintf3("%s/%s", path, el), &sb)) {
 	if(S_ISDIR(sb.st_mode)) {
 	    if(!*rest) {
@@ -215,7 +225,7 @@ static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *
 		return(1);
 	    }
 	    newpath = sprintf2("%s/%s", path, el);
-	    rv = checkpath(req, fd, newpath, rest + 1);
+	    rv = checkpath(req, fd, newpath, rest + 1, final);
 	    free(newpath);
 	    return(rv);
 	} else if(S_ISREG(sb.st_mode)) {
@@ -239,9 +249,11 @@ static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *
 
 static int checkdir(struct hthead *req, int fd, char *path, char *rest)
 {
-    char *cpath;
+    char *cpath, *newpath;
     struct config *cf, *ccf;
     struct child *ch;
+    struct stat sb;
+    int rv;
     
     cf = getconfig(path);
     if((cf->capture != NULL) && (cf->caproot || !cf->path || strcmp(cf->path, "."))) {
@@ -257,13 +269,29 @@ static int checkdir(struct hthead *req, int fd, char *path, char *rest)
 	    rest++;
 	replrest(req, rest);
 	if(childhandle(ch, req, fd, chinit, ccf?ccf->path:NULL))
-	    simpleerror(fd, 500, "Server Error", "The request handler crashed.");
+	    childerror(req, fd);
 	return(1);
+    }
+    if(cf->reparse != NULL) {
+	newpath = (cf->reparse[0] == '/')?sstrdup(cf->reparse):sprintf2("%s/%s", path, cf->reparse);
+	rv = stat(newpath, &sb);
+	if(!rv && S_ISDIR(sb.st_mode)) {
+	    rv = checkpath(req, fd, newpath, rest, !cf->parsecomb);
+	} else if(!rv && S_ISREG(sb.st_mode)) {
+	    replrest(req, rest);
+	    handlefile(req, fd, newpath);
+	    rv = 1;
+	} else {
+	    rv = !cf->parsecomb;
+	}
+	free(newpath);
+	if(rv)
+	    return(rv);
     }
     return(0);
 }
 
-static int checkpath(struct hthead *req, int fd, char *path, char *rest)
+static int checkpath(struct hthead *req, int fd, char *path, char *rest, int final)
 {
     char *p, *el;
     int rv;
@@ -292,8 +320,7 @@ static int checkpath(struct hthead *req, int fd, char *path, char *rest)
 	goto out;
     }
     if(strchr(el, '/') || (!*el && *rest)) {
-	handle404(req, fd, sprintf3("%s/", path));
-	rv = 1;
+	rv = 0;
 	goto out;
     }
     if(!*el) {
@@ -302,9 +329,13 @@ static int checkpath(struct hthead *req, int fd, char *path, char *rest)
 	rv = 1;
 	goto out;
     }
-    rv = checkentry(req, fd, path, rest, el);
+    rv = checkentry(req, fd, path, rest, el, final);
     
 out:
+    if(final && !rv) {
+	handle404(req, fd, sprintf3("%s/", path));
+	rv = 1;
+    }
     if(el != NULL)
 	free(el);
     return(rv);
@@ -313,8 +344,7 @@ out:
 static void serve(struct hthead *req, int fd)
 {
     now = time(NULL);
-    if(!checkpath(req, fd, ".", req->rest))
-	handle404(req, fd, ".");
+    checkpath(req, fd, ".", req->rest, 1);
 }
 
 static void chldhandler(int sig)

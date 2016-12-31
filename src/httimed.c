@@ -23,6 +23,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/poll.h>
+#include <sys/socket.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -39,21 +40,21 @@ static void usage(FILE *out)
 
 int main(int argc, char **argv)
 {
-    int c, t, ret;
+    int c, timeout, ret;
     int ch, fd;
     struct hthead *req;
     struct pollfd pfd[2];
     time_t lreq, now;
     
-    t = 300;
+    timeout = 300;
     while((c = getopt(argc, argv, "+ht:")) >= 0) {
 	switch(c) {
 	case 'h':
 	    usage(stdout);
 	    exit(0);
 	case 't':
-	    t = atoi(optarg);
-	    if(t < 1) {
+	    timeout = atoi(optarg);
+	    if(timeout < 1) {
 		fprintf(stderr, "httimed: timeout must be positive\n");
 		exit(1);
 	    }
@@ -75,7 +76,7 @@ int main(int argc, char **argv)
 	pfd[0].events = POLLIN;
 	pfd[1].fd = ch;
 	pfd[1].events = POLLHUP;
-	if((ret = poll(pfd, 2, (t + 1 - (time(NULL) - lreq)) * 1000)) < 0) {
+	if((ret = poll(pfd, 2, (timeout < 0)?-1:((timeout + 1 - (time(NULL) - lreq)) * 1000))) < 0) {
 	    if(errno != EINTR) {
 		flog(LOG_ERR, "httimed: error in poll: %s", strerror(errno));
 		exit(1);
@@ -96,10 +97,10 @@ int main(int argc, char **argv)
 	    freehthead(req);
 	    close(fd);
 	}
-	if(pfd[1].revents & POLLHUP)
-	    break;
-	if(now - lreq > t)
-	    break;
+	if((pfd[1].revents & POLLHUP) || (now - lreq > timeout)) {
+	    timeout = -1;
+	    shutdown(0, SHUT_RDWR);
+	}
 	lreq = now;
     }
     return(0);

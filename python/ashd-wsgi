@@ -1,19 +1,19 @@
 #!/usr/bin/python
 
-import sys, os, getopt, threading, logging, time
-import ashd.proto, ashd.util, ashd.perf
+import sys, os, getopt, socket, logging, time, signal
+import ashd.util, ashd.serve
 try:
     import pdm.srv
 except:
     pdm = None
 
 def usage(out):
-    out.write("usage: ashd-wsgi [-hAL] [-m PDM-SPEC] [-p MODPATH] [-l REQLIMIT] HANDLER-MODULE [ARGS...]\n")
+    out.write("usage: ashd-wsgi [-hAL] [-m PDM-SPEC] [-p MODPATH] [-t REQUEST-HANDLER[:PAR[=VAL](,PAR[=VAL])...]] HANDLER-MODULE [ARGS...]\n")
 
-reqlimit = 0
+hspec = "free", {}
 modwsgi_compat = False
 setlog = True
-opts, args = getopt.getopt(sys.argv[1:], "+hAp:l:m:")
+opts, args = getopt.getopt(sys.argv[1:], "+hALp:t:l:m:")
 for o, a in opts:
     if o == "-h":
         usage(sys.stdout)
@@ -25,7 +25,9 @@ for o, a in opts:
     elif o == "-A":
         modwsgi_compat = True
     elif o == "-l":
-        reqlimit = int(a)
+        hspec = "free", {"max": a, "abort": "10"}
+    elif o == "-t":
+        hspec = ashd.serve.parsehspec(a)
     elif o == "-m":
         if pdm is not None:
             pdm.srv.listen(a)
@@ -51,10 +53,6 @@ else:
         sys.stderr.write("ashd-wsgi: handler %s has no `application' object\n" % args[0])
         sys.exit(1)
     handler = handlermod.application
-
-class closed(IOError):
-    def __init__(self):
-        super(closed, self).__init__("The client has closed the connection.")
 
 cwd = os.getcwd()
 def absolutify(path):
@@ -95,7 +93,7 @@ def unquoteurl(url):
             buf += c
     return buf
 
-def dowsgi(req):
+def mkenv(req):
     env = {}
     env["wsgi.version"] = 1, 0
     for key, val in req.headers:
@@ -147,107 +145,59 @@ def dowsgi(req):
     env["wsgi.multithread"] = True
     env["wsgi.multiprocess"] = False
     env["wsgi.run_once"] = False
+    return env
 
-    resp = []
-    respsent = []
+class request(ashd.serve.wsgirequest):
+    def __init__(self, bkreq, **kw):
+        super(request, self).__init__(**kw)
+        self.bkreq = bkreq.dup()
 
-    def flushreq():
-        if not respsent:
-            if not resp:
-                raise Exception, "Trying to write data before starting response."
-            status, headers = resp
-            respsent[:] = [True]
-            try:
-                req.sk.write("HTTP/1.1 %s\n" % status)
-                for nm, val in headers:
-                    req.sk.write("%s: %s\n" % (nm, val))
-                req.sk.write("\n")
-            except IOError:
-                raise closed()
+    def mkenv(self):
+        return mkenv(self.bkreq)
 
-    def write(data):
-        if not data:
-            return
-        flushreq()
+    def handlewsgi(self, env, startreq):
+        return handler(env, startreq)
+
+    def fileno(self):
+        return self.bkreq.bsk.fileno()
+
+    def writehead(self, status, headers):
+        w = self.buffer.extend
+        w("HTTP/1.1 %s\n" % status)
+        for nm, val in headers:
+            w("%s: %s\n" % (nm, val))
+        w("\n")
+
+    def flush(self):
         try:
-            req.sk.write(data)
-            req.sk.flush()
+            ret = self.bkreq.bsk.send(self.buffer, socket.MSG_DONTWAIT)
+            self.buffer[:ret] = ""
         except IOError:
-            raise closed()
+            raise ashd.serve.closed()
 
-    def startreq(status, headers, exc_info = None):
-        if resp:
-            if exc_info:                # Interesting, this...
-                try:
-                    if respsent:
-                        raise exc_info[0], exc_info[1], exc_info[2]
-                finally:
-                    exc_info = None     # CPython GC bug?
-            else:
-                raise Exception, "Can only start responding once."
-        resp[:] = status, headers
-        return write
+    def close(self):
+        self.bkreq.close()
 
-    reqevent = ashd.perf.request(env)
-    exc = (None, None, None)
-    try:
-        try:
-            respiter = handler(env, startreq)
-            try:
-                for data in respiter:
-                    write(data)
-                if resp:
-                    flushreq()
-            finally:
-                if hasattr(respiter, "close"):
-                    respiter.close()
-        except closed:
-            pass
-        if resp:
-            reqevent.response(resp)
-    except:
-        exc = sys.exc_info()
-        raise
-    finally:
-        reqevent.__exit__(*exc)
-
-flightlock = threading.Condition()
-inflight = 0
-
-class reqthread(threading.Thread):
-    def __init__(self, req):
-        super(reqthread, self).__init__(name = "Request handler")
-        self.req = req.dup()
-    
-    def run(self):
-        global inflight
-        try:
-            flightlock.acquire()
-            try:
-                if reqlimit != 0:
-                    start = time.time()
-                    while inflight >= reqlimit:
-                        flightlock.wait(10)
-                        if time.time() - start > 10:
-                            os.abort()
-                inflight += 1
-            finally:
-                flightlock.release()
-            try:
-                dowsgi(self.req)
-            finally:
-                flightlock.acquire()
-                try:
-                    inflight -= 1
-                    flightlock.notify()
-                finally:
-                    flightlock.release()
-        except:
-            log.error("exception occurred in handler thread", exc_info=True)
-        finally:
-            self.req.close()
-    
 def handle(req):
-    reqthread(req).start()
+    reqhandler.handle(request(bkreq=req, handler=reqhandler))
 
-ashd.util.serveloop(handle)
+if hspec[0] not in ashd.serve.names:
+    sys.stderr.write("ashd-wsgi: no such request handler: %s\n" % hspec[0])
+    sys.exit(1)
+hclass = ashd.serve.names[hspec[0]]
+try:
+    hargs = hclass.parseargs(**hspec[1])
+except ValueError as exc:
+    sys.stderr.write("ashd-wsgi: %s\n" % exc)
+    sys.exit(1)
+
+def sigterm(sig, frame):
+    socket.fromfd(0, socket.AF_UNIX, socket.SOCK_SEQPACKET).shutdown(socket.SHUT_RDWR) # :P
+for signum in [signal.SIGINT, signal.SIGTERM]:
+    signal.signal(signum, sigterm)
+
+reqhandler = hclass(**hargs)
+try:
+    ashd.util.serveloop(handle)
+finally:
+    reqhandler.close()

@@ -78,6 +78,16 @@ the client.
 Note that *htextauth* will wait for the authentication program to exit
 and not process any other requests until then.
 
+FILES
+-----
+The file `etc/extauth/vhtpasswd` in the *ashd* source distribution is
+a simple authenticator program (written in Python) that can be used
+with *htextauth*, which verifies the given credentials against a
+simple database of users with encrypted passwords. It can be used as
+is, or as a simple example of how to produce authenticator
+programs. The accompanying `mkhtpasswd` program can be used to
+maintain the password database.
+
 AUTHOR
 ------
 Fredrik Tolf <fredrik@dolda2000.com>

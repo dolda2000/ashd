@@ -1,3 +1,21 @@
+Version 0.13:
+
+	* FreeBSD support.
+	* Support upgrading connections to full-duplex, for eg. websockets.
+	* More useful dirplex/patplex configuration options.
+	* Improved behavior under overload conditions.
+	* Expanded accesslog's logging capabilities.
+	* Added httrcall.
+	* Quite a slew of random bugfixes and implementation improvements.
+
+Version 0.12:
+
+	* Support chunked request-bodies from clients.
+	* Improved general behavior when handlers are overloaded.
+	* Improved shutdown behavior.
+	* Properly support URL percent-escapes in patplex.
+	* Added psendfile.
+
 Version 0.11:
 
 	* Some useful configuration options for dirplex.

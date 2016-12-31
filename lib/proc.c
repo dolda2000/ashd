@@ -56,7 +56,7 @@ int stdmkchild(char **argv, void (*chinit)(void *), void *idata)
     return(fd[1]);
 }
 
-int sendfd(int sock, int fd, char *data, size_t datalen)
+int sendfd2(int sock, int fd, char *data, size_t datalen, int flags)
 {
     struct msghdr msg;
     struct cmsghdr *cmsg;
@@ -78,7 +78,12 @@ int sendfd(int sock, int fd, char *data, size_t datalen)
     *((int *)CMSG_DATA(cmsg)) = fd;
     msg.msg_controllen = cmsg->cmsg_len;
     
-    return(sendmsg(sock, &msg, MSG_NOSIGNAL | MSG_DONTWAIT));
+    return(sendmsg(sock, &msg, flags));
+}
+
+int sendfd(int sock, int fd, char *data, size_t datalen)
+{
+    return(sendfd2(sock, fd, data, datalen, MSG_NOSIGNAL));
 }
 
 int recvfd(int sock, char **data, size_t *datalen)

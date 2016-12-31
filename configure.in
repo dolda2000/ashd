@@ -1,6 +1,8 @@
-AC_INIT(src/htparser.c)
-AM_INIT_AUTOMAKE([ashd], [0.12])
+AC_INIT([ashd], [0.13])
+AC_CONFIG_SRCDIR(src/htparser.c)
+AM_INIT_AUTOMAKE
 AM_CONFIG_HEADER(config.h)
+AC_USE_SYSTEM_EXTENSIONS
 
 AC_PROG_CC
 AM_PROG_CC_C_O
@@ -19,11 +21,29 @@ if test "$HAS_MAGIC" = no; then
 	AC_MSG_ERROR([*** cannot find libmagic on this system])
 fi
 
+AH_TEMPLATE(HAVE_GLIBC_STDIO, [define to indicate system support for glibc cookie streams])
+AH_TEMPLATE(HAVE_BSD_STDIO, [define to indicate system support for BSD-style funopen streams])
+
+HAS_FOPENCOOKIE=yes
+AC_CHECK_FUNC(fopencookie, [], [HAS_FOPENCOOKIE=no])
+AC_CHECK_MEMBER([cookie_io_functions_t.read], [], [HAS_FOPENCOOKIE=no])
+
+HAS_FUNOPEN=yes
+AC_CHECK_FUNC(funopen, [], [HAS_FUNOPEN=no])
+
+if test "$HAS_FOPENCOOKIE" = yes; then
+        AC_DEFINE(HAVE_GLIBC_STDIO)
+elif test "$HAS_FUNOPEN" = yes; then
+        AC_DEFINE(HAVE_BSD_STDIO)
+else
+        AC_MSG_ERROR([*** libc support for custom stdio streams is required])
+fi
+
 AH_TEMPLATE(HAVE_VALGRIND, [define to include debugging support for Valgrind])
 AC_CHECK_HEADER(valgrind/memcheck.h, [AC_DEFINE(HAVE_VALGRIND)], [])
 
 AH_TEMPLATE(HAVE_EPOLL, [define to enable epoll support])
-AC_ARG_WITH(epoll, [  --with-epoll            Enable epoll(2) support])
+AC_ARG_WITH(epoll, AS_HELP_STRING([--with-epoll], [enable epoll(2) support]))
 HAS_EPOLL=""
 if test "$with_epoll" = no; then HAS_EPOLL=no; fi
 if test -z "$HAS_EPOLL"; then
@@ -39,10 +59,30 @@ fi
 if test "$HAS_EPOLL" = yes; then
 	AC_DEFINE(HAVE_EPOLL)
 fi
-AM_CONDITIONAL(USE_EPOLL, [test "$HAS_EPOLL" = yes ])
+
+AH_TEMPLATE(HAVE_KQUEUE, [define to enable kqueue support])
+AC_ARG_WITH(kqueue, AS_HELP_STRING([--with-kqueue], [enable kqueue(2) support]))
+HAS_KQUEUE=""
+if test "$with_kqueue" = no; then HAS_QUEUE=no; fi
+if test -z "$HAS_KQUEUE"; then
+        AC_CHECK_FUNC(kqueue, [], [HAS_KQUEUE=no])
+fi
+if test -z "$HAS_KQUEUE"; then
+        AC_CHECK_HEADER(sys/event.h, [], [HAS_KQUEUE=no])
+fi
+if test "$HAS_KQUEUE" != no; then HAS_KQUEUE=yes; fi
+if test "$with_kqueue" = yes -a "$HAS_KQUEUE" = no; then
+        AC_MSG_ERROR([*** cannot find kqueue support on this system])
+fi
+if test "$HAS_KQUEUE" = yes; then
+        AC_DEFINE(HAVE_KQUEUE)
+fi
+
+AM_CONDITIONAL(USE_EPOLL, [test "$HAS_EPOLL" = yes])
+AM_CONDITIONAL(USE_KQUEUE, [test "$HAS_KQUEUE" = yes])
 
 AH_TEMPLATE(HAVE_XATTR, [define to compile support for filesystem extended attributes])
-AC_ARG_WITH(xattr, [  --with-xattr            Enable XATTR support])
+AC_ARG_WITH(xattr, AS_HELP_STRING([--with-xattr], [enable XATTR support]))
 HAS_XATTR=""
 if test "$with_xattr" = no; then HAS_XATTR=no; fi
 if test -z "$HAS_XATTR"; then
@@ -62,7 +102,7 @@ fi
 AC_SUBST(XATTR_LIBS)
 
 AH_TEMPLATE(HAVE_GNUTLS, [define to use the GnuTLS library for SSL support])
-AC_ARG_WITH(gnutls, [  --with-gnutls           Enable SSL support with the GnuTLS library])
+AC_ARG_WITH(gnutls, AS_HELP_STRING([--with-gnutls], [enable SSL support with the GnuTLS library]))
 HAS_GNUTLS=""
 if test "$with_gnutls" = no; then HAS_GNUTLS=no; fi
 if test -z "$HAS_GNUTLS"; then

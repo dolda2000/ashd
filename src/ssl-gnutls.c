@@ -34,6 +34,7 @@
 #include <mtio.h>
 #include <req.h>
 #include <log.h>
+#include <bufio.h>
 
 #include "htparser.h"
 
@@ -56,6 +57,7 @@ struct sslport {
     int fd;
     int sport;
     gnutls_certificate_credentials_t creds;
+    gnutls_priority_t ciphers;
     struct namedcreds **ncreds;
 };
 
@@ -187,7 +189,7 @@ static int tlsblock(int fd, gnutls_session_t sess, time_t to)
 	return(block(fd, EV_READ, to));
 }
 
-static ssize_t sslread(void *cookie, char *buf, size_t len)
+static ssize_t sslread(void *cookie, void *buf, size_t len)
 {
     struct sslconn *ssl = cookie;
     ssize_t xf;
@@ -216,7 +218,7 @@ static ssize_t sslread(void *cookie, char *buf, size_t len)
     return(xf);
 }
 
-static ssize_t sslwrite(void *cookie, const char *buf, size_t len)
+static ssize_t sslwrite(void *cookie, const void *buf, size_t len)
 {
     struct sslconn *ssl = cookie;
     int ret;
@@ -254,7 +256,7 @@ static int sslclose(void *cookie)
     return(0);
 }
 
-static cookie_io_functions_t iofuns = {
+static struct bufioops iofuns = {
     .read = sslread,
     .write = sslwrite,
     .close = sslclose,
@@ -265,16 +267,12 @@ static int initreq(struct conn *conn, struct hthead *req)
     struct sslconn *ssl = conn->pdata;
     struct sockaddr_storage sa;
     socklen_t salen;
-    char nmbuf[256];
     
     headappheader(req, "X-Ash-Address", formathaddress((struct sockaddr *)&ssl->name, sizeof(sa)));
-    if(ssl->name.ss_family == AF_INET) {
-	headappheader(req, "X-Ash-Address", inet_ntop(AF_INET, &((struct sockaddr_in *)&ssl->name)->sin_addr, nmbuf, sizeof(nmbuf)));
+    if(ssl->name.ss_family == AF_INET)
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in *)&ssl->name)->sin_port)));
-    } else if(ssl->name.ss_family == AF_INET6) {
-	headappheader(req, "X-Ash-Address", inet_ntop(AF_INET6, &((struct sockaddr_in6 *)&ssl->name)->sin6_addr, nmbuf, sizeof(nmbuf)));
+    else if(ssl->name.ss_family == AF_INET6)
 	headappheader(req, "X-Ash-Port", sprintf3("%i", ntohs(((struct sockaddr_in6 *)&ssl->name)->sin6_port)));
-    }
     salen = sizeof(sa);
     if(!getsockname(ssl->fd, (struct sockaddr *)&sa, &salen))
 	headappheader(req, "X-Ash-Server-Address", formathaddress((struct sockaddr *)&sa, sizeof(sa)));
@@ -292,7 +290,6 @@ static void servessl(struct muth *muth, va_list args)
     struct sslconn ssl;
     gnutls_session_t sess;
     int ret;
-    FILE *in;
     
     int setcreds(gnutls_session_t sess)
     {
@@ -325,7 +322,7 @@ static void servessl(struct muth *muth, va_list args)
     numconn++;
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
     gnutls_init(&sess, GNUTLS_SERVER);
-    gnutls_set_default_priority(sess);
+    gnutls_priority_set(sess, pd->ciphers);
     gnutls_db_set_retrieve_function(sess, sessdbfetch);
     gnutls_db_set_store_function(sess, sessdbstore);
     gnutls_db_set_remove_function(sess, sessdbdel);
@@ -347,8 +344,7 @@ static void servessl(struct muth *muth, va_list args)
     ssl.name = name;
     ssl.sess = sess;
     bufinit(ssl.in);
-    in = fopencookie(&ssl, "r+", iofuns);
-    serve(in, &conn);
+    serve(bioopen(&ssl, &iofuns), fd, &conn);
     
 out:
     gnutls_deinit(sess);
@@ -359,20 +355,30 @@ out:
 static void listenloop(struct muth *muth, va_list args)
 {
     vavar(struct sslport *, pd);
-    int i, ns;
+    int i, ns, n;
     struct sockaddr_storage name;
     socklen_t namelen;
     
+    fcntl(pd->fd, F_SETFL, fcntl(pd->fd, F_GETFL) | O_NONBLOCK);
     while(1) {
 	namelen = sizeof(name);
 	if(block(pd->fd, EV_READ, 0) == 0)
 	    goto out;
-	ns = accept(pd->fd, (struct sockaddr *)&name, &namelen);
-	if(ns < 0) {
-	    flog(LOG_ERR, "accept: %s", strerror(errno));
-	    goto out;
+	n = 0;
+	while(1) {
+	    ns = accept(pd->fd, (struct sockaddr *)&name, &namelen);
+	    if(ns < 0) {
+		if(errno == EAGAIN)
+		    break;
+		if(errno == ECONNABORTED)
+		    continue;
+		flog(LOG_ERR, "accept: %s", strerror(errno));
+		goto out;
+	    }
+	    mustart(servessl, ns, name, pd);
+	    if(++n >= 100)
+		break;
 	}
-	mustart(servessl, ns, name, pd);
     }
     
 out:
@@ -512,15 +518,17 @@ void handlegnussl(int argc, char **argp, char **argv)
 {
     int i, ret, port, fd;
     gnutls_certificate_credentials_t creds;
+    gnutls_priority_t ciphers;
     struct ncredbuf ncreds;
     struct sslport *pd;
-    char *crtfile, *keyfile;
+    char *crtfile, *keyfile, *perr;
     
     init();
     port = 443;
     bufinit(ncreds);
     gnutls_certificate_allocate_credentials(&creds);
     keyfile = crtfile = NULL;
+    ciphers = NULL;
     for(i = 0; i < argc; i++) {
 	if(!strcmp(argp[i], "help")) {
 	    printf("ssl handler parameters:\n");
@@ -528,6 +536,8 @@ void handlegnussl(int argc, char **argp, char **argv)
 	    printf("\t\tThe name of the file to read the certificate from.\n");
 	    printf("\tkey=KEY-FILE    [same as CERT-FILE]\n");
 	    printf("\t\tThe name of the file to read the private key from.\n");
+	    printf("\tprio=PRIORITIES [NORMAL]\n");
+	    printf("\t\tCiphersuite priorities, as a GnuTLS priority string.\n");
 	    printf("\ttrust=CA-FILE   [no default]\n");
 	    printf("\t\tThe name of a file to read trusted certificates from.\n");
 	    printf("\t\tMay be given multiple times.\n");
@@ -557,6 +567,17 @@ void handlegnussl(int argc, char **argp, char **argv)
 	    crtfile = argv[i];
 	} else if(!strcmp(argp[i], "key")) {
 	    keyfile = argv[i];
+	} else if(!strcmp(argp[i], "prio")) {
+	    if(ciphers != NULL)
+		gnutls_priority_deinit(ciphers);
+	    ret = gnutls_priority_init(&ciphers, argv[i], (const char **)&perr);
+	    if(ret == GNUTLS_E_INVALID_REQUEST) {
+		flog(LOG_ERR, "ssl: invalid cipher priority string, at `%s'", perr);
+		exit(1);
+	    } else if(ret != 0) {
+		flog(LOG_ERR, "ssl: could not initialize cipher priorities: %s", gnutls_strerror(ret));
+		exit(1);
+	    }
 	} else if(!strcmp(argp[i], "trust")) {
 	    if((ret = gnutls_certificate_set_x509_trust_file(creds, argv[i], GNUTLS_X509_FMT_PEM)) != 0) {
 		flog(LOG_ERR, "ssl: could not load trust file `%s': %s", argv[i], gnutls_strerror(ret));
@@ -604,6 +625,10 @@ void handlegnussl(int argc, char **argp, char **argv)
 	flog(LOG_ERR, "ssl: could not load certificate or key: %s", gnutls_strerror(ret));
 	exit(1);
     }
+    if((ciphers == NULL) && ((ret = gnutls_priority_init(&ciphers, "NORMAL", NULL)) != 0)) {
+	flog(LOG_ERR, "ssl: could not initialize cipher priorities: %s", gnutls_strerror(ret));
+	exit(1);
+    }
     gnutls_certificate_set_dh_params(creds, dhparams());
     bufadd(ncreds, NULL);
     omalloc(pd);
@@ -611,6 +636,7 @@ void handlegnussl(int argc, char **argp, char **argv)
     pd->sport = port;
     pd->creds = creds;
     pd->ncreds = ncreds.b;
+    pd->ciphers = ciphers;
     bufadd(listeners, mustart(listenloop, pd));
     if((fd = listensock4(port)) < 0) {
 	if(errno != EADDRINUSE) {
@@ -622,6 +648,8 @@ void handlegnussl(int argc, char **argp, char **argv)
 	pd->fd = fd;
 	pd->sport = port;
 	pd->creds = creds;
+	pd->ncreds = ncreds.b;
+	pd->ciphers = ciphers;
 	bufadd(listeners, mustart(listenloop, pd));
     }
 }
