@@ -43,15 +43,10 @@ struct blocker {
     struct muth *th;
 };
 
-struct timeentry {
-    time_t to;
-    struct blocker *bl;
-};
-
 static int epfd = -1, fdln = 0;
 static int exitstatus;
 static struct blocker **fdlist;
-static typedbuf(struct timeentry) timeheap;
+static typedbuf(struct blocker *) timeheap;
 
 static int regfd(struct blocker *bl)
 {
@@ -136,23 +131,23 @@ static void remfd(struct blocker *bl)
     bl->reg = 0;
 }
 
-static void thraise(struct timeentry ent, int n)
+static void thraise(struct blocker *bl, int n)
 {
     int p;
     
     while(n > 0) {
 	p = (n - 1) >> 1;
-	if(timeheap.b[p].to <= ent.to)
+	if(timeheap.b[p]->to <= bl->to)
 	    break;
 	timeheap.b[n] = timeheap.b[p];
-	timeheap.b[n].bl->thpos = n;
+	timeheap.b[n]->thpos = n;
 	n = p;
     }
-    timeheap.b[n] = ent;
-    ent.bl->thpos = n;
+    timeheap.b[n] = bl;
+    bl->thpos = n;
 }
 
-static void thlower(struct timeentry ent, int n)
+static void thlower(struct blocker *bl, int n)
 {
     int c;
     
@@ -160,27 +155,26 @@ static void thlower(struct timeentry ent, int n)
 	c = (n << 1) + 1;
 	if(c >= timeheap.d)
 	    break;
-	if((c + 1 < timeheap.d) && (timeheap.b[c + 1].to < timeheap.b[c].to))
+	if((c + 1 < timeheap.d) && (timeheap.b[c + 1]->to < timeheap.b[c]->to))
 	    c = c + 1;
-	if(timeheap.b[c].to > ent.to)
+	if(timeheap.b[c]->to > bl->to)
 	    break;
 	timeheap.b[n] = timeheap.b[c];
-	timeheap.b[n].bl->thpos = n;
+	timeheap.b[n]->thpos = n;
 	n = c;
     }
-    timeheap.b[n] = ent;
-    ent.bl->thpos = n;
+    timeheap.b[n] = bl;
+    bl->thpos = n;
 }
 
 static void addtimeout(struct blocker *bl, time_t to)
 {
     sizebuf(timeheap, ++timeheap.d);
-    thraise((struct timeentry){.to = to, .bl = bl}, timeheap.d - 1);
+    thraise(bl, timeheap.d - 1);
 }
 
 static void deltimeout(struct blocker *bl)
 {
-    struct timeentry ent;
     int n;
     
     if(bl->thpos == timeheap.d - 1) {
@@ -188,11 +182,11 @@ static void deltimeout(struct blocker *bl)
 	return;
     }
     n = bl->thpos;
-    ent = timeheap.b[--timeheap.d];
-    if((n > 0) && (timeheap.b[(n - 1) >> 1].to > ent.to))
-	thraise(ent, n);
+    bl = timeheap.b[--timeheap.d];
+    if((n > 0) && (timeheap.b[(n - 1) >> 1]->to > bl->to))
+	thraise(bl, n);
     else
-	thlower(ent, n);
+	thlower(bl, n);
 }
 
 static int addblock(struct blocker *bl)
@@ -288,8 +282,8 @@ int ioloop(void)
 	now = time(NULL);
 	if(timeheap.d == 0)
 	    toval = -1;
-	else if(timeheap.b[0].to > now)
-	    toval = (timeheap.b[0].to - now) * 1000;
+	else if(timeheap.b[0]->to > now)
+	    toval = (timeheap.b[0]->to - now) * 1000;
 	else
 	    toval = 1000;
 	if(exitstatus)
@@ -326,9 +320,9 @@ int ioloop(void)
 	    }
 	}
 	now = time(NULL);
-	while((timeheap.d > 0) && (timeheap.b[0].to <= now)) {
+	while((timeheap.d > 0) && ((bl = timeheap.b[0])->to <= now)) {
 	    if(bl->id < 0) {
-		resume(timeheap.b[0].bl->th, 0);
+		resume(bl->th, 0);
 	    } else {
 		bl->rev = 0;
 		resume(bl->th, bl->id);
