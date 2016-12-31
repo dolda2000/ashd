@@ -272,7 +272,6 @@ int ioloop(void)
     exitstatus = 0;
     epfd = epoll_create(128);
     fcntl(epfd, F_SETFD, FD_CLOEXEC);
-    bufinit(timeheap);
     for(bl = blockers; bl; bl = nbl) {
 	nbl = bl->n;
 	if(regfd(bl))
@@ -331,7 +330,6 @@ int ioloop(void)
     }
     for(bl = blockers; bl; bl = bl->n)
 	remfd(bl);
-    buffree(timeheap);
     close(epfd);
     epfd = -1;
     return(exitstatus);
