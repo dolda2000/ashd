@@ -36,10 +36,15 @@ static int exitstatus;
 
 struct blocker {
     struct blocker *n, *p;
+    struct iterator *it;
     int fd;
     int ev, rev, id;
     time_t to;
     struct muth *th;
+};
+
+struct iterator {
+    struct blocker *bl;
 };
 
 static void addblock(struct blocker *bl)
@@ -58,6 +63,11 @@ static void remblock(struct blocker *bl)
 	bl->p->n = bl->n;
     if(bl == blockers)
 	blockers = bl->n;
+    if(bl->it) {
+	if((bl->it->bl = bl->n) != NULL)
+	    bl->it->bl->it = bl->it;
+	bl->it = NULL;
+    }
 }
 
 struct selected mblock(time_t to, int n, struct selected *spec)
@@ -111,7 +121,8 @@ int ioloop(void)
 {
     int ret;
     fd_set rfds, wfds, efds;
-    struct blocker *bl, *nbl;
+    struct blocker *bl;
+    struct iterator it;
     struct timeval toval;
     time_t now, timeout;
     int maxfd;
@@ -150,8 +161,9 @@ int ioloop(void)
 	    }
 	} else {
 	    now = time(NULL);
-	    for(bl = blockers; bl; bl = nbl) {
-		nbl = bl->n;
+	    for(bl = it.bl = blockers; bl; bl = it.bl) {
+		if((it.bl = bl->n) != NULL)
+		    it.bl->it = &it;
 		ev = 0;
 		if(FD_ISSET(bl->fd, &rfds))
 		    ev |= EV_READ;
@@ -174,6 +186,8 @@ int ioloop(void)
 			resume(bl->th, bl->id);
 		    }
 		}
+		if(it.bl)
+		    it.bl->it = NULL;
 	    }
 	}
     }
