@@ -38,6 +38,7 @@ struct blocker {
     struct blocker *n, *p, *n2, *p2;
     int fd, reg;
     int ev, rev, id;
+    int thpos;
     time_t to;
     struct muth *th;
 };
@@ -45,6 +46,7 @@ struct blocker {
 static int epfd = -1, fdln = 0;
 static int exitstatus;
 static struct blocker **fdlist;
+static typedbuf(struct blocker *) timeheap;
 
 static int regfd(struct blocker *bl)
 {
@@ -129,6 +131,64 @@ static void remfd(struct blocker *bl)
     bl->reg = 0;
 }
 
+static void thraise(struct blocker *bl, int n)
+{
+    int p;
+    
+    while(n > 0) {
+	p = (n - 1) >> 1;
+	if(timeheap.b[p]->to <= bl->to)
+	    break;
+	timeheap.b[n] = timeheap.b[p];
+	timeheap.b[n]->thpos = n;
+	n = p;
+    }
+    timeheap.b[n] = bl;
+    bl->thpos = n;
+}
+
+static void thlower(struct blocker *bl, int n)
+{
+    int c;
+    
+    while(1) {
+	c = (n << 1) + 1;
+	if(c >= timeheap.d)
+	    break;
+	if((c + 1 < timeheap.d) && (timeheap.b[c + 1]->to < timeheap.b[c]->to))
+	    c = c + 1;
+	if(timeheap.b[c]->to > bl->to)
+	    break;
+	timeheap.b[n] = timeheap.b[c];
+	timeheap.b[n]->thpos = n;
+	n = c;
+    }
+    timeheap.b[n] = bl;
+    bl->thpos = n;
+}
+
+static void addtimeout(struct blocker *bl, time_t to)
+{
+    sizebuf(timeheap, ++timeheap.d);
+    thraise(bl, timeheap.d - 1);
+}
+
+static void deltimeout(struct blocker *bl)
+{
+    int n;
+    
+    if(bl->thpos == timeheap.d - 1) {
+	timeheap.d--;
+	return;
+    }
+    n = bl->thpos;
+    bl = timeheap.b[--timeheap.d];
+    if((n > 0) && (timeheap.b[(n - 1) >> 1]->to > bl->to))
+	thraise(bl, n);
+    else
+	thlower(bl, n);
+}
+
 static int addblock(struct blocker *bl)
 {
     if((epfd >= 0) && regfd(bl))
@@ -137,11 +197,15 @@ static int addblock(struct blocker *bl)
     if(blockers)
 	blockers->p = bl;
     blockers = bl;
+    if(bl->to > 0)
+	addtimeout(bl, bl->to);
     return(0);
 }
 
 static void remblock(struct blocker *bl)
 {
+    if(bl->to > 0)
+	deltimeout(bl);
     if(bl->n)
 	bl->n->p = bl->p;
     if(bl->p)
@@ -203,27 +267,23 @@ int ioloop(void)
     struct blocker *bl, *nbl;
     struct epoll_event evr[16];
     int i, fd, nev, ev, toval;
-    time_t now, timeout;
+    time_t now;
     
     exitstatus = 0;
     epfd = epoll_create(128);
     fcntl(epfd, F_SETFD, FD_CLOEXEC);
+    bufinit(timeheap);
     for(bl = blockers; bl; bl = nbl) {
 	nbl = bl->n;
 	if(regfd(bl))
 	    resume(bl->th, -1);
     }
     while(blockers != NULL) {
-	timeout = 0;
-	for(bl = blockers; bl; bl = bl->n) {
-	    if((bl->to != 0) && ((timeout == 0) || (timeout > bl->to)))
-		timeout = bl->to;
-	}
 	now = time(NULL);
-	if(timeout == 0)
+	if(timeheap.d == 0)
 	    toval = -1;
-	else if(timeout > now)
-	    toval = (timeout - now) * 1000;
+	else if(timeheap.b[0]->to > now)
+	    toval = (timeheap.b[0]->to - now) * 1000;
 	else
 	    toval = 1000;
 	if(exitstatus)
@@ -260,20 +320,18 @@ int ioloop(void)
 	    }
 	}
 	now = time(NULL);
-	for(bl = blockers; bl; bl = nbl) {
-	    nbl = bl->n;
-	    if((bl->to != 0) && (bl->to <= now)) {
-		if(bl->id < 0) {
-		    resume(bl->th, 0);
-		} else {
-		    bl->rev = 0;
-		    resume(bl->th, bl->id);
-		}
+	while((timeheap.d > 0) && ((bl = timeheap.b[0])->to <= now)) {
+	    if(bl->id < 0) {
+		resume(bl->th, 0);
+	    } else {
+		bl->rev = 0;
+		resume(bl->th, bl->id);
 	    }
 	}
     }
     for(bl = blockers; bl; bl = bl->n)
 	remfd(bl);
+    buffree(timeheap);
     close(epfd);
     epfd = -1;
     return(exitstatus);

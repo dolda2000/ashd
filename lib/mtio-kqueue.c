@@ -262,6 +262,8 @@ int ioloop(void)
 	    }
 	}
 	now = time(NULL);
+	/* XXX: This is inefficient and buggy, and should have the
+	 * heap structure from mtio-epoll ported. */
 	for(bl = blockers; bl; bl = nbl) {
 	    nbl = bl->n;
 	    if((bl->to != 0) && (bl->to <= now)) {
