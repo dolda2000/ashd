@@ -207,7 +207,8 @@ class threadpool(handler):
         self.waitlimit = 5
         self.wlstart = 0.0
         self.qlk = threading.Lock()
-        self.qcond = threading.Condition(self.qlk)
+        self.qfcond = threading.Condition(self.qlk)
+        self.qecond = threading.Condition(self.qlk)
         self.max = max
         self.qsz = qsz
         self.timeout = timeout
@@ -229,15 +230,15 @@ class threadpool(handler):
             if self.timeout is not None:
                 now = start = time.time()
                 while len(self.queue) >= self.qsz:
-                    self.qcond.wait(start + self.timeout - now)
+                    self.qecond.wait(start + self.timeout - now)
                     now = time.time()
                     if now - start > self.timeout:
                         os.abort()
             else:
-                while len(self.current) >= self.qsz:
-                    self.qcond.wait()
+                while len(self.queue) >= self.qsz:
+                    self.qecond.wait()
             self.queue.append(req)
-            self.qcond.notify()
+            self.qfcond.notify()
             if len(self.waiting) < 1:
                 spawn = True
         if spawn:
@@ -283,13 +284,14 @@ class threadpool(handler):
                         try:
                             if len(self.waiting) == self.waitlimit:
                                 self.wlstart = now
-                            self.qcond.wait(start + timeout - now)
+                            self.qfcond.wait(start + timeout - now)
                         finally:
                             self.waiting.remove(th)
                         now = time.time()
                         if now - start > timeout:
                             return
                     req = self.queue.popleft()
+                    self.qecond.notify()
                 try:
                     self.handle1(req)
                 finally:
