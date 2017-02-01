@@ -54,8 +54,12 @@ class epoller(object):
         ep = select.epoll()
         try:
             with self.lock:
-                for fd, (ob, evs) in self.registered.items():
-                    ep.register(fd, evs)
+                try:
+                    for fd, (ob, evs) in self.registered.items():
+                        ep.register(fd, evs)
+                except:
+                    self.registered.clear()
+                    raise
                 self.ep = ep
 
             while self.registered:
