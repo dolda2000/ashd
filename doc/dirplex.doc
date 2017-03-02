@@ -71,7 +71,7 @@ element. If there is such a file, it is considered the result of the
 mapping.
 
 If the result of the mapping procedure is a directory, it is checked
-for the presence of a filed named by the *index-file* configuration
+for the presence of a file named by the *index-file* configuration
 directive (see CONFIGURATION below). If there is such a file, it is
 considered the final result instead of the directory itself. If the
 index file name contains no dots and there is no exact match, then,
