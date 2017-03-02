@@ -295,7 +295,7 @@ A HTTP 404 response is sent to the client if
  * A path element is encountered during mapping which, after URL
    unescaping, either begins with a dot or contains slashes;
  * The mapping procedure finds a file which is neither a directory nor
-   a regular file (or a symbolic link to any of the same);
+   a regular file (nor a symbolic link to any of the same);
  * An empty, non-final path element is encountered during mapping; or
  * The mapping procedure results in a file which is not matched by any
    *match* stanza.
