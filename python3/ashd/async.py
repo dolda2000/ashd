@@ -5,6 +5,7 @@ class epoller(object):
 
     def __init__(self, check=None):
         self.registered = {}
+        self.fdcache = {}
         self.lock = threading.RLock()
         self.ep = None
         self.th = None
@@ -54,8 +55,12 @@ class epoller(object):
         ep = select.epoll()
         try:
             with self.lock:
-                for fd, (ob, evs) in self.registered.items():
-                    ep.register(fd, evs)
+                try:
+                    for fd, (ob, evs) in self.registered.items():
+                        ep.register(fd, evs)
+                except:
+                    self.registered.clear()
+                    raise
                 self.ep = ep
 
             while self.registered:
@@ -82,6 +87,7 @@ class epoller(object):
                         if fd in self.registered:
                             nevs = self._evsfor(ch)
                             if nevs == 0:
+                                del self.fdcache[ch]
                                 del self.registered[fd]
                                 ep.unregister(fd)
                                 self._cb(ch, "close")
@@ -115,6 +121,7 @@ class epoller(object):
                 ch.close()
                 return
             ch.watcher = self
+            self.fdcache[ch] = fd
             self.registered[fd] = (ch, evs)
             if self.ep:
                 self.ep.register(fd, evs)
@@ -122,14 +129,16 @@ class epoller(object):
 
     def remove(self, ch, ignore=False):
         with self.lock:
-            fd = ch.fileno()
-            if fd not in self.registered:
+            try:
+                fd = self.fdcache[ch]
+            except KeyError:
                 if ignore:
                     return
                 raise KeyError("fd %i is not registered" % fd)
             pch, cevs = self.registered[fd]
             if pch is not ch:
                 raise ValueError("fd %i registered via object %r, cannot remove with %r" % (pch, ch))
+            del self.fdcache[ch]
             del self.registered[fd]
             if self.ep:
                 self.ep.unregister(fd)
@@ -137,8 +146,9 @@ class epoller(object):
 
     def update(self, ch, ignore=False):
         with self.lock:
-            fd = ch.fileno()
-            if fd not in self.registered:
+            try:
+                fd = self.fdcache[ch]
+            except KeyError:
                 if ignore:
                     return
                 raise KeyError("fd %i is not registered" % fd)
@@ -147,6 +157,7 @@ class epoller(object):
                 raise ValueError("fd %i registered via object %r, cannot update with %r" % (pch, ch))
             evs = self._evsfor(ch)
             if evs == 0:
+                del self.fdcache[ch]
                 del self.registered[fd]
                 if self.ep:
                     self.ep.unregister(fd)
