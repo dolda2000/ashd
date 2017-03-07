@@ -436,6 +436,7 @@ int main(int argc, char **argv, char **envp)
     printf("\n");
     if(passdata(out, stdout))
 	kill(child, SIGINT);
+    fclose(out);
     if(waitpid(child, &estat, 0) == child) {
 	if(WCOREDUMP(estat))
 	    flog(LOG_WARNING, "CGI handler `%s' dumped core", prog.b[0]);
