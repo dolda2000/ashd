@@ -287,12 +287,13 @@ int ioloop(void)
     }
     while(blockers != NULL) {
 	now = time(NULL);
+	toval = &(struct timespec){};
 	if(timeheap.d == 0)
 	    toval  = NULL;
 	else if(timeheap.b[0]->to > now)
-	    toval = &(struct timespec){.tv_sec = timeheap.b[0]->to - now};
+	    *toval = (struct timespec){.tv_sec = timeheap.b[0]->to - now};
 	else
-	    toval = &(struct timespec){.tv_sec = 1};
+	    *toval = (struct timespec){.tv_sec = 1};
 	if(exitstatus)
 	    break;
 	nev = kevent(qfd, NULL, 0, evs, sizeof(evs) / sizeof(*evs), toval);
