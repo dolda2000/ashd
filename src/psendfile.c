@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <stdint.h>
 #include <time.h>
+#include <signal.h>
 #include <magic.h>
 #include <locale.h>
 #include <langinfo.h>
