@@ -75,8 +75,10 @@ class handler(object):
     def handle(self, request):
         raise Exception()
     def ckflush(self, req):
+        p = select.poll()
+        p.register(req, select.POLLOUT)
         while len(req.buffer) > 0:
-            rls, wls, els = select.select([], [req], [req])
+            p.poll()
             req.flush()
     def close(self):
         pass
