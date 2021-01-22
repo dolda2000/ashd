@@ -99,6 +99,8 @@ LOGIN
 
 As part of the login procedure, *userplex* does the following:
 
+ * A new session is entered (with *setsid*(2)).
+
  * The UID, GID and auxiliary groups of the new process are changed
    accordingly. For testing purposes, *userplex* may be running as a
    user other than root, and the child process will, then, simply exit
