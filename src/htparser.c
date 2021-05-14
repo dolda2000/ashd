@@ -40,7 +40,6 @@
 #include "htparser.h"
 
 static int plex;
-static char *pidfile = NULL;
 static int daemonize, usesyslog;
 struct mtbuf listeners;
 
@@ -603,7 +602,7 @@ int main(int argc, char **argv)
 {
     int c, d;
     int i, s1;
-    char *root;
+    char *root, *pidfile, *pidtmp;
     FILE *pidout;
     struct passwd *pwent;
     
@@ -656,8 +655,14 @@ int main(int argc, char **argv)
     bufadd(listeners, mustart(plexwatch, plex));
     pidout = NULL;
     if(pidfile != NULL) {
-	if((pidout = fopen(pidfile, "w")) == NULL) {
-	    flog(LOG_ERR, "could not open %s for writing: %s", pidfile, strerror(errno));
+	pidtmp = sprintf3("%s.new", pidfile);
+	if((pidout = fopen(pidtmp, "w")) == NULL) {
+	    flog(LOG_ERR, "could not open %s for writing: %s", pidtmp, strerror(errno));
+	    return(1);
+	}
+	if(rename(pidtmp, pidfile)) {
+	    flog(LOG_ERR, "could not overwrite %s: %s", pidfile, strerror(errno));
+	    unlink(pidtmp);
 	    return(1);
 	}
     }
@@ -688,7 +693,7 @@ int main(int argc, char **argv)
     }
     if(pidout != NULL) {
 	fprintf(pidout, "%i\n", getpid());
-	fclose(pidout);
+	fflush(pidout);
     }
     d = 0;
     while(!d) {
@@ -701,11 +706,17 @@ int main(int argc, char **argv)
 		while(listeners.d > 0)
 		    resume(listeners.b[0], 0);
 		flog(LOG_INFO, "no longer listening");
+		if(pidout != NULL) {
+		    putc('\n', pidout);
+		    fflush(pidout);
+		}
 	    } else {
 		d = 1;
 	    }
 	    break;
 	}
     }
+    if(pidout != NULL)
+	ftruncate(fileno(pidout), 0);
     return(0);
 }
