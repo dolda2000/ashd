@@ -15,6 +15,9 @@ set -e
 PATH=/usr/local/bin:/usr/local/sbin:$PATH
 HTPARSER="$(which htparser || true)"
 PIDFILE=/var/run/ashd.pid
+GRACE_PERIOD=10
+USER=nobody
+CHROOT=/var/tmp
 PORTSPEC="plain"
 ROOTSPEC="dirplex /srv/www"
 [ -r /etc/default/locale ] && . /etc/default/locale
@@ -24,14 +27,78 @@ ROOTSPEC="dirplex /srv/www"
 start() {
     export LANG
     log_daemon_msg "Starting HTTP server" "ashd"
-    start-stop-daemon -S -p "$PIDFILE" -qx "$HTPARSER" -- -Sf -p "$PIDFILE" -u nobody -r /var/tmp $PORTSPEC -- $ROOTSPEC
+    if start-stop-daemon -S -p "$PIDFILE" -qa "$HTPARSER" -- -Sf -p "$PIDFILE" -u "$USER" -r "$CHROOT" $PORTSPEC -- $ROOTSPEC; then
+       log_success_msg
+    else
+	log_end_msg $?
+    fi
+}
+
+kill_wholly() {
+    start-stop-daemon -K -p "$PIDFILE" -qx "$HTPARSER"
+}
+
+kill_listen() {
+    pid=$(cat "$PIDFILE" 2>/dev/null || true)
+    if [ -z "$pid" ]; then
+	log_failure_msg "no pid file"
+	return 1
+    fi
+    if ! kill -0 "$pid"; then
+	log_failure_msg "invalid saved pid"
+	return 1
+    fi
+    log_progress_msg "listen"
+    kill -TERM "$pid"
+    for try in 0 1 2 3 4 5; do
+	  sleep $try
+	  case "$(wc -l <"$PIDFILE")" in
+	      1) continue ;;
+	      0|2) return 0 ;;
+	      *)
+		  log_failure_msg "could not parse pid file"
+		  return 1
+		  ;;
+	  esac
+    done
+    log_failure_msg "htparser did not stop listening, killing it completely"
+    kill_wholly
+    start-stop-daemon -K -p "$PIDFILE" -qx "$HTPARSER"
+    return 1
+}
+
+stop_listen() {
+    log_daemon_msg "Stopping HTTP server" "ashd"
+    kill_listen
     log_end_msg $?
 }
 
-stop() {
+stop_gracefully() {
     log_daemon_msg "Stopping HTTP server" "ashd"
-    start-stop-daemon -K -p "$PIDFILE" -qx "$HTPARSER"
-    log_end_msg $?
+    if ! kill_listen ; then
+	log_end_msg $?
+	return 1
+    fi
+    pid=$(cat "$PIDFILE" 2>/dev/null || true)
+    if kill -0 "$pid" 2>/dev/null; then
+	log_progress_msg "waiting for remaining connections..."
+	for try in $(seq "$GRACE_PERIOD"); do
+	    sleep 1
+	    if ! kill -0 "$pid" 2>/dev/null; then
+		log_success_msg
+		return 0
+	    fi
+	done
+    else
+	log_success_msg
+	return 0
+    fi
+    log_progress_msg "terminating remaining connections"
+    if kill_wholly; then
+	log_success_msg
+    else
+	log_end_msg $?
+    fi
 }
 
 case "$1" in
@@ -39,10 +106,12 @@ case "$1" in
 	start
 	;;
     stop)
-	stop
+	stop_gracefully
 	;;
     restart)
-	stop
+	stop_listen
+	# Truncate PID file to allow start-stop-daemon to work despite remaining connections.
+	>"$PIDFILE"
 	start
 	;;
 esac
