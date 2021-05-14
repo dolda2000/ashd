@@ -621,16 +621,16 @@ int main(int argc, char **argv)
 	    usesyslog = 1;
 	    break;
 	case 'u':
-	    if((pwent = getpwnam(optarg)) == NULL) {
+	    if(optarg[0] && ((pwent = getpwnam(optarg)) == NULL)) {
 		flog(LOG_ERR, "could not find user %s", optarg);
 		exit(1);
 	    }
 	    break;
 	case 'r':
-	    root = optarg;
+	    root = optarg[0] ? optarg : NULL;
 	    break;
 	case 'p':
-	    pidfile = optarg;
+	    pidfile = optarg[0] ? optarg : NULL;
 	    break;
 	default:
 	    usage(stderr);
