@@ -607,7 +607,7 @@ int main(int argc, char **argv)
     struct passwd *pwent;
     
     daemonize = usesyslog = 0;
-    root = NULL;
+    root = pidfile = NULL;
     pwent = NULL;
     while((c = getopt(argc, argv, "+hSfu:r:p:")) >= 0) {
 	switch(c) {
