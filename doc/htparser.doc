@@ -81,6 +81,9 @@ OPTIONS
 	After having daemonized, write the PID of the new process to
 	'PIDFILE'.
 
+If the *-u*, *-r* or *-p* option is presented with an empty argument,
+it will be treated as if the option had not been given.
+
 SIGNALS
 -------
 
@@ -91,6 +94,31 @@ SIGTERM, SIGINT::
 	currently ongoing requests until none remain, not keeping the
 	connections open for keep-alive. Upon second reception,
 	`htparser` shuts down completely.
+
+PID-FILE PROTOCOL
+-----------------
+
+If the *-p* option is used to create a PID file, `htparser` will
+follow a simple protocol to allow state monitoring for clean shutdown
+purposes. When `htparser` is signalled to terminate, as described
+under SIGNALS, then it appends a single newline at the end of the PID
+file. Once all outstanding connections have been terminated, then
+`htparser` will truncate the PID file to zero size just prior to
+exiting. Thus, init scripts or other state-monitoring tools can know
+that `htparser` is serving remaining connections as long as the PID
+file contains two lines (the last of which is empty).
+
+Further, when `htparser` starts, it does not overwrite the contents of
+an existing PID file, but rather creates a new file, replacing the old
+file. Thus, if a new instance of `htparser` is started while a
+previous instance is still running (or serving remaining connections),
+the PID file for the new instance will not be truncated when the
+previous instance terminates.
+
+The reason for the somewhat unorthodox protocol is that it works by
+simply keeping the PID file open in the running process, allowing the
+protocol to work without pathnames, and therefore even if `htparser`
+is instructed to change root directory with the *-r* option.
 
 EXAMPLES
 --------
