@@ -124,6 +124,7 @@ static void runserver(int lsk, int ch)
 		if((rfd = recvreq(cl[i], &req)) < 0) {
 		    if(errno != 0)
 			flog(LOG_ERR, "htpipe: error from client: %s", strerror(errno));
+		    close(cl[i]);
 		    cl[i] = -1;
 		} else {
 		    if(sendreq(ch, req, rfd)) {
