@@ -104,6 +104,7 @@ static void runserver(int lsk, int ch)
     struct hthead *req;
     
     ncl = 0;
+    cl = NULL;
     while(1) {
 	struct pollfd pfd[ncl + 1];
 	for(i = 0; i < ncl; i++) {
