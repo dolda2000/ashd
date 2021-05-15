@@ -1,0 +1,71 @@
+htpipe(1)
+==========
+
+NAME
+----
+htpipe - Ashd decoupler pipe
+
+SYNOPSIS
+--------
+*htpipe* [*-h*] [*-CS*] 'SOCKET-PATH' ['CHILD' ['ARGS'...]]
+
+DESCRIPTION
+-----------
+
+The *htpipe* handler implements piping of *ashd*(7) requests over a
+named Unix socket. The main reason for doing so would be to isolate an
+*ashd*(7) handler program from the effects of restarting its parent
+process. In particular, it is useful for isolating the entire handler
+process tree from restarting *htparser*(1), which may be done
+particularly often for such reasons as certificate renewal.
+
+If the *-S* flag is given to start *htpipe* in server mode, *htpipe*
+will start listening to a socket named by 'SOCKET-PATH', start a
+handler program as specified by 'CHILD' and 'ARGS', accept connections
+on said socket, and pass requests received on such connections to the
+handler program. It can handle an arbitrary amount of such
+connections, but it is not implemented for high performance with a
+large number of connections. It is expected that the ordinary will
+involve very few connections, usually only one at a time.
+
+If the *-C* flag is given the start *htpipe* in client mode, *htpipe*
+will connect to the socket named by 'SOCKET-PATH', accept requests
+from standard input, and pass such requests over said socket,
+presumably to an *htpipe* instance running in server mode on the other
+end.
+
+By default, when neither the *-S* nor the *-C* option is given,
+*htpipe* will attempt to connect to the socket named by 'SOCKET-PATH'
+and, if that succeeds, go on running in client mode, just as if the
+*-C* option had been given. If, however, the connection fails, it will
+fork a copy of itself to run in server mode, and then reconnect to the
+socket presumably created by that new process.
+
+*htpipe* is a persistent handler, as defined in *ashd*(7), and the
+specified child handler must also be a persistent handler.
+
+OPTIONS
+-------
+
+*-h*::
+
+	Print a brief help message to standard output and exit.
+
+*-C*::
+
+	Run in dedicated client mode, as described above. In this
+	mode, the 'CHILD' argument does not need to be given.
+
+*-S*::
+
+	Run in dedicated server mode, as described above. In this
+	mode, as well as when neither the *-C* nor the *-S* option
+	were given, the 'CHILD' argument is mandatory.
+
+AUTHOR
+------
+Fredrik Tolf <fredrik@dolda2000.com>
+
+SEE ALSO
+--------
+*ashd*(7)
