@@ -6,4 +6,4 @@ cd "$(dirname "$0")"
 
 # Start htparser running patplex; see the patterns.conf file for
 # further details.
-htparser plain:port=8080 -- patplex patterns.conf
+htparser plain:port=8080 -- patplex ./patterns.conf
