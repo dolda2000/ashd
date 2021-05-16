@@ -35,8 +35,8 @@ OPTIONS
 	allowed to run at one time. If further request are received
 	while 'LIMIT' children are running, *httrcall* will block,
 	waiting for one to exit before processing further requests. If
-	no *-l* option is specified, *httrcall* imposes no limit on
-	the number of children that may run.
+	no *-l* option is specified (or specified as zero), *httrcall*
+	imposes no limit on the number of children that may run.
 
 AUTHOR
 ------
