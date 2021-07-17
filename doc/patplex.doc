@@ -92,10 +92,14 @@ rules are recognized:
 	'HEADER', the rule never matches. If 'FLAGS' contain the
 	character `i`, 'REGEX' is matched case-independently.
 
+*all*::
+
+	The rule always matches.
+
 *default*::
 
-	Matches if and only if no *match* stanza without a *default*
-	rule has matched.
+	Convenient shorthand for an *all* line followed by *priority
+	-10* (see below).
 
 In addition to the rules, a *match* stanza must contain exactly one
 follow-up line specifying the action to take if it matches. Currently,
@@ -108,6 +112,20 @@ only the *handler* action is recognized:
 
 Additionally, a *match* stanza may contain any of the following,
 optional lines:
+
+*priority* 'INTEGER'::
+
+	Specifies the priority for the match stanza. In case more than
+	one stanza match a request, the one with the highest priority
+	is used. In case more than one stanza with the same highest
+	priority match a request, it is unspecified which will be
+	used. Match stanzas without a priority specification will
+	default to priority 0. Either positive or negative priorities
+	may be specified.
+
+*order* 'INTEGER'::
+
+	A synonym for *priority*. Use whichever you like the best.
 
 *set* 'HEADER' 'VALUE'::
 

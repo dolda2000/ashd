@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <regex.h>
+#include <limits.h>
 #include <sys/wait.h>
 
 #ifdef HAVE_CONFIG_H
@@ -41,7 +42,6 @@
 #define PAT_METHOD 2
 #define PAT_HEADER 3
 #define PAT_ALL 4
-#define PAT_DEFAULT 5
 
 #define PATFL_MSS 1
 #define PATFL_UNQ 2
@@ -69,6 +69,7 @@ struct pattern {
     char *childnm;
     struct rule **rules;
     char *restpat;
+    int prio;
 };
 
 static struct config *gconfig, *lconfig;
@@ -237,7 +238,14 @@ static struct pattern *parsepattern(struct cfstate *s)
 	} else if(!strcmp(s->argv[0], "all")) {
 	    newrule(pat)->type = PAT_ALL;
 	} else if(!strcmp(s->argv[0], "default")) {
-	    newrule(pat)->type = PAT_DEFAULT;
+	    newrule(pat)->type = PAT_ALL;
+	    pat->prio = -10;
+	} else if(!strcmp(s->argv[0], "order") || !strcmp(s->argv[0], "priority")) {
+	    if(s->argc < 2) {
+		flog(LOG_WARNING, "%s:%i: missing specification for `%s' directive", s->file, s->lno, s->argv[0]);
+		continue;
+	    }
+	    pat->prio = atoi(s->argv[1]);
 	} else if(!strcmp(s->argv[0], "handler")) {
 	    if(s->argc < 2) {
 		flog(LOG_WARNING, "%s:%i: missing child name for `handler' directive", s->file, s->lno);
@@ -394,7 +402,19 @@ static void qoffsets(char *buf, int *obuf, char *pstr, int unquote)
     }
 }
 
-static struct pattern *findmatch(struct config *cf, struct hthead *req, int trydefault)
+struct match {
+    struct pattern *pat;
+    char **mstr;
+    int rmo;
+};
+
+static void freematch(struct match *match)
+{
+    freeca(match->mstr);
+    free(match);
+}
+
+static struct match *findmatch(struct config *cf, struct hthead *req, struct match *match)
 {
     int i, o;
     struct pattern *pat;
@@ -407,6 +427,8 @@ static struct pattern *findmatch(struct config *cf, struct hthead *req, int tryd
     
     mstr = NULL;
     for(pat = cf->patterns; pat != NULL; pat = pat->next) {
+	if(match && (pat->prio <= match->pat->prio))
+	    continue;
 	rmo = -1;
 	for(i = 0; (rule = pat->rules[i]) != NULL; i++) {
 	    rx = NULL;
@@ -451,27 +473,32 @@ static struct pattern *findmatch(struct config *cf, struct hthead *req, int tryd
 		    }
 		}
 	    } else if(rule->type == PAT_ALL) {
-	    } else if(rule->type == PAT_DEFAULT) {
-		if(!trydefault)
-		    break;
 	    }
 	}
 	if(!rule) {
-	    if(pat->restpat) {
-		exprestpat(req, pat, mstr);
-	    } else if(rmo != -1) {
-		replrest(req, req->rest + rmo);
-	    }
-	    if(mstr)
-		freeca(mstr);
-	    return(pat);
-	}
-	if(mstr) {
-	    freeca(mstr);
-	    mstr = NULL;
+	    if(match)
+		freematch(match);
+	    omalloc(match);
+	    match->pat = pat;
+	    match->mstr = mstr;
+	    match->rmo = rmo;
 	}
     }
-    return(NULL);
+    return(match);
+}
+
+static void execmatch(struct hthead *req, struct match *match)
+{
+    struct headmod *head;
+    
+    if(match->pat->restpat)
+	exprestpat(req, match->pat, match->mstr);
+    else if(match->rmo != -1)
+	replrest(req, req->rest + match->rmo);
+    for(head = match->pat->headers; head != NULL; head = head->next) {
+	headrmheader(req, head->name);
+	headappheader(req, head->name, head->value);
+    }
 }
 
 static void childerror(struct hthead *req, int fd)
@@ -484,44 +511,33 @@ static void childerror(struct hthead *req, int fd)
 
 static void serve(struct hthead *req, int fd)
 {
-    struct pattern *pat;
-    struct headmod *head;
+    struct match *match;
     struct child *ch;
     
-    pat = NULL;
-    if(pat == NULL)
-	pat = findmatch(lconfig, req, 0);
-    if(pat == NULL)
-	pat = findmatch(lconfig, req, 1);
-    if(gconfig != NULL) {
-	if(pat == NULL)
-	    pat = findmatch(gconfig, req, 0);
-	if(pat == NULL)
-	    pat = findmatch(gconfig, req, 1);
-    }
-    if(pat == NULL) {
+    match = NULL;
+    match = findmatch(lconfig, req, match);
+    if(gconfig != NULL)
+	match = findmatch(gconfig, req, match);
+    if(match == NULL) {
 	simpleerror(fd, 404, "Not Found", "The requested resource could not be found on this server.");
 	return;
     }
     ch = NULL;
     if(ch == NULL)
-	ch = getchild(lconfig, pat->childnm);
-    if(gconfig != NULL) {
-	if(ch == NULL)
-	    ch = getchild(gconfig, pat->childnm);
-    }
+	ch = getchild(lconfig, match->pat->childnm);
+    if((ch == NULL) && (gconfig != NULL))
+	ch = getchild(gconfig, match->pat->childnm);
     if(ch == NULL) {
-	flog(LOG_ERR, "child %s requested, but was not declared", pat->childnm);
-	simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", pat->childnm);
+	flog(LOG_ERR, "child %s requested, but was not declared", match->pat->childnm);
+	simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", match->pat->childnm);
+	freematch(match);
 	return;
     }
     
-    for(head = pat->headers; head != NULL; head = head->next) {
-	headrmheader(req, head->name);
-	headappheader(req, head->name, head->value);
-    }
+    execmatch(req, match);
     if(childhandle(ch, req, fd, NULL, NULL))
 	childerror(req, fd);
+    freematch(match);
 }
 
 static void reloadconf(char *nm)
