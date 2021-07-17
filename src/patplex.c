@@ -46,6 +46,9 @@
 #define PATFL_MSS 1
 #define PATFL_UNQ 2
 
+#define HND_CHILD 1
+#define HND_REPARSE 2
+
 struct config {
     struct child *children;
     struct pattern *patterns;
@@ -69,7 +72,7 @@ struct pattern {
     char *childnm;
     struct rule **rules;
     char *restpat;
-    int prio;
+    int handler, prio, disable;
 };
 
 static struct config *gconfig, *lconfig;
@@ -254,6 +257,9 @@ static struct pattern *parsepattern(struct cfstate *s)
 	    if(pat->childnm != NULL)
 		free(pat->childnm);
 	    pat->childnm = sstrdup(s->argv[1]);
+	    pat->handler = HND_CHILD;
+	} else if(!strcmp(s->argv[0], "reparse")) {
+	    pat->handler = HND_REPARSE;
 	} else if(!strcmp(s->argv[0], "restpat")) {
 	    if(s->argc < 2) {
 		flog(LOG_WARNING, "%s:%i: missing pattern for `restpat' directive", s->file, s->lno);
@@ -287,7 +293,7 @@ static struct pattern *parsepattern(struct cfstate *s)
 	freepattern(pat);
 	return(NULL);
     }
-    if(pat->childnm == NULL) {
+    if(pat->handler == 0) {
 	flog(LOG_WARNING, "%s:%i: missing handler in match declaration", s->file, sl);
 	freepattern(pat);
 	return(NULL);
@@ -427,7 +433,7 @@ static struct match *findmatch(struct config *cf, struct hthead *req, struct mat
     
     mstr = NULL;
     for(pat = cf->patterns; pat != NULL; pat = pat->next) {
-	if(match && (pat->prio <= match->pat->prio))
+	if(pat->disable || (match && (pat->prio <= match->pat->prio)))
 	    continue;
 	rmo = -1;
 	for(i = 0; (rule = pat->rules[i]) != NULL; i++) {
@@ -522,21 +528,30 @@ static void serve(struct hthead *req, int fd)
 	simpleerror(fd, 404, "Not Found", "The requested resource could not be found on this server.");
 	return;
     }
-    ch = NULL;
-    if(ch == NULL)
-	ch = getchild(lconfig, match->pat->childnm);
-    if((ch == NULL) && (gconfig != NULL))
-	ch = getchild(gconfig, match->pat->childnm);
-    if(ch == NULL) {
-	flog(LOG_ERR, "child %s requested, but was not declared", match->pat->childnm);
-	simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", match->pat->childnm);
-	freematch(match);
-	return;
-    }
-    
     execmatch(req, match);
-    if(childhandle(ch, req, fd, NULL, NULL))
-	childerror(req, fd);
+    switch(match->pat->handler) {
+    case HND_CHILD:
+	ch = NULL;
+	if(ch == NULL)
+	    ch = getchild(lconfig, match->pat->childnm);
+	if((ch == NULL) && (gconfig != NULL))
+	    ch = getchild(gconfig, match->pat->childnm);
+	if(ch == NULL) {
+	    flog(LOG_ERR, "child %s requested, but was not declared", match->pat->childnm);
+	    simpleerror(fd, 500, "Configuration Error", "The server is erroneously configured. Handler %s was requested, but not declared.", match->pat->childnm);
+	    break;
+	}
+	if(childhandle(ch, req, fd, NULL, NULL))
+	    childerror(req, fd);
+	break;
+    case HND_REPARSE:
+	match->pat->disable = 1;
+	serve(req, fd);
+	match->pat->disable = 0;
+	break;
+    default:
+	abort();
+    }
     freematch(match);
 }
 

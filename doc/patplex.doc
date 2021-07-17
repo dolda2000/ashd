@@ -102,13 +102,21 @@ rules are recognized:
 	-10* (see below).
 
 In addition to the rules, a *match* stanza must contain exactly one
-follow-up line specifying the action to take if it matches. Currently,
-only the *handler* action is recognized:
+follow-up line specifying the action to take if it matches. The
+following actions are supported:
 
 *handler* 'HANDLER'::
 
 	'HANDLER' must be a named handler as declared by a *child* or
 	*fchild* stanza, to which the request is passed.
+
+*reparse*::
+
+	Apply any side-effects as required by the match stanza (such
+	as rest-string or header modifications), and then retry the
+	matching of the request. During the rematching, the stanza
+	containing the *reparse* action will be disabled. Multiple
+	*reparse* stanzas may be used recursively.
 
 Additionally, a *match* stanza may contain any of the following,
 optional lines:
