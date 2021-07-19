@@ -25,10 +25,10 @@ handler program as specified by 'CHILD' and 'ARGS', accept connections
 on said socket, and pass requests received on such connections to the
 handler program. It can handle an arbitrary amount of such
 connections, but it is not implemented for high performance with a
-large number of connections. It is expected that the ordinary will
-involve very few connections, usually only one at a time.
+large number of connections. It is expected that the ordinary case
+will involve very few connections, usually only one at a time.
 
-If the *-C* flag is given the start *htpipe* in client mode, *htpipe*
+If the *-C* flag is given to start *htpipe* in client mode, *htpipe*
 will connect to the socket named by 'SOCKET-PATH', accept requests
 from standard input, and pass such requests over said socket,
 presumably to an *htpipe* instance running in server mode on the other
