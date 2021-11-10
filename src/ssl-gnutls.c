@@ -438,7 +438,7 @@ static int readcrtchain(struct certbuffer *ret, struct charbuf *pem)
     
     for(i = 0, p = NULL; i < sizeof(headers) / sizeof(*headers); i++) {
 	f = memmem(pem->b, pem->d, headers[i], strlen(headers[i]));
-	if((p == NULL) || (f < p))
+	if((f != NULL) && ((p == NULL) || (f < p)))
 	    p = f;
     }
     if(p == NULL)
@@ -453,7 +453,7 @@ static int readcrtchain(struct certbuffer *ret, struct charbuf *pem)
 	bufadd(*ret, crt);
 	for(i = 0, p2 = NULL; i < sizeof(headers) / sizeof(*headers); i++) {
 	    f = memmem(p + 1, pem->d - (p + 1 - pem->b), headers[i], strlen(headers[i]));
-	    if((p2 == NULL) || (f < p2))
+	    if((f != NULL) && ((p2 == NULL) || (f < p2)))
 		p2 = f;
 	}
     } while((p = p2) != NULL);
