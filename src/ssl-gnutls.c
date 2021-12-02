@@ -54,8 +54,7 @@ struct ncredbuf {
 };
 
 struct sslport {
-    int fd;
-    int sport;
+    int fd, sport, clreq;
     gnutls_certificate_credentials_t creds;
     gnutls_priority_t ciphers;
     struct namedcreds **ncreds;
@@ -313,14 +312,16 @@ static void servessl(struct muth *muth, va_list args)
 		for(u = 0; pd->ncreds[o]->names[u] != NULL; u++) {
 		    if(!strcmp(pd->ncreds[o]->names[u], nambuf)) {
 			gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->ncreds[o]->creds);
-			gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
+			if(pd->clreq)
+			    gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
 			return(0);
 		    }
 		}
 	    }
 	}
 	gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->creds);
-	gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
+	if(pd->clreq)
+	    gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
 	return(0);
     }
 
@@ -562,7 +563,7 @@ static void readncdir(struct ncredbuf *buf, char *dir, gnutls_x509_privkey_t def
 
 void handlegnussl(int argc, char **argp, char **argv)
 {
-    int i, ret, port, fd;
+    int i, ret, port, fd, clreq;
     gnutls_certificate_credentials_t creds;
     gnutls_priority_t ciphers;
     gnutls_x509_privkey_t defkey;
@@ -573,6 +574,7 @@ void handlegnussl(int argc, char **argp, char **argv)
     
     init();
     port = 443;
+    clreq = 0;
     bufinit(ncreds);
     bufinit(ncertf);
     bufinit(ncertd);
@@ -639,6 +641,7 @@ void handlegnussl(int argc, char **argp, char **argv)
 		    exit(1);
 		}
 	    }
+	    clreq = 1;
 	} else if(!strcmp(argp[i], "crl")) {
 	    if((ret = gnutls_certificate_set_x509_crl_file(creds, argv[i], GNUTLS_X509_FMT_PEM)) != 0) {
 		flog(LOG_ERR, "ssl: could not load CRL file `%s': %s", argv[i], gnutls_strerror(ret));
@@ -650,6 +653,7 @@ void handlegnussl(int argc, char **argp, char **argv)
 		    exit(1);
 		}
 	    }
+	    clreq = 1;
 	} else if(!strcmp(argp[i], "port")) {
 	    port = atoi(argv[i]);
 	} else if(!strcmp(argp[i], "ncert")) {
@@ -694,6 +698,7 @@ void handlegnussl(int argc, char **argp, char **argv)
     omalloc(pd);
     pd->fd = fd;
     pd->sport = port;
+    pd->clreq = clreq;
     pd->creds = creds;
     pd->ncreds = ncreds.b;
     pd->ciphers = ciphers;
