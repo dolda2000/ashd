@@ -316,9 +316,9 @@ static void tickbucket(struct bucket *bk)
     bk->last = now;
     ll = bk->level;
     if((bk->level -= delta * cf.rate) < 0) {
-	bk->level = 0;
 	if(ll > 0)
-	    bk->etime = now;
+	    bk->etime = now + (bk->level / cf.rate);
+	bk->level = 0;
     }
     while((bk->brim.d > 0) && (bk->level < cf.size)) {
 	if(sendreq(child, bk->brim.b[0].req, bk->brim.b[0].fd)) {
