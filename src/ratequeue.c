@@ -151,7 +151,7 @@ static const char *formatsrc(const struct source *src)
 
 static void rehash(int nlen)
 {
-    int i, o, n, m, pl, nl;
+    unsigned int i, o, n, m, pl, nl;
     struct bucket **new, **old;
     
     old = buckets;
