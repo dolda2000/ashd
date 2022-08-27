@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys, os, getopt, socket, logging, time, locale, collections, signal
+import sys, os, getopt, socket, logging, time, locale, collections.abc, signal
 import ashd.util, ashd.serve, ashd.htlib
 try:
     import pdm.srv
@@ -148,7 +148,7 @@ def mkenv(req):
     return env
 
 def recode(thing):
-    if isinstance(thing, collections.ByteString):
+    if isinstance(thing, collections.abc.ByteString):
         return thing
     else:
         return str(thing).encode("latin-1")
