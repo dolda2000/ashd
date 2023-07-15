@@ -161,7 +161,10 @@ def serveloop(handler, sock = 0):
     and is called once for each received request.
     """
     while True:
-        req = proto.recvreq(sock)
+        try:
+            req = proto.recvreq(sock)
+        except InterruptedError:
+            continue
         if req is None:
             break
         try:
