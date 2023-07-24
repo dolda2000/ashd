@@ -271,6 +271,8 @@ static int initreq(struct conn *conn, struct hthead *req)
     struct sslconn *ssl = conn->pdata;
     struct sockaddr_storage sa;
     socklen_t salen;
+    gnutls_datum_t sessid;
+    char *esessid;
     
     headappheader(req, "X-Ash-Address", formathaddress((struct sockaddr *)&ssl->name, sizeof(sa)));
     if(ssl->name.ss_family == AF_INET)
@@ -282,6 +284,11 @@ static int initreq(struct conn *conn, struct hthead *req)
 	headappheader(req, "X-Ash-Server-Address", formathaddress((struct sockaddr *)&sa, sizeof(sa)));
     headappheader(req, "X-Ash-Server-Port", sprintf3("%i", ssl->port->sport));
     headappheader(req, "X-Ash-Protocol", "https");
+    if(gnutls_session_get_id2(ssl->sess, &sessid) == GNUTLS_E_SUCCESS) {
+	esessid = base64encode((void *)sessid.data, sessid.size);
+	headappheader(req, "X-Ash-TLS-Session", esessid);
+	free(esessid);
+    }
     return(0);
 }
 
