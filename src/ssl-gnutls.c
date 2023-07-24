@@ -285,6 +285,38 @@ static int initreq(struct conn *conn, struct hthead *req)
     return(0);
 }
 
+static int setcreds(gnutls_session_t sess)
+{
+    int i, o, u;
+    struct sslport *pd;
+    unsigned int ntype;
+    char nambuf[256];
+    size_t namlen;
+    
+    pd = gnutls_session_get_ptr(sess);
+    for(i = 0; 1; i++) {
+	namlen = sizeof(nambuf);
+	if(gnutls_server_name_get(sess, nambuf, &namlen, &ntype, i) != 0)
+	    break;
+	if(ntype != GNUTLS_NAME_DNS)
+	    continue;
+	for(o = 0; pd->ncreds[o] != NULL; o++) {
+	    for(u = 0; pd->ncreds[o]->names[u] != NULL; u++) {
+		if(!strcmp(pd->ncreds[o]->names[u], nambuf)) {
+		    gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->ncreds[o]->creds);
+		    if(pd->clreq)
+			gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
+		    return(0);
+		}
+	    }
+	}
+    }
+    gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->creds);
+    if(pd->clreq)
+	gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
+    return(0);
+}
+
 static void servessl(struct muth *muth, va_list args)
 {
     vavar(int, fd);
@@ -294,36 +326,6 @@ static void servessl(struct muth *muth, va_list args)
     struct sslconn ssl;
     gnutls_session_t sess;
     int ret;
-    
-    int setcreds(gnutls_session_t sess)
-    {
-	int i, o, u;
-	unsigned int ntype;
-	char nambuf[256];
-	size_t namlen;
-	
-	for(i = 0; 1; i++) {
-	    namlen = sizeof(nambuf);
-	    if(gnutls_server_name_get(sess, nambuf, &namlen, &ntype, i) != 0)
-		break;
-	    if(ntype != GNUTLS_NAME_DNS)
-		continue;
-	    for(o = 0; pd->ncreds[o] != NULL; o++) {
-		for(u = 0; pd->ncreds[o]->names[u] != NULL; u++) {
-		    if(!strcmp(pd->ncreds[o]->names[u], nambuf)) {
-			gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->ncreds[o]->creds);
-			if(pd->clreq)
-			    gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
-			return(0);
-		    }
-		}
-	    }
-	}
-	gnutls_credentials_set(sess, GNUTLS_CRD_CERTIFICATE, pd->creds);
-	if(pd->clreq)
-	    gnutls_certificate_server_set_request(sess, GNUTLS_CERT_REQUEST);
-	return(0);
-    }
 
     numconn++;
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
@@ -333,6 +335,7 @@ static void servessl(struct muth *muth, va_list args)
     gnutls_db_set_store_function(sess, sessdbstore);
     gnutls_db_set_remove_function(sess, sessdbdel);
     gnutls_db_set_ptr(sess, NULL);
+    gnutls_session_set_ptr(sess, pd);
     gnutls_handshake_set_post_client_hello_function(sess, setcreds);
     gnutls_transport_set_ptr(sess, (gnutls_transport_ptr_t)(intptr_t)fd);
     while((ret = gnutls_handshake(sess)) != 0) {
