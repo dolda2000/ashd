@@ -148,6 +148,19 @@ The following configuration directives are recognized:
 	may be given to turn off index file searching completely. The
 	*index-file* directive accepts no follow-up lines.
 
+*dot-allow* ['PATTERN'...]::
+
+	As described under 404 RESPONSES, a path element beginning
+	with a dot character is normally rejected by default, but the
+	*dot-allow* directive allows certain dot-files or -directories
+	to be selectively allowed. Each 'PATTERN' is an ordinary glob
+	pattern, the matching of which allows access to a given path
+	element. When checking for access to dot-files or
+	-directories, only the *dot-allow* directive "closest" to the
+	file under consideration is used. It should be noted that the
+	default configuration file for *dirplex* contains a
+	*dot-allow* directive for the `.well-known` directory.
+
 *child* 'NAME'::
 
 	Declares a named, persistent request handler (see *ashd*(7)
