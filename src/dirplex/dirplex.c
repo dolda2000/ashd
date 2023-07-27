@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <time.h>
+#include <fnmatch.h>
 #include <sys/wait.h>
 #include <sys/signal.h>
 
@@ -131,6 +132,27 @@ static void handlefile(struct hthead *req, int fd, char *path)
     handle(req, fd, path, pat);
 }
 
+static int checkaccess(char *path, char *name)
+{
+    int i, o;
+    struct config **cfs;
+    
+    if(*name == '.') {
+	cfs = getconfigs(sprintf3("%s/", path));
+	for(i = 0; cfs[i] != NULL; i++) {
+	    if(cfs[i]->dotallow != NULL) {
+		for(o = 0; cfs[i]->dotallow[o] != NULL; o++) {
+		    if(!fnmatch(cfs[i]->dotallow[o], name, 0))
+			return(1);
+		}
+		break;
+	    }
+	}
+	return(0);
+    }
+    return(1);
+}
+
 static char *findfile(char *path, char *name, struct stat *sb)
 {
     DIR *dir;
@@ -155,12 +177,20 @@ static char *findfile(char *path, char *name, struct stat *sb)
 	    continue;
 	if(strncmp(dent->d_name, name, strlen(name)))
 	    continue;
-	fp = sprintf3("%s/%s", path, dent->d_name);
-	if(stat(fp, sb))
+	fp = sprintf2("%s/%s", path, dent->d_name);
+	if(stat(fp, sb)) {
+	    free(fp);
 	    continue;
-	if(!S_ISREG(sb->st_mode))
+	}
+	if(!S_ISREG(sb->st_mode)) {
+	    free(fp);
 	    continue;
-	ret = sstrdup(fp);
+	}
+	if(!checkaccess(path, dent->d_name)) {
+	    free(fp);
+	    continue;
+	}
+	ret = fp;
 	break;
     }
     closedir(dir);
@@ -216,9 +246,9 @@ static int checkentry(struct hthead *req, int fd, char *path, char *rest, char *
     char *newpath;
     int rv;
     
-    if(*el == '.')
-	return(0);
     if(!stat(sprintf3("%s/%s", path, el), &sb)) {
+	if(!checkaccess(path, el))
+	    return(0);
 	if(S_ISDIR(sb.st_mode)) {
 	    if(!*rest) {
 		stdredir(req, fd, 301, sprintf3("%s/", el));

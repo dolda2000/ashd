@@ -17,7 +17,7 @@ struct config {
     time_t mtime, lastck;
     struct child *children;
     struct pattern *patterns;
-    char **index;
+    char **index, **dotallow;
     char *capture, *reparse;
     int caproot, parsecomb;
 };
