@@ -1,3 +1,4 @@
-include dirplex.d/*.rc
-
 index-file index
+dot-allow .well-known
+
+include dirplex.d/*.rc
