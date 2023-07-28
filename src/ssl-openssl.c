@@ -18,7 +18,9 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 
 #ifdef HAVE_CONFIG_H
