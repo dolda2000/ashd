@@ -33,6 +33,8 @@
 
 #include "htparser.h"
 
+#ifdef HAVE_OPENSSL
+
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -300,3 +302,5 @@ void handleossl(int argc, char **argp, char **argv)
 	bufadd(listeners, mustart(listenloop, pd));
     }
 }
+
+#endif
