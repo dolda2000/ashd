@@ -20,6 +20,9 @@ void handleplain(int argc, char **argp, char **argv);
 #ifdef HAVE_GNUTLS
 void handlegnussl(int argc, char **argp, char **argv);
 #endif
+#ifdef HAVE_OPENSSL
+void handleossl(int argc, char **argp, char **argv);
+#endif
 
 extern struct mtbuf listeners;
 

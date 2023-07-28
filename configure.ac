@@ -97,8 +97,12 @@ fi
 AC_SUBST(XATTR_LIBS)
 
 AH_TEMPLATE(HAVE_GNUTLS, [define to use the GnuTLS library for SSL support])
+AH_TEMPLATE(HAVE_OPENSSL, [define to use the OpenSSL library for SSL support])
 AC_ARG_WITH(gnutls, AS_HELP_STRING([--with-gnutls], [enable SSL support with the GnuTLS library]))
+AC_ARG_WITH(openssl, AS_HELP_STRING([--with-openssl], [enable SSL support with the OpenSSL library]))
 HAS_GNUTLS=""
+HAS_OPENSSL=""
+
 if test "$with_gnutls" = no; then HAS_GNUTLS=no; fi
 if test -z "$HAS_GNUTLS"; then
 	AC_CHECK_LIB(gnutls, gnutls_global_init, [:], [HAS_GNUTLS=no])
@@ -117,6 +121,36 @@ if test "$HAS_GNUTLS" = yes; then
 fi
 AC_SUBST(GNUTLS_CPPFLAGS)
 AC_SUBST(GNUTLS_LIBS)
+
+if test "$with_openssl" = no; then
+	HAS_OPENSSL=no
+elif test -z "$with_openssl" -a "$HAS_GNUTLS" = yes; then
+	HAS_OPENSSL=no
+fi
+if test -z "$HAS_OPENSSL"; then
+	AC_CHECK_LIB(ssl, SSL_CTX_new, [:], [HAS_OPENSSL=no])
+fi
+if test -z "$HAS_OPENSSL"; then
+	AC_CHECK_LIB(crypto, ERR_get_error, [:], [HAS_OPENSSL=no])
+fi
+if test -z "$HAS_OPENSSL";  then
+	AC_CHECK_HEADER(openssl/ssl.h, [], [HAS_OPENSSL=no])
+fi
+if test "$HAS_OPENSSL" != no; then HAS_OPENSSL=yes; fi
+if test "$with_openssl" = yes -a "$HAS_OPENSSL" = no; then
+	AC_MSG_ERROR([*** cannot find OpenSSL on this system])
+fi
+if test "$HAS_OPENSSL" = yes; then
+	OPENSSL_LIBS="-lssl -lcrypto"
+	GNUTLS_CPPFLAGS=
+	AC_DEFINE(HAVE_OPENSSL)
+fi
+AC_SUBST(OPENSSL_CPPFLAGS)
+AC_SUBST(OPENSSL_LIBS)
+
+if test "$HAS_GNUTLS" = yes -a "$HAS_OPENSSL" = yes; then
+	AC_MSG_ERROR([*** only one of GnuTLS and OpenSSL must be enabled])
+fi
 
 AC_CONFIG_FILES([
 Makefile

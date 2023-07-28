@@ -580,9 +580,12 @@ static void addport(char *spec)
     /* XXX: It would be nice to decentralize this, but, meh... */
     if(!strcmp(nm, "plain")) {
 	handleplain(pars.d, pars.b, vals.b);
-#ifdef HAVE_GNUTLS
+#if defined HAVE_GNUTLS
     } else if(!strcmp(nm, "ssl")) {
 	handlegnussl(pars.d, pars.b, vals.b);
+#elif defined HAVE_OPENSSL
+    } else if(!strcmp(nm, "ssl")) {
+	handleossl(pars.d, pars.b, vals.b);
 #endif
     } else {
 	flog(LOG_ERR, "htparser: unknown port handler `%s'", nm);
