@@ -518,7 +518,7 @@ int main(int argc, char **argv)
 	    pidfile = optarg;
 	    break;
 	case 'a':
-	    format = "%A - - [%{%d/%b/%Y:%H:%M:%S %z}t] \"%m %u %v\" %c %o \"%R\" \"%G\"";
+	    format = "%A - %{log-user}P [%{%d/%b/%Y:%H:%M:%S %z}t] \"%m %u %v\" %c %o \"%R\" \"%G\"";
 	    break;
 	default:
 	    usage(stderr);
