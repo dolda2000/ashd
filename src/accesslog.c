@@ -96,6 +96,16 @@ static void logitem(struct logdata *data, char o, char *d)
 	    qputs(h, out);
 	}
 	break;
+    case 'p':
+	if(!data->resp || ((h = getheader(data->req, d)) == NULL)) {
+	    putc('-', out);
+	} else {
+	    qputs(h, out);
+	}
+	break;
+    case 'P':
+	logitem(data, 'p', sprintf3("X-Ash-%s", d));
+	break;
     case 'u':
 	qputs(data->req->url, out);
 	break;

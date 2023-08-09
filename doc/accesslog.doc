@@ -199,6 +199,17 @@ instead expand into a dash.
 	Expands into the time it took for the handler to complete the
 	response, expressed as seconds with 6 decimals precision.
 
+*%{*'HEADER'*}p*::
+
+	Expands into the HTTP response header named by 'HEADER'. If
+	the specified header does not exist in the request, *%p*
+	expands into a dash.
+
+*%{*'HEADER'*}P*::
+
+	Similar to *%p*, except that 'HEADER' is prepended with
+	`X-Ash-`, for simple convenience.
+
 In any expanded field, any "unsafe" characters are escaped. Currently,
 this means that double-quotes and backslashes are prepended with a
 backslash, newlines and tabs are expressed as, respectively, `\n` and
