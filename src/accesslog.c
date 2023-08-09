@@ -97,7 +97,7 @@ static void logitem(struct logdata *data, char o, char *d)
 	}
 	break;
     case 'p':
-	if(!data->resp || ((h = getheader(data->req, d)) == NULL)) {
+	if(!data->resp || ((h = getheader(data->resp, d)) == NULL)) {
 	    putc('-', out);
 	} else {
 	    qputs(h, out);
