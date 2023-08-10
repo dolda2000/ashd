@@ -151,7 +151,7 @@ def recode(thing):
     if isinstance(thing, collections.abc.ByteString):
         return thing
     else:
-        return str(thing).encode("latin-1")
+        return str(thing).encode("utf-8")
 
 class request(ashd.serve.wsgirequest):
     def __init__(self, *, bkreq, **kw):
