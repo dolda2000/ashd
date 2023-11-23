@@ -26,11 +26,11 @@ ROOTSPEC="dirplex /srv/www"
 
 start() {
     export LANG
-    log_daemon_msg "Starting HTTP server" "ashd"
+    [ -n "$SILENT_INIT" ] || log_daemon_msg "Starting HTTP server" "ashd"
     if start-stop-daemon -S -p "$PIDFILE" -qa "$HTPARSER" -- -Sf -p "$PIDFILE" -u "$USER" -r "$CHROOT" $PORTSPEC -- $ROOTSPEC; then
-       log_success_msg
+	[ -n "$SILENT_INIT" ] || log_success_msg
     else
-	log_end_msg $?
+	[ -n "$SILENT_INIT" ] || log_end_msg 1
     fi
 }
 
@@ -48,7 +48,7 @@ kill_listen() {
 	log_failure_msg "invalid saved pid"
 	return 1
     fi
-    log_progress_msg "listen"
+    [ -n "$SILENT_INIT" ] || log_progress_msg "listen"
     kill -TERM "$pid"
     for try in 0 1 2 3 4 5; do
 	  sleep $try
@@ -68,36 +68,39 @@ kill_listen() {
 }
 
 stop_listen() {
-    log_daemon_msg "Stopping HTTP server" "ashd"
-    kill_listen
-    log_end_msg $?
+    [ -n "$SILENT_INIT" ] || log_daemon_msg "Stopping HTTP server" "ashd"
+    if kill_listen; then
+	[ -n "$SILENT_INIT" ] || log_success_msg
+    else
+	[ -n "$SILENT_INIT" ] || log_end_msg $?
+    fi
 }
 
 stop_gracefully() {
-    log_daemon_msg "Stopping HTTP server" "ashd"
+    [ -n "$SILENT_INIT" ] || log_daemon_msg "Stopping HTTP server" "ashd"
     if ! kill_listen ; then
-	log_end_msg $?
+	log_end_msg 1
 	return 1
     fi
     pid=$(cat "$PIDFILE" 2>/dev/null || true)
     if kill -0 "$pid" 2>/dev/null; then
-	log_progress_msg "waiting for remaining connections..."
+	[ -n "$SILENT_INIT" ] || log_progress_msg "waiting for remaining connections..."
 	for try in $(seq "$GRACE_PERIOD"); do
 	    sleep 1
 	    if ! kill -0 "$pid" 2>/dev/null; then
-		log_success_msg
+		[ -n "$SILENT_INIT" ] || log_success_msg
 		return 0
 	    fi
 	done
     else
-	log_success_msg
+	[ -n "$SILENT_INIT" ] || log_success_msg
 	return 0
     fi
-    log_progress_msg "terminating remaining connections"
+    [ -n "$SILENT_INIT" ] || log_progress_msg "terminating remaining connections"
     if kill_wholly; then
-	log_success_msg
+	[ -n "$SILENT_INIT" ] || log_success_msg
     else
-	log_end_msg $?
+	log_end_msg 1
     fi
 }
 
