@@ -1,4 +1,4 @@
-import collections
+import collections.abc
 try:
     import pdm.perf
 except:
@@ -56,7 +56,7 @@ class request(object):
         try:
             if len(self.resp) > 0:
                 status = self.resp[0]
-                if isinstance(status, collections.ByteString):
+                if isinstance(status, collections.abc.ByteString):
                     status = status.decode("latin-1")
                 else:
                     status = str(status)
