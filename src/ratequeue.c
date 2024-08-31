@@ -160,12 +160,13 @@ static void rehash(int nlen)
     if(nlen <= SBUCKETS) {
 	nlen = SBUCKETS;
 	new = sbuckets;
-	memset(sbuckets, 0, sizeof(sbuckets));
     } else {
 	new = szmalloc(sizeof(*new) * (1 << nlen));
     }
     if(nlen == hashlen)
 	return;
+    if(new == sbuckets)
+	memset(sbuckets, 0, sizeof(sbuckets));
     assert(old != new);
     pl = 1 << hashlen; nl = 1 << nlen; m = nl - 1;
     for(i = 0; i < pl; i++) {
