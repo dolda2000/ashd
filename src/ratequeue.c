@@ -160,6 +160,7 @@ static void rehash(int nlen)
     if(nlen <= SBUCKETS) {
 	nlen = SBUCKETS;
 	new = sbuckets;
+	memset(sbuckets, 0, sizeof(sbuckets));
     } else {
 	new = szmalloc(sizeof(*new) * (1 << nlen));
     }
