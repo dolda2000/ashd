@@ -84,7 +84,7 @@ if test -z "$HAS_XATTR"; then
 	AC_CHECK_LIB(attr, getxattr, [:], [HAS_XATTR=no])
 fi
 if test -z "$HAS_XATTR"; then
-	AC_CHECK_HEADER(attr/xattr.h, [], [HAS_XATTR=no])
+	AC_CHECK_HEADER(sys/xattr.h, [], [HAS_XATTR=no])
 fi
 if test "$HAS_XATTR" != no; then HAS_XATTR=yes; fi
 if test "$with_xattr" = yes -a "$HAS_XATTR" = no; then

@@ -37,7 +37,7 @@
 #include <resp.h>
 
 #ifdef HAVE_XATTR
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 #endif
 
 static magic_t cookie = NULL;
