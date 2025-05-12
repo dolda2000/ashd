@@ -240,7 +240,7 @@ static int sconnect(void)
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
     while(1) {
 	if(connect(fd, curaddr, caddrlen)) {
-	    if(errno == EINPROGRESS) {
+	    if((errno == EINPROGRESS) || (errno == EAGAIN)) {
 		block(fd, EV_WRITE, 30);
 		errlen = sizeof(err);
 		if(getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errlen) || ((errno = err) != 0)) {
