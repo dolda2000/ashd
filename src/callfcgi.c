@@ -246,27 +246,14 @@ static void startnolisten(void)
 static int sconnect(void)
 {
     int fd;
-    int err;
-    socklen_t errlen;
 
     fd = socket(cafamily, SOCK_STREAM, 0);
-    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
-    while(1) {
-	if(connect(fd, curaddr, caddrlen)) {
-	    if((errno == EINPROGRESS) || (errno == EAGAIN)) {
-		block(fd, EV_WRITE, 30);
-		errlen = sizeof(err);
-		if(getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errlen) || ((errno = err) != 0)) {
-		    close(fd);
-		    return(-1);
-		}
-		return(fd);
-	    }
-	    close(fd);
-	    return(-1);
-	}
-	return(fd);
+    if(connect(fd, curaddr, caddrlen)) {
+	close(fd);
+	return(-1);
     }
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+    return(fd);
 }
 
 static int econnect(void)
