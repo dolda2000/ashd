@@ -246,14 +246,30 @@ static void startnolisten(void)
 static int sconnect(void)
 {
     int fd;
+    int err;
+    socklen_t errlen;
 
     fd = socket(cafamily, SOCK_STREAM, 0);
-    if(connect(fd, curaddr, caddrlen)) {
+    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+    while(1) {
+	if(!connect(fd, curaddr, caddrlen))
+	    return(fd);
+	if(errno == EAGAIN) {
+	    block(-1, 0, 1);
+	    continue;
+	}
+	if(errno == EINPROGRESS) {
+	    block(fd, EV_WRITE, 30);
+	    errlen = sizeof(err);
+	    if(getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &errlen) || ((errno = err) != 0)) {
+		close(fd);
+		return(-1);
+	    }
+	    return(fd);
+	}
 	close(fd);
 	return(-1);
     }
-    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
-    return(fd);
 }
 
 static int econnect(void)
@@ -676,7 +692,6 @@ static void serve(struct muth *muth, va_list args)
     size_t read;
     char buf[8192];
     
-    sfd = reconn();
     is = mtstdopen(fd, 1, 60, "r+", NULL);
     os = mtstdopen(sfd, 1, 600, "r+", NULL);
     
@@ -730,7 +745,7 @@ out:
 static void listenloop(struct muth *muth, va_list args)
 {
     vavar(int, lfd);
-    int fd;
+    int fd, sfd;
     struct hthead *req;
     
     while(1) {
@@ -740,7 +755,12 @@ static void listenloop(struct muth *muth, va_list args)
 		flog(LOG_ERR, "recvreq: %s", strerror(errno));
 	    break;
 	}
-	mustart(serve, req, fd);
+	if((sfd = reconn()) < 0) {
+	    close(fd);
+	    freehthead(req);
+	    continue;
+	}
+	mustart(serve, req, fd, sfd);
     }
 }
 
