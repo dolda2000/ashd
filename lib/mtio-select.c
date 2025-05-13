@@ -137,13 +137,15 @@ int ioloop(void)
 	now = time(NULL);
 	timeout = 0;
 	for(bl = blockers; bl; bl = bl->n) {
-	    if(bl->ev & EV_READ)
-		FD_SET(bl->fd, &rfds);
-	    if(bl->ev & EV_WRITE)
-		FD_SET(bl->fd, &wfds);
-	    FD_SET(bl->fd, &efds);
-	    if(bl->fd > maxfd)
-		maxfd = bl->fd;
+	    if(bl->fd >= 0) {
+		if(bl->ev & EV_READ)
+		    FD_SET(bl->fd, &rfds);
+		if(bl->ev & EV_WRITE)
+		    FD_SET(bl->fd, &wfds);
+		FD_SET(bl->fd, &efds);
+		if(bl->fd > maxfd)
+		    maxfd = bl->fd;
+	    }
 	    if((bl->to != 0) && ((timeout == 0) || (timeout > bl->to)))
 		timeout = bl->to;
 	}
@@ -165,12 +167,14 @@ int ioloop(void)
 		if((it.bl = bl->n) != NULL)
 		    it.bl->it = &it;
 		ev = 0;
-		if(FD_ISSET(bl->fd, &rfds))
-		    ev |= EV_READ;
-		if(FD_ISSET(bl->fd, &wfds))
-		    ev |= EV_WRITE;
-		if(FD_ISSET(bl->fd, &efds))
-		    ev = -1;
+		if(bl->fd >= 0) {
+		    if(FD_ISSET(bl->fd, &rfds))
+			ev |= EV_READ;
+		    if(FD_ISSET(bl->fd, &wfds))
+			ev |= EV_WRITE;
+		    if(FD_ISSET(bl->fd, &efds))
+			ev = -1;
+		}
 		if((ev < 0) || (ev & bl->ev)) {
 		    if(bl->id < 0) {
 			resume(bl->th, ev);

@@ -53,6 +53,8 @@ static int regfd(struct blocker *bl)
     struct blocker *o;
     struct epoll_event evd;
     
+    if(bl->fd < 0)
+	return(0);
     memset(&evd, 0, sizeof(evd));
     evd.events = 0;
     if(bl->ev & EV_READ)

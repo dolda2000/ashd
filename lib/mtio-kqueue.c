@@ -54,6 +54,8 @@ static int regfd(struct blocker *bl)
     int prev;
     struct kevent evd;
     
+    if(bl->fd < 0)
+	return(0);
     if(bl->fd >= fdln) {
 	if(fdlist) {
 	    fdlist = srealloc(fdlist, sizeof(*fdlist) * (bl->fd + 1));
