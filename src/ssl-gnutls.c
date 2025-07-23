@@ -361,6 +361,12 @@ static void servessl(struct muth *muth, va_list args)
     ssl.sess = sess;
     bufinit(ssl.in);
     serve(bioopen(&ssl, &iofuns), fd, &conn);
+    while((ret = gnutls_bye(sess, GNUTLS_SHUT_RDWR)) != 0) {
+	if((ret != GNUTLS_E_INTERRUPTED) && (ret != GNUTLS_E_AGAIN))
+	    goto out;
+	if(tlsblock(fd, sess, 60) <= 0)
+	    goto out;
+    }
     
 out:
     gnutls_deinit(sess);
