@@ -35,7 +35,13 @@ if len(args) < 1:
     usage(sys.stderr)
     sys.exit(1)
 if setlog:
-    logging.basicConfig(format="ashd-wsgi3(%(name)s): %(levelname)s: %(message)s")
+    params = {"format": "ashd-wsgi3[%(name)s]: %(levelname)s: %(message)s",
+              "level": logging.INFO,
+              }
+    if os.getenv("ASHD_USESYSLOG"):
+        import logging.handlers
+        params["handlers"] = [logging.handlers.SysLogHandler("/dev/log")]
+    logging.basicConfig(**params)
 log = logging.getLogger("ashd-wsgi3")
 
 try:
