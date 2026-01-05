@@ -40,7 +40,7 @@ if setlog:
               }
     if os.getenv("ASHD_USESYSLOG"):
         import logging.handlers
-        params["handlers"] = [logging.handlers.SysLogHandler("/dev/log")]
+        params["handlers"] = [logging.handlers.SysLogHandler("/dev/log", facility=logging.handlers.SysLogHandler.LOG_DAEMON)]
     logging.basicConfig(**params)
 log = logging.getLogger("ashd-wsgi3")
 
