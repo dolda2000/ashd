@@ -270,7 +270,7 @@ int ccopen(char *path, struct stat *sb, char *accept, const char **encoding)
     for(i = 0; i < types.d; i++) {
 	if((type = findtype(types.b[i])) != NULL) {
 	    if((efd = openbytype(type, fd, sb, &esb)) >= 0) {
-		if((mfd < 0) || (esb.st_size < minsz)) {
+		if((esb.st_size < sb->st_size) && ((mfd < 0) || (esb.st_size < minsz))) {
 		    if(mfd >= 0)
 			close(mfd);
 		    mfd = efd;
