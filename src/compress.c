@@ -106,6 +106,7 @@ out:
     free(ib);
     free(ob);
     deflateEnd(&zs);
+    lseek(sfd, 0, SEEK_SET);
     return(rv);
 }
 
