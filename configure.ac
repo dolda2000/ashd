@@ -96,6 +96,26 @@ if test "$HAS_XATTR" = yes; then
 fi
 AC_SUBST(XATTR_LIBS)
 
+AH_TEMPLATE(HAVE_ZLIB, [define to compile support for libz content compression])
+AC_ARG_WITH(zlib, AS_HELP_STRING([--with-zlib], [enable zlib support]))
+HAS_ZLIB=""
+if test "$with_zlib" = no; then HAS_ZLIB=no; fi
+if test -z "$HAS_ZLIB"; then
+	AC_CHECK_LIB(z, deflate, [:], [HAS_ZLIB=no])
+fi
+if test -z "$HAS_ZLIB"; then
+	AC_CHECK_HEADER(zlib.h, [], [HAS_ZLIB=no])
+fi
+if test "$HAS_ZLIB" != no; then HAS_ZLIB=yes; fi
+if test "$with_zlib" = yes -a "$HAS_ZLIB" = no; then
+	AC_MSG_ERROR([*** cannot find zlib support on this system])
+fi
+if test "$HAS_ZLIB" = yes; then
+	ZLIB_LIBS=-lz
+	AC_DEFINE(HAVE_ZLIB)
+fi
+AC_SUBST(ZLIB_LIBS)
+
 AH_TEMPLATE(HAVE_GNUTLS, [define to use the GnuTLS library for SSL support])
 AH_TEMPLATE(HAVE_OPENSSL, [define to use the OpenSSL library for SSL support])
 AC_ARG_WITH(gnutls, AS_HELP_STRING([--with-gnutls], [enable SSL support with the GnuTLS library]))
