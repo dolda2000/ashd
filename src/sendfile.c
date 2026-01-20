@@ -40,6 +40,8 @@
 #include <sys/xattr.h>
 #endif
 
+#include "compress.h"
+
 static magic_t cookie = NULL;
 
 static void passdata(int in, int out, off_t maxlen)
@@ -141,10 +143,12 @@ static void checkcache(char *file, struct stat *sb)
     }
 }
 
-static void sendwhole(int fd, struct stat *sb, const char *contype, int head)
+static void sendwhole(int fd, struct stat *sb, const char *contype, const char *enctype, int head)
 {
     printf("HTTP/1.1 200 OK\n");
     printf("Content-Type: %s\n", contype);
+    if(enctype != NULL)
+	printf("Content-Encoding: %s\n", enctype);
     printf("Content-Length: %ji\n", (intmax_t)sb->st_size);
     printf("Last-Modified: %s\n", fmthttpdate(sb->st_mtime));
     printf("Date: %s\n", fmthttpdate(time(NULL)));
@@ -154,7 +158,7 @@ static void sendwhole(int fd, struct stat *sb, const char *contype, int head)
 	passdata(fd, 1, -1);
 }
 
-static void sendrange(int fd, struct stat *sb, const char *contype, char *spec, int head)
+static void sendrange(int fd, struct stat *sb, const char *contype, const char *enctype, char *spec, int head)
 {
     char buf[strlen(spec) + 1];
     char *p, *e;
@@ -210,6 +214,8 @@ static void sendrange(int fd, struct stat *sb, const char *contype, char *spec, 
     printf("Content-Range: bytes %ji-%ji/%ji\n", (intmax_t)start, (intmax_t)(end - 1), (intmax_t)sb->st_size);
     printf("Content-Length: %ji\n", (intmax_t)(end - start));
     printf("Content-Type: %s\n", contype);
+    if(enctype != NULL)
+	printf("Content-Encoding: %s\n", enctype);
     printf("Last-Modified: %s\n", fmthttpdate(sb->st_mtime));
     printf("Date: %s\n", fmthttpdate(time(NULL)));
     printf("\n");
@@ -219,7 +225,7 @@ static void sendrange(int fd, struct stat *sb, const char *contype, char *spec, 
     return;
     
 error:
-    sendwhole(fd, sb, contype, head);
+    sendwhole(fd, sb, contype, enctype, head);
 }
 
 static void usage(void)
@@ -233,7 +239,7 @@ int main(int argc, char **argv)
     char *file, *hdr;
     struct stat sb;
     int fd, ishead, ignrest;
-    const char *contype;
+    const char *contype, *enctype;
     
     setlocale(LC_ALL, "");
     contype = NULL;
@@ -266,8 +272,9 @@ int main(int argc, char **argv)
 	simpleerror(1, 404, "Not Found", "The requested URL has no corresponding resource.");
 	exit(0);
     }
-    if(stat(file, &sb) || ((fd = open(file, O_RDONLY)) < 0)) {
-	flog(LOG_ERR, "sendfile: could not stat input file %s: %s", file, strerror(errno));
+    hdr = getenv("REQ_X_ASH_COMPRESS") ? getenv("REQ_ACCEPT_ENCODING") : "";
+    if((fd = ccopen(file, &sb, hdr, &enctype)) < 0) {
+	flog(LOG_ERR, "sendfile: could not open input file %s: %s", file, strerror(errno));
 	simpleerror(1, 500, "Internal Error", "The server could not access its own data.");
 	exit(1);
     }
@@ -290,8 +297,8 @@ int main(int argc, char **argv)
     checkcache(file, &sb);
     
     if((hdr = getenv("REQ_RANGE")) != NULL)
-	sendrange(fd, &sb, contype, hdr, ishead);
+	sendrange(fd, &sb, contype, enctype, hdr, ishead);
     else
-	sendwhole(fd, &sb, contype, ishead);
+	sendwhole(fd, &sb, contype, enctype, ishead);
     return(0);
 }

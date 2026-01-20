@@ -4,18 +4,22 @@ fchild send
 match
   filename *.html
   xset content-type text/html
+  xset compress 1
   handler send
 match
   filename *.css
   xset content-type text/css
+  xset compress 1
   handler send
 match
   filename *.txt
   xset content-type text/plain
+  xset compress 1
   handler send
 match
   filename *.js
   xset content-type text/javascript
+  xset compress 1
   handler send
 
 # Image types

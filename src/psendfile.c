@@ -45,6 +45,8 @@
 #include <sys/xattr.h>
 #endif
 
+#include "compress.h"
+
 static magic_t cookie;
 
 static char *attrmimetype(char *file)
@@ -138,10 +140,12 @@ static off_t passdata(FILE *in, FILE *out, off_t max)
     return(total);
 }
 
-static void sendwhole(struct hthead *req, FILE *out, FILE *sfile, struct stat *sb, char *contype, int head)
+static void sendwhole(struct hthead *req, FILE *out, FILE *sfile, struct stat *sb, char *contype, const char *enctype, int head)
 {
     fprintf(out, "HTTP/1.1 200 OK\n");
     fprintf(out, "Content-Type: %s\n", contype);
+    if(enctype != NULL)
+	fprintf(out, "Content-Encoding: %s\n", enctype);
     fprintf(out, "Content-Length: %ji\n", (intmax_t)sb->st_size);
     fprintf(out, "Last-Modified: %s\n", fmthttpdate(sb->st_mtime));
     fprintf(out, "Date: %s\n", fmthttpdate(time(NULL)));
@@ -150,7 +154,7 @@ static void sendwhole(struct hthead *req, FILE *out, FILE *sfile, struct stat *s
 	passdata(sfile, out, -1);
 }
 
-static void sendrange(struct hthead *req, FILE *out, FILE *sfile, struct stat *sb, char *contype, char *spec, int head)
+static void sendrange(struct hthead *req, FILE *out, FILE *sfile, struct stat *sb, char *contype, const char *enctype, char *spec, int head)
 {
     char buf[strlen(spec) + 1];
     char *p, *e;
@@ -214,7 +218,7 @@ static void sendrange(struct hthead *req, FILE *out, FILE *sfile, struct stat *s
     return;
     
 error:
-    sendwhole(req, out, sfile, sb, contype, head);
+    sendwhole(req, out, sfile, sb, contype, enctype, head);
 }
 
 static void serve(struct muth *muth, va_list args)
@@ -222,8 +226,9 @@ static void serve(struct muth *muth, va_list args)
     vavar(struct hthead *, req);
     vavar(int, fd);
     FILE *out, *sfile;
-    int ishead;
+    int ishead, sfd;
     char *file, *contype, *hdr;
+    const char *enctype;
     struct stat sb;
     
     sfile = NULL;
@@ -239,8 +244,11 @@ static void serve(struct muth *muth, va_list args)
 	simpleerror2(out, 404, "Not Found", "The requested URL has no corresponding resource.");
 	goto out;
     }
-    if(((sfile = fopen(file, "r")) == NULL) || fstat(fileno(sfile), &sb)) {
-	flog(LOG_ERR, "psendfile: could not stat input file %s: %s", file, strerror(errno));
+    hdr = getheader(req, "X-Ash-Compress") ? getheader(req, "Accept-Encoding") : "";
+    if(((sfd = ccopen(file, &sb, hdr, &enctype)) < 0) || ((sfile = fdopen(sfd, "r")) == NULL)) {
+	if(sfd >= 0)
+	    close(sfd);
+	flog(LOG_ERR, "psendfile: could not open input file %s: %s", file, strerror(errno));
 	simpleerror2(out, 500, "Internal Error", "The server could not access its own data.");
 	goto out;
     }
@@ -262,9 +270,9 @@ static void serve(struct muth *muth, va_list args)
 	goto out;
 
     if((hdr = getheader(req, "Range")) != NULL)
-	sendrange(req, out, sfile, &sb, contype, hdr, ishead);
+	sendrange(req, out, sfile, &sb, contype, enctype, hdr, ishead);
     else
-	sendwhole(req, out, sfile, &sb, contype, ishead);
+	sendwhole(req, out, sfile, &sb, contype, enctype, ishead);
     
 out:
     if(sfile != NULL)
