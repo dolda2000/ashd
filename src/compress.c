@@ -275,6 +275,9 @@ int ccopen(char *path, struct stat *sb, char *accept, const char **encoding)
 		    mfd = efd;
 		    minsz = esb.st_size;
 		    msb = esb;
+		    msb.st_atime = sb->st_atime;
+		    msb.st_mtime = sb->st_mtime;
+		    msb.st_ctime = sb->st_ctime;
 		    mtype = type;
 		}
 	    }
