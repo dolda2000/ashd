@@ -26,6 +26,7 @@
 #include <time.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -160,8 +161,10 @@ static void checkclean(void)
 	}
     }
     close(fd);
-    if((fd = open(sprintf3("%s/lastclean", cachedir()), O_WRONLY | O_CREAT, 0600)) >= 0)
+    if((fd = open(sprintf3("%s/lastclean", cachedir()), O_WRONLY | O_CREAT, 0600)) >= 0) {
+	futimes(fd, NULL);;
 	close(fd);
+    }
     if((dp = opendir(cachedir())) == NULL)
 	return;
     while((ent = readdir(dp)) != NULL) {
