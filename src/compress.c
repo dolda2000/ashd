@@ -283,6 +283,8 @@ int ccopen(char *path, struct stat *sb, char *accept, const char **encoding)
 		    msb.st_mtime = sb->st_mtime;
 		    msb.st_ctime = sb->st_ctime;
 		    mtype = type;
+		} else {
+		    close(efd);
 		}
 	    }
 	}
