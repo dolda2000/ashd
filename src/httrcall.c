@@ -33,36 +33,25 @@
 #include <proc.h>
 #include <resp.h>
 
-struct current {
-    struct current *next, *prev;
-    pid_t pid;
-};
-
 static char **prog;
-static struct current *running = NULL;
-static int nrunning = 0, limit = 0;
+typedbuf(pid_t) running;
+static int limit = 0;
 static volatile int exited;
 
 static void checkexit(int block)
 {
+    int i, st, any;
     pid_t pid;
-    int st;
-    struct current *rec;
     
     exited = 0;
-    while((pid = waitpid(-1, &st, block?0:WNOHANG)) > 0) {
+    any = 0;
+    while((pid = waitpid(-1, &st, (block && !any) ? 0 : WNOHANG)) > 0) {
+	any = 1;
 	if(WCOREDUMP(st))
 	    flog(LOG_WARNING, "child process %i dumped core", pid);
-	for(rec = running; rec != NULL; rec = rec->next) {
-	    if(rec->pid == pid) {
-		if(rec->next)
-		    rec->next->prev = rec->prev;
-		if(rec->prev)
-		    rec->prev->next = rec->next;
-		if(rec == running)
-		    running = rec->next;
-		free(rec);
-		nrunning--;
+	for(i = 0; i < running.d; i++) {
+	    if(running.b[i] == pid) {
+		running.b[i] = running.b[--running.d];
 		break;
 	    }
 	}
@@ -72,21 +61,14 @@ static void checkexit(int block)
 static void serve(struct hthead *req, int fd)
 {
     pid_t new;
-    struct current *rec;
     
-    while((limit > 0) && (nrunning >= limit))
+    while((limit > 0) && (running.d >= limit))
 	checkexit(1);
     if((new = stdforkserve(prog, req, fd, NULL, NULL)) < 0) {
 	simpleerror(fd, 500, "Server Error", "The server appears to be overloaded.");
 	return;
     }
-    omalloc(rec);
-    rec->pid = new;
-    rec->next = running;
-    if(running != NULL)
-	running->prev = rec;
-    running = rec;
-    nrunning++;
+    bufadd(running, new);
 }
 
 static void chldhandler(int sig)
