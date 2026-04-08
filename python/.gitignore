@@ -1,3 +1,5 @@
 *.pyc
 /build
+/dist
+/ashd_py3.egg-info
 /ashd/htlib.so

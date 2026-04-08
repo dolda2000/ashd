@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ashd-py3"
+version = "0.6"
+description = "Python module for handling ashd requests"
+license = "GPL-3.0-or-later"
+authors = [{name = "Fredrik Tolf", email = "fredrik@dolda2000.com"}]
+
+[project.urls]
+Homepage = "https://www.dolda2000.com/~fredrik/ashd/"
+Repository = "git://git.dolda2000.com/ashd"
+
+[tool.setuptools]
+packages = ["ashd"]
+script-files = ["ashd-wsgi3", "scgi-wsgi3", "serve-ssi"]
+ext-modules = [
+    {name = "ashd.htlib", sources=["htp.c"], libraries=["ht"]}
+]
