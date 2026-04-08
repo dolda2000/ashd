@@ -4,8 +4,8 @@ This module implements a rather convenient interface for writing ashd
 handlers, wrapping the low-level ashd.proto module.
 """
 
-import os, socket
-import proto
+import os, socket, collections
+from . import proto
 
 __all__ = ["stdfork", "pchild", "respond", "serveloop"]
 
@@ -27,7 +27,7 @@ def stdfork(argv, chinit = None):
     if pid == 0:
         try:
             os.dup2(csk.fileno(), 0)
-            for fd in xrange(3, 1024):
+            for fd in range(3, 1024):
                 try:
                     os.close(fd)
                 except:
@@ -126,22 +126,26 @@ def respond(req, body, status = ("200 OK"), ctype = "text/html"):
     and the `ctype' argument can be used to specify a non-HTML
     MIME-type.
 
-    If `body' is a Unicode object, it will be encoded as UTF-8.
+    If `body' is not a byte string, its string representation will be
+    encoded as UTF-8.
 
     For example:
         respond(req, "Not found", status = "404 Not Found", ctype = "text/plain")
     """
-    if type(body) == unicode:
-        body = body.decode("utf-8")
-        if ctype[:5] == "text/" and ctype.find(';') < 0:
-            ctype = ctype + "; charset=utf-8"
+    if isinstance(body, collections.ByteString):
+        body = bytes(body)
     else:
         body = str(body)
+        body = body.encode("utf-8")
+        if ctype[:5] == "text/" and ctype.find(';') < 0:
+            ctype = ctype + "; charset=utf-8"
     try:
-        req.sk.write("HTTP/1.1 %s\n" % status)
-        req.sk.write("Content-Type: %s\n" % ctype)
-        req.sk.write("Content-Length: %i\n" % len(body))
-        req.sk.write("\n")
+        head = ""
+        head += "HTTP/1.1 %s\n" % status
+        head += "Content-Type: %s\n" % ctype
+        head += "Content-Length: %i\n" % len(body)
+        head += "\n"
+        req.sk.write(head.encode("ascii"))
         req.sk.write(body)
     finally:
         req.close()
@@ -157,7 +161,10 @@ def serveloop(handler, sock = 0):
     and is called once for each received request.
     """
     while True:
-        req = proto.recvreq(sock)
+        try:
+            req = proto.recvreq(sock)
+        except InterruptedError:
+            continue
         if req is None:
             break
         try:

@@ -1,5 +1,5 @@
-import sys, os, threading, time, logging, select, Queue
-import perf
+import sys, os, threading, time, logging, select, queue, collections
+from . import perf
 
 log = logging.getLogger("ashd.serve")
 seq = 1
@@ -14,16 +14,16 @@ def reqseq():
 
 class closed(IOError):
     def __init__(self):
-        super(closed, self).__init__("The client has closed the connection.")
+        super().__init__("The client has closed the connection.")
 
 class reqthread(threading.Thread):
-    def __init__(self, name=None, **kw):
+    def __init__(self, *, name=None, **kw):
         if name is None:
             name = "Request handler %i" % reqseq()
-        super(reqthread, self).__init__(name=name, **kw)
+        super().__init__(name=name, **kw)
 
 class wsgirequest(object):
-    def __init__(self, handler):
+    def __init__(self, *, handler):
         self.status = None
         self.headers = []
         self.respsent = False
@@ -86,7 +86,7 @@ class handler(object):
     @classmethod
     def parseargs(cls, **args):
         if len(args) > 0:
-            raise ValueError("unknown handler argument: " + iter(args).next())
+            raise ValueError("unknown handler argument: " + next(iter(args)))
         return {}
 
 class single(handler):
@@ -110,11 +110,21 @@ class single(handler):
         finally:
             req.close()
 
+def dbg(*a):
+    f = True
+    for o in a:
+        if not f:
+            sys.stderr.write(" ")
+        sys.stderr.write(str(a))
+        f = False
+    sys.stderr.write("\n")
+    sys.stderr.flush()
+
 class freethread(handler):
     cname = "free"
 
-    def __init__(self, max=None, timeout=None, **kw):
-        super(freethread, self).__init__(**kw)
+    def __init__(self, *, max=None, timeout=None, **kw):
+        super().__init__(**kw)
         self.current = set()
         self.lk = threading.Lock()
         self.tcond = threading.Condition(self.lk)
@@ -122,8 +132,8 @@ class freethread(handler):
         self.timeout = timeout
 
     @classmethod
-    def parseargs(cls, max=None, abort=None, **args):
-        ret = super(freethread, cls).parseargs(**args)
+    def parseargs(cls, *, max=None, abort=None, **args):
+        ret = super().parseargs(**args)
         if max:
             ret["max"] = int(max)
         if abort:
@@ -181,7 +191,122 @@ class freethread(handler):
         while True:
             with self.lk:
                 if len(self.current) > 0:
-                    th = iter(self.current).next()
+                    th = next(iter(self.current))
+                else:
+                    return
+            th.join()
+
+class threadpool(handler):
+    cname = "pool"
+
+    def __init__(self, *, max=25, qsz=100, timeout=None, **kw):
+        super().__init__(**kw)
+        self.current = set()
+        self.clk = threading.Lock()
+        self.ccond = threading.Condition(self.clk)
+        self.queue = collections.deque()
+        self.waiting = set()
+        self.waitlimit = 5
+        self.wlstart = 0.0
+        self.qlk = threading.Lock()
+        self.qfcond = threading.Condition(self.qlk)
+        self.qecond = threading.Condition(self.qlk)
+        self.max = max
+        self.qsz = qsz
+        self.timeout = timeout
+
+    @classmethod
+    def parseargs(cls, *, max=None, queue=None, abort=None, **args):
+        ret = super().parseargs(**args)
+        if max:
+            ret["max"] = int(max)
+        if queue:
+            ret["qsz"] = int(queue)
+        if abort:
+            ret["timeout"] = int(abort)
+        return ret
+
+    def handle(self, req):
+        spawn = False
+        with self.qlk:
+            if self.timeout is not None:
+                now = start = time.time()
+                while len(self.queue) >= self.qsz:
+                    self.qecond.wait(start + self.timeout - now)
+                    now = time.time()
+                    if now - start > self.timeout:
+                        os.abort()
+            else:
+                while len(self.queue) >= self.qsz:
+                    self.qecond.wait()
+            self.queue.append(req)
+            self.qfcond.notify()
+            if len(self.waiting) < 1:
+                spawn = True
+        if spawn:
+            with self.clk:
+                if len(self.current) < self.max:
+                    th = reqthread(target=self.run)
+                    th.registered = False
+                    th.start()
+                    while not th.registered:
+                        self.ccond.wait()
+
+    def handle1(self, req):
+        try:
+            env = req.mkenv()
+            with perf.request(env) as reqevent:
+                respiter = req.handlewsgi(env, req.startreq)
+                for data in respiter:
+                    req.write(data)
+                if req.status:
+                    reqevent.response([req.status, req.headers])
+                    req.flushreq()
+                self.ckflush(req)
+        except closed:
+            pass
+        except:
+            log.error("exception occurred when handling request", exc_info=True)
+
+    def run(self):
+        timeout = 10.0
+        th = threading.current_thread()
+        with self.clk:
+            self.current.add(th)
+            th.registered = True
+            self.ccond.notify_all()
+        try:
+            while True:
+                start = now = time.time()
+                with self.qlk:
+                    while len(self.queue) < 1:
+                        if len(self.waiting) >= self.waitlimit and now - self.wlstart >= timeout:
+                            return
+                        self.waiting.add(th)
+                        try:
+                            if len(self.waiting) == self.waitlimit:
+                                self.wlstart = now
+                            self.qfcond.wait(start + timeout - now)
+                        finally:
+                            self.waiting.remove(th)
+                        now = time.time()
+                        if now - start > timeout:
+                            return
+                    req = self.queue.popleft()
+                    self.qecond.notify()
+                try:
+                    self.handle1(req)
+                finally:
+                    req.close()
+        finally:
+            with self.clk:
+                self.current.remove(th)
+
+    def close(self):
+        while True:
+            with self.clk:
+                if len(self.current) > 0:
+                    th = next(iter(self.current))
                 else:
                     return
             th.join()
@@ -189,20 +314,20 @@ class freethread(handler):
 class resplex(handler):
     cname = "rplex"
 
-    def __init__(self, max=None, **kw):
-        super(resplex, self).__init__(**kw)
+    def __init__(self, *, max=None, **kw):
+        super().__init__(**kw)
         self.current = set()
         self.lk = threading.Lock()
         self.tcond = threading.Condition(self.lk)
         self.max = max
-        self.cqueue = Queue.Queue(5)
+        self.cqueue = queue.Queue(5)
         self.cnpipe = os.pipe()
         self.rthread = reqthread(name="Response thread", target=self.handle2)
         self.rthread.start()
 
     @classmethod
-    def parseargs(cls, max=None, **args):
-        ret = super(resplex, cls).parseargs(**args)
+    def parseargs(cls, *, max=None, **args):
+        ret = super().parseargs(**args)
         if max:
             ret["max"] = int(max)
         return ret
@@ -239,7 +364,7 @@ class resplex(handler):
                     return
                 else:
                     self.cqueue.put((req, respiter))
-                    os.write(self.cnpipe[1], " ")
+                    os.write(self.cnpipe[1], b" ")
                     req = None
             finally:
                 with self.lk:
@@ -275,7 +400,7 @@ class resplex(handler):
                 if respiter is not None:
                     rem = False
                     try:
-                        data = respiter.next()
+                        data = next(respiter)
                     except StopIteration:
                         rem = True
                         try:
@@ -305,7 +430,7 @@ class resplex(handler):
                     closereq(req)
 
             while True:
-                bufl = list(req for req in current.iterkeys() if req.buffer)
+                bufl = list(req for req in current.keys() if req.buffer)
                 rls, wls, els = select.select([rp], bufl, [rp] + bufl)
                 if rp in rls:
                     ret = os.read(rp, 1024)
@@ -317,7 +442,7 @@ class resplex(handler):
                             req, respiter = self.cqueue.get(False)
                             current[req] = respiter
                             ckiter(req)
-                    except Queue.Empty:
+                    except queue.Empty:
                         pass
                 for req in wls:
                     try:
@@ -338,17 +463,17 @@ class resplex(handler):
         while True:
             with self.lk:
                 if len(self.current) > 0:
-                    th = iter(self.current).next()
+                    th = next(iter(self.current))
                 else:
                     break
             th.join()
         os.close(self.cnpipe[1])
         self.rthread.join()
 
-names = dict((cls.cname, cls) for cls in globals().itervalues() if
-             isinstance(cls, type) and
-             issubclass(cls, handler) and
-             hasattr(cls, "cname"))
+names = {cls.cname: cls for cls in globals().values() if
+         isinstance(cls, type) and
+         issubclass(cls, handler) and
+         hasattr(cls, "cname")}
 
 def parsehspec(spec):
     if ":" not in spec:

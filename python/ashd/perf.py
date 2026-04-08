@@ -1,7 +1,13 @@
+import collections.abc
 try:
     import pdm.perf
 except:
     pdm = None
+try:
+    import time
+    clock_thread = time.CLOCK_THREAD_CPUTIME_ID
+except:
+    clock_thread = None
 
 reqstat = {}
 
@@ -12,7 +18,7 @@ if pdm:
 
     class reqstart(pdm.perf.startevent):
         def __init__(self, env):
-            super(reqstart, self).__init__()
+            super().__init__()
             self.method = env.get("REQUEST_METHOD")
             self.uri = env.get("REQUEST_URI")
             self.host = env.get("HTTP_HOST")
@@ -23,11 +29,16 @@ if pdm:
             self.remoteaddr = env.get("REMOTE_ADDR")
             self.remoteport = env.get("REMOTE_PORT")
             self.scheme = env.get("wsgi.url_scheme")
+            if clock_thread is not None:
+                self.icpu = time.clock_gettime(clock_thread)
 
     class reqfinish(pdm.perf.finishevent):
         def __init__(self, start, aborted, status):
-            super(reqfinish, self).__init__(start, aborted)
+            super().__init__(start, aborted)
             self.status = status
+            self.cputime = 0
+            if clock_thread is not None:
+                self.cputime = time.clock_gettime(clock_thread) - start.icpu
 
 class request(object):
     def __init__(self, env):
@@ -45,6 +56,10 @@ class request(object):
         try:
             if len(self.resp) > 0:
                 status = self.resp[0]
+                if isinstance(status, collections.abc.ByteString):
+                    status = status.decode("latin-1")
+                else:
+                    status = str(status)
                 p = status.find(" ")
                 if p < 0:
                     key = status

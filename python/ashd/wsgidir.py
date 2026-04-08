@@ -17,7 +17,7 @@ omitted (such that the name is a string with no dots), in which case
 the handler object is looked up from this module.
 
 By default, this module will handle files with the extensions `.wsgi'
-or `.wsgi2' using the `chain' handler, which chainloads such files and
+or `.wsgi3' using the `chain' handler, which chainloads such files and
 runs them as independent WSGI applications. See its documentation for
 details.
 
@@ -33,8 +33,8 @@ argument `.fpy=my.module.foohandler' can be given to pass requests for
 functions, you may want to use the getmod() function in this module.
 """
 
-import sys, os, threading, types, logging, getopt
-import wsgiutil
+import sys, os, threading, types, logging, importlib, getopt
+from . import wsgiutil
 
 __all__ = ["application", "wmain", "getmod", "cachedmod", "chain"]
 
@@ -57,6 +57,20 @@ class cachedmod(object):
         self.lock = threading.Lock()
         self.mod = mod
         self.mtime = mtime
+
+class current(object):
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.current = True
+    def wait(self, timeout=None):
+        with self.cond:
+            self.cond.wait(timeout)
+    def uncurrent(self):
+        with self.cond:
+            self.current = False
+            self.cond.notify_all()
+    def __bool__(self):
+        return self.current
 
 modcache = {}
 cachelock = threading.Lock()
@@ -84,31 +98,30 @@ def getmod(path):
     about the module. See its documentation for details.
     """
     sb = os.stat(path)
-    cachelock.acquire()
-    try:
+    with cachelock:
         if path in modcache:
             entry = modcache[path]
         else:
             entry = [threading.Lock(), None]
             modcache[path] = entry
-    finally:
-        cachelock.release()
-    entry[0].acquire()
-    try:
+    with entry[0]:
         if entry[1] is None or sb.st_mtime > entry[1].mtime:
-            f = open(path, "r")
-            try:
+            with open(path, "rb") as f:
                 text = f.read()
-            finally:
-                f.close()
             code = compile(text, path, "exec")
             mod = types.ModuleType(mangle(path))
             mod.__file__ = path
-            exec code in mod.__dict__
-            entry[1] = cachedmod(mod, sb.st_mtime)
+            mod.__current__ = current()
+            try:
+                exec(code, mod.__dict__)
+            except:
+                mod.__current__.uncurrent()
+                raise
+            else:
+                if entry[1] is not None:
+                    entry[1].mod.__current__.uncurrent()
+                entry[1] = cachedmod(mod, sb.st_mtime)
         return entry[1]
-    finally:
-        entry[0].release()
 
 def importlocal(filename):
     import inspect
@@ -137,11 +150,10 @@ class handler(object):
         self.handlers = {}
         self.exts = {}
         self.addext("wsgi", "chain")
-        self.addext("wsgi2", "chain")
+        self.addext("wsgi3", "chain")
 
     def resolve(self, name):
-        self.lock.acquire()
-        try:
+        with self.lock:
             if name in self.handlers:
                 return self.handlers[name]
             p = name.rfind('.')
@@ -149,12 +161,10 @@ class handler(object):
                 return globals()[name]
             mname = name[:p]
             hname = name[p + 1:]
-            mod = __import__(mname, fromlist = ["dummy"])
+            mod = importlib.import_module(mname)
             ret = getattr(mod, hname)
             self.handlers[name] = ret
             return ret
-        finally:
-            self.lock.release()
         
     def addext(self, ext, handler):
         self.exts[ext] = self.resolve(handler)
@@ -195,7 +205,7 @@ def wmain(*argv):
     hnd = handler()
     ret = hnd.handle
 
-    opts, args = getopt.getopt(argv, "V")
+    opts, args = getopt.getopt(argv, "-V")
     for o, a in opts:
         if o == "-V":
             import wsgiref.validate
@@ -230,8 +240,7 @@ def chain(env, startreq):
         return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "Could not load WSGI handler.")
     entry = None
     if mod is not None:
-        mod.lock.acquire()
-        try:
+        with mod.lock:
             if hasattr(mod, "entry"):
                 entry = mod.entry
             else:
@@ -240,8 +249,6 @@ def chain(env, startreq):
                 elif hasattr(mod.mod, "application"):
                     entry = mod.mod.application
                 mod.entry = entry
-        finally:
-            mod.lock.release()
     if entry is not None:
         return entry(env, startreq)
     return wsgiutil.simpleerror(env, startreq, 500, "Internal Error", "Invalid WSGI handler.")

@@ -8,7 +8,7 @@ ashd.util module provides an easier-to-use interface.
 """
 
 import os, socket
-import htlib
+from . import htlib
 
 __all__ = ["req", "recvreq", "sendreq"]
 
@@ -32,10 +32,13 @@ class req(object):
     Python stream object in the `sk' variable. Again, see the ashd(7)
     manpage for what to receive and transmit on the response socket.
 
-    Note that instances of this class contain a reference to the live
-    socket used for responding to requests, which should be closed
-    when you are done with the request. The socket can be closed
-    manually by calling the close() method on this
+    Note that all request parts are stored in byte, rather than
+    string, form. The response socket is also opened in binary mode.
+
+    Note also that instances of this class contain a reference to the
+    live socket used for responding to requests, which should be
+    closed when you are done with the request. The socket can be
+    closed manually by calling the close() method on this
     object. Alternatively, this class implements the resource-manager
     interface, so that it can be used in `with' statements.
     """
@@ -47,7 +50,7 @@ class req(object):
         self.rest = rest
         self.headers = headers
         self.bsk = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sk = self.bsk.makefile('r+')
+        self.sk = self.bsk.makefile('rwb')
         os.close(fd)
 
     def close(self):
@@ -60,7 +63,12 @@ class req(object):
         req["Content-Type"] returns the value of the content-type
         header regardlessly of whether the client specified it as
         "Content-Type", "content-type" or "Content-type".
+        
+        If the header is given as a (Unicode) string, it is encoded
+        into Ascii for use in matching.
         """
+        if isinstance(header, str):
+            header = header.encode("ascii")
         header = header.lower()
         for key, val in self.headers:
             if key.lower() == header:
@@ -71,6 +79,8 @@ class req(object):
         """Works analogously to the __getitem__ method for checking
         header presence case-insensitively.
         """
+        if isinstance(header, str):
+            header = header.encode("ascii")
         header = header.lower()
         for key, val in self.headers:
             if key.lower() == header:
@@ -89,6 +99,9 @@ class req(object):
         string off and returns True. Otherwise, it returns False
         without doing anything.
 
+        If the `match' argument is given as a (Unicode) string, it is
+        encoded into UTF-8.
+
         This can be used for simple dispatching. For example:
         if req.match("foo/"):
             handle(req)
@@ -97,13 +110,17 @@ class req(object):
         else:
             util.respond(req, "Not found", status = "404 Not Found", ctype = "text/plain")
         """
+        if isinstance(match, str):
+            match = match.encode("utf-8")
         if self.rest[:len(match)] == match:
             self.rest = self.rest[len(match):]
             return True
         return False
 
     def __str__(self):
-        return "\"%s %s %s\"" % (self.method, self.url, self.ver)
+        def dec(b):
+            return b.decode("ascii", errors="replace")
+        return "\"%s %s %s\"" % (dec(self.method), dec(self.url), dec(self.ver))
 
     def __enter__(self):
         return self
@@ -129,14 +146,14 @@ def recvreq(sock = 0):
     if fd is None:
         return None
     try:
-        parts = data.split('\0')[:-1]
+        parts = data.split(b'\0')[:-1]
         if len(parts) < 5:
             raise protoerr("Truncated request")
         method, url, ver, rest = parts[:4]
         headers = []
         i = 4
         while True:
-            if parts[i] == "": break
+            if parts[i] == b"": break
             if len(parts) - i < 3:
                 raise protoerr("Truncated request")
             headers.append((parts[i], parts[i + 1]))
@@ -153,13 +170,13 @@ def sendreq(sock, req):
     This function may raise an OSError if an error occurs on the
     socket.
     """
-    data = ""
-    data += req.method + '\0'
-    data += req.url + '\0'
-    data += req.ver + '\0'
-    data += req.rest + '\0'
+    data = b""
+    data += req.method + b'\0'
+    data += req.url + b'\0'
+    data += req.ver + b'\0'
+    data += req.rest + b'\0'
     for key, val in req.headers:
-        data += key + '\0'
-        data += val + '\0'
-    data += '\0'
-    htlib.sendfd(sock, req.sk.fileno(), data)
+        data += key + b'\0'
+        data += val + b'\0'
+    data += b'\0'
+    htlib.sendfd(sock, req.bsk.fileno(), data)
